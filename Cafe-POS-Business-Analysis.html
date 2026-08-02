@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="ar-EG" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تحليل أعمال نظام الكافيه · Phase 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;900&family=Lalezar&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#FFFDF6;--ink:#16181C;--marker:#F25C26;--teal:#0E9E9E;--sun:#FFC93C;
+--grape:#6C5CE7;--pencil:#8A8F98;--rule:#E3DDCB;--code:#1C2128}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);
+background-image:linear-gradient(var(--rule) 1px,transparent 1px);background-size:100% 34px;
+color:var(--ink);font-family:'Cairo','Tajawal','Segoe UI',Tahoma,sans-serif;font-size:18px;line-height:1.85}
+h1,h2,h3{font-family:'Lalezar','Cairo',sans-serif;font-weight:400;line-height:1.32;margin:0}
+.en{font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;direction:ltr;display:inline-block;
+background:linear-gradient(transparent 55%,var(--sun) 55%);padding:0 3px;font-size:.86em;font-weight:600}
+.wrap{max-width:940px;margin:0 auto;padding:0 20px}
+#bar{position:fixed;top:0;right:0;height:5px;background:var(--marker);width:0;z-index:99}
+header{padding:64px 0 34px;text-align:center}
+.kicker{font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;font-size:13px;letter-spacing:2px;color:var(--pencil);direction:ltr}
+h1{font-size:clamp(36px,7.6vw,80px);margin:10px 0 6px}
+h1 .hl{position:relative;display:inline-block}
+h1 .hl::after{content:'';position:absolute;inset:auto -6px 8px -6px;height:16px;background:var(--sun);z-index:-1;transform:rotate(-1.2deg)}
+.sub{font-size:20px;max-width:660px;margin:14px auto 0;color:#3A3F47}
+.meta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+.tag{border:2.5px solid var(--ink);border-radius:14px 20px 16px 22px;padding:6px 14px;font-size:14px;font-weight:600;background:#fff}
+section{padding:52px 0 8px}
+.eyebrow{display:inline-block;font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;font-size:12px;letter-spacing:2px;
+background:var(--ink);color:var(--paper);padding:4px 10px;transform:rotate(-1.5deg);direction:ltr}
+h2{font-size:clamp(27px,4.8vw,42px);margin:14px 0 4px}
+.lede{font-size:19px;color:#3A3F47;max-width:740px;margin:6px 0 24px}
+.card{background:#fff;border:3px solid var(--ink);border-radius:16px 26px 18px 24px;
+box-shadow:7px 7px 0 rgba(22,24,28,.12);padding:20px 22px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.num{width:38px;height:38px;border:3px solid var(--ink);border-radius:50%;display:grid;place-items:center;
+font-family:'Lalezar';font-size:20px;background:var(--sun);flex:none}
+.row{display:flex;gap:14px;align-items:flex-start}
+.rv{opacity:0;transform:translateY(26px);transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.3,1)}
+.rv.in{opacity:1;transform:none}
+.note{background:#FFF6D8;border:2.5px dashed var(--ink);border-radius:14px;padding:14px 18px;margin:18px 0}
+.note b{font-family:'Lalezar';font-size:19px}
+.warn{background:#FFEDE6;border-color:var(--marker)}
+.good{background:#E8FBF8;border-color:var(--teal)}
+svg{max-width:100%;height:auto;display:block}
+.cap{text-align:center;font-size:14px;color:var(--pencil);margin-top:6px}
+button.btn{font-family:'Cairo';font-weight:600;font-size:15px;cursor:pointer;border:3px solid var(--ink);
+background:var(--sun);border-radius:12px 18px 14px 20px;padding:8px 18px;box-shadow:4px 4px 0 rgba(22,24,28,.18);transition:transform .12s}
+button.btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 rgba(22,24,28,.18)}
+button.btn.off{background:#fff}
+:focus-visible{outline:3px solid var(--grape);outline-offset:3px}
+pre{background:var(--code);color:#E6EDF3;border:3px solid var(--ink);border-radius:12px;padding:14px 16px;
+overflow-x:auto;direction:ltr;text-align:left;font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;font-size:13.5px;line-height:1.7;margin:12px 0}
+pre .k{color:#FF7B72}pre .s{color:#A5D6FF}pre .c{color:#8B949E;font-style:italic}pre .t{color:#79C0FF}pre .f{color:#D2A8FF}
+table{width:100%;border-collapse:collapse;font-size:15.5px}
+thead tr{background:var(--ink);color:var(--paper);font-family:'Lalezar';font-size:18px}
+th{padding:11px 12px;text-align:right}
+td{padding:10px 12px;border-bottom:2px solid var(--rule);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+.qi{border:3px solid var(--ink);border-radius:16px 24px 18px 22px;background:#fff;padding:14px 18px;margin:13px 0;box-shadow:6px 6px 0 rgba(22,24,28,.1)}
+.qq{font-family:'Lalezar';font-size:20px;cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.qq>span:last-child{font-size:22px;transition:transform .3s}
+.qi.on .qq>span:last-child{transform:rotate(45deg)}
+.qa{max-height:0;overflow:hidden;transition:max-height .45s ease;color:#3A3F47}
+.qi.on .qa{max-height:400px}
+.qa p{margin:10px 0 2px}
+.pill{display:inline-block;border:2.5px solid var(--ink);border-radius:20px;padding:3px 12px;font-size:13px;font-weight:600;background:#fff;margin:2px}
+.pill.t{background:#E8FBF8;border-color:var(--teal)}
+.pill.o{background:#FFEDE6;border-color:var(--marker)}
+.pill.g{background:#EFEBFF;border-color:var(--grape)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+@media(max-width:600px){body{font-size:17px}.card{padding:16px 14px}td,th{padding:8px 7px;font-size:14px}}
+
+.ent{border:3px solid var(--ink);border-radius:14px;background:#fff;margin:14px 0;
+box-shadow:5px 5px 0 rgba(22,24,28,.12);overflow:hidden}
+.ent .eh{background:var(--ink);color:var(--paper);padding:9px 15px;font-family:'Lalezar';font-size:19px;
+display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ent .eh .en2{font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;font-size:12px;
+background:var(--sun);color:var(--ink);padding:2px 9px;border-radius:12px;direction:ltr}
+.ent .eb{padding:12px 15px}
+.ent .desc{font-size:15px;color:#4A4F57;margin-bottom:9px}
+.flds{width:100%;border-collapse:collapse;font-size:14px}
+.flds td{padding:5px 8px;border-bottom:1.5px dashed var(--rule);vertical-align:top}
+.flds td:first-child{font-family:'JetBrains Mono','DejaVu Sans Mono',monospace;direction:ltr;
+font-size:12.5px;color:#0A6E6E;width:38%;font-weight:600}
+.flds tr:last-child td{border:none}
+.rel{background:#F6F1E4;border-radius:8px;padding:7px 11px;margin-top:9px;font-size:13.5px}
+.rel b{font-family:'Lalezar';font-weight:400;font-size:15px}
+.rule{display:flex;gap:12px;padding:10px 0;border-bottom:2px dashed var(--rule);align-items:flex-start}
+.rule:last-child{border:none}
+.rule .rn{width:34px;height:34px;border-radius:9px;background:var(--sun);border:3px solid var(--ink);
+display:grid;place-items:center;font-family:'JetBrains Mono';font-size:12px;font-weight:700;flex:none}
+.rule .rb{flex:1;font-size:15.5px}
+.rule .rb b{font-family:'Lalezar';font-weight:400;font-size:17px;display:block;margin-bottom:2px}
+.rule.crit .rn{background:#FFEDE6;border-color:var(--marker)}
+.actor{border:3px solid var(--ink);border-radius:14px;padding:14px 16px;background:#fff;
+box-shadow:5px 5px 0 rgba(22,24,28,.1)}
+.actor .ic{font-size:30px}
+.actor h3{font-size:21px;margin:4px 0 2px}
+.can{font-size:14px;line-height:1.9}
+.can .y::before{content:'✅ ';}
+.can .n::before{content:'🚫 ';}
+.steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.edge{border:3px solid var(--ink);border-radius:14px;background:#fff;margin:12px 0;overflow:hidden;
+box-shadow:5px 5px 0 rgba(22,24,28,.1)}
+.edge .qh{padding:11px 15px;font-family:'Lalezar';font-size:18px;cursor:pointer;
+display:flex;justify-content:space-between;gap:10px;align-items:center;background:#FFF6D8}
+.edge .qh span:last-child{transition:.3s}
+.edge.on .qh span:last-child{transform:rotate(45deg)}
+.edge .qb{max-height:0;overflow:hidden;transition:max-height .4s ease;padding:0 15px}
+.edge.on .qb{max-height:420px;padding:12px 15px}
+.big{font-family:'Lalezar';font-size:clamp(19px,3.2vw,27px);line-height:1.5;text-align:center;margin:10px 0}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<header><div class="wrap">
+  <div class="kicker">WANAS CAFÉ POS · PHASE 1 · BUSINESS ANALYSIS</div>
+  <h1>تحليل <span class="hl">الأعمال</span></h1>
+  <div class="sub">الأدوار · الكيانات · قواعد العمل · دورة حياة الأوردر · الحالات الشاذة — الأساس اللي هيتبني عليه النظام كله.</div>
+  <div class="meta">
+    <span class="tag">١٦ كيان</span>
+    <span class="tag">٣٢ قاعدة عمل</span>
+    <span class="tag">☕ ونس كافيه</span>
+  </div>
+</div></header>
+
+<main class="wrap">
+
+<section class="rv">
+  <span class="eyebrow">00 · CONTEXT</span>
+  <h2>الوضع على الأرض</h2>
+  <div class="grid g3">
+    <div class="card"><h3>🪑 القاعة</h3><p class="mini">٤٠ ترابيزة · الخدمة داخل الكافيه أساساً · الكاشير جهاز ديسكتوب</p></div>
+    <div class="card"><h3>🍳 المحطات</h3><p class="mini">المطبخ منفصل عن البار · <b>مفيش شاشات عرض</b> · الطابعة هي وسيلة التواصل الوحيدة</p></div>
+    <div class="card"><h3>🖨️ الطابعات</h3><p class="mini">تلاتة: مطبخ · بار · فواتير الكاشير — كلها حرارية على الشبكة المحلية</p></div>
+  </div>
+  <div class="note warn"><b>أخطر حقيقة في المشروع كله:</b> مفيش شاشة في المطبخ. يعني لو الطباعة فشلت، <b>الأوردر ضاع فعلياً</b> — المطبخ ما يعرفش بيه والكاشير فاكر إنه اتبعت. عشان كده الطباعة في النظام ده مش تفصيلة تقنية، دي <b>قلب العملية</b>، وكل التصميم اللي جاي بيدور حواليها.</div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">01 · ACTORS</span>
+  <h2>الأدوار — مين بيعمل إيه</h2>
+  <div class="grid g2">
+    <div class="actor"><div class="ic">🧾</div><h3>الكاشير</h3>
+      <p class="mini">الشخص اللي على الجهاز — بياخد الأوردر وبيحصّل.</p>
+      <div class="can">
+        <div class="y">يفتح ترابيزة ويضيف أصناف</div>
+        <div class="y">يبعت الأوردر للمحطات</div>
+        <div class="y">يضيف صنف على أوردر مفتوح</div>
+        <div class="y">يقبض ويقفل الفاتورة</div>
+        <div class="n">يلغي صنف اتبعت للمطبخ</div>
+        <div class="n">يعمل خصم</div>
+        <div class="n">يفتح فاتورة اتقفلت</div>
+      </div></div>
+
+    <div class="actor" style="border-color:var(--teal)"><div class="ic">👔</div><h3>المشرف</h3>
+      <p class="mini">مسؤول الوردية — بيعتمد الاستثناءات.</p>
+      <div class="can">
+        <div class="y">كل صلاحيات الكاشير</div>
+        <div class="y">يلغي صنف أو أوردر كامل</div>
+        <div class="y">يعمل خصم في حدود معينة</div>
+        <div class="y">يفتح فاتورة مقفولة (بسبب مكتوب)</div>
+        <div class="y">يقفل الوردية ويسلّم الدرج</div>
+        <div class="n">يعدّل الأسعار أو المنتجات</div>
+        <div class="n">يضيف مستخدمين</div>
+      </div></div>
+
+    <div class="actor" style="border-color:var(--grape)"><div class="ic">🔑</div><h3>المدير / المالك</h3>
+      <p class="mini">إنت — الإعدادات والتقارير.</p>
+      <div class="can">
+        <div class="y">كل الصلاحيات</div>
+        <div class="y">المنتجات والأسعار والأقسام</div>
+        <div class="y">المستخدمين والصلاحيات</div>
+        <div class="y">الطابعات والمحطات</div>
+        <div class="y">كل التقارير وسجل التدقيق</div>
+        <div class="y">المصاريف والالتزامات الثابتة</div>
+      </div></div>
+
+    <div class="actor" style="border-color:var(--pencil)"><div class="ic">🍳</div><h3>المطبخ والبار</h3>
+      <p class="mini">مش مستخدمين في النظام — دول <b>متلقّين</b> بس.</p>
+      <p class="mini" style="margin-bottom:0">ما عندهمش شاشة ولا لوجين. بيستقبلوا تذاكر مطبوعة وخلاص. وده معناه إن النظام <b>ما يعرفش</b> إن الطبق اتعمل ولا لأ — وده قيد أساسي لازم نعيش معاه في المرحلة دي.</p></div>
+  </div>
+  <div class="note"><b>ملاحظة على الأدوار:</b> ما نعملش دور "ويتر" دلوقتي. لو الأوردر بيتدخّل من الكاشير بس، بنتجنّب مشكلة إن اتنين يعدّلوا نفس الترابيزة في نفس اللحظة — ودي بتوفر تعقيد كبير في المرحلة الأولى.</div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">02 · ENTITIES</span>
+  <h2>الكيانات — قلب النظام</h2>
+  <p class="lede">١٦ كيان مقسّمين على ٥ مجموعات. كل واحد فيه: بيمثّل إيه، أهم حقوله، وعلاقته بالباقي.</p>
+
+  <h3 style="font-size:24px;margin-top:26px">🗂️ المجموعة الأولى — الكتالوج</h3>
+
+  <div class="ent"><div class="eh"><span>القسم</span><span class="en2">Category</span></div><div class="eb">
+    <p class="desc">تصنيف المنتجات في المنيو — مشروبات ساخنة، مشروبات باردة، ساندويتشات، حلويات.</p>
+    <table class="flds">
+      <tr><td>id</td><td>المعرّف</td></tr>
+      <tr><td>name_ar / name_en</td><td>الاسم بالعربي والإنجليزي</td></tr>
+      <tr><td>display_order</td><td>ترتيب الظهور على شاشة الكاشير</td></tr>
+      <tr><td>is_active</td><td>مفعّل ولا لأ</td></tr>
+    </table>
+    <div class="rel"><b>العلاقات:</b> قسم واحد ← منتجات كتير</div>
+  </div></div>
+
+  <div class="ent"><div class="eh"><span>المنتج</span><span class="en2">Product</span></div><div class="eb">
+    <p class="desc">الصنف اللي بيتباع. أهم حقل فيه هو <b>المحطة</b> — لأنه هو اللي بيحدد التذكرة تطلع على أنهي طابعة.</p>
+    <table class="flds">
+      <tr><td>id</td><td>المعرّف</td></tr>
+      <tr><td>category_id</td><td>القسم التابع له</td></tr>
+      <tr><td>station_id</td><td><b>المحطة (مطبخ / بار) — الحقل الأهم</b></td></tr>
+      <tr><td>revenue_line</td><td><b>خط الإيراد: أكل ولا بوفيه</b> — للتقارير</td></tr>
+      <tr><td>name_ar / name_en</td><td>الاسم</td></tr>
+      <tr><td>price</td><td>السعر (BigDecimal)</td></tr>
+      <tr><td>is_available</td><td>متاح دلوقتي — للتوقيف المؤقت لما الخامة تخلص</td></tr>
+      <tr><td>is_active</td><td>موجود في المنيو أصلاً</td></tr>
+      <tr><td>prep_note</td><td>ملاحظة ثابتة تطبع على التذكرة</td></tr>
+    </table>
+    <div class="rel"><b>العلاقات:</b> منتج ← قسم واحد · منتج ← محطة واحدة · منتج ← خيارات (اختياري)</div>
+  </div></div>
+
+  <div class="ent"><div class="eh"><span>خيارات المنتج</span><span class="en2">ProductOption</span></div><div class="eb">
+    <p class="desc">التعديلات على الصنف: سكر زيادة، بدون تلج، لبن بدل مية، حجم كبير. بعضها بيغيّر السعر.</p>
+    <table class="flds">
+      <tr><td>id / product_id</td><td>المنتج التابع له</td></tr>
+      <tr><td>name_ar</td><td>اسم الخيار</td></tr>
+      <tr><td>price_delta</td><td>الفرق في السعر (ممكن صفر)</td></tr>
+      <tr><td>is_default</td><td>مختار افتراضياً</td></tr>
+    </table>
+    <div class="rel"><b>ليه مهم:</b> الخيار ده لازم يطبع على تذكرة المطبخ، لأنه هو الفرق بين طلب صح وطلب غلط</div>
+  </div></div>
+
+  <h3 style="font-size:24px;margin-top:30px">🍳 المجموعة التانية — المحطات والطباعة</h3>
+
+  <div class="ent" style="border-color:var(--teal)"><div class="eh" style="background:var(--teal)"><span>المحطة</span><span class="en2">Station</span></div><div class="eb">
+    <p class="desc">مكان التحضير — المطبخ أو البار. <b>دي الطبقة اللي بتفصل المنتج عن الطابعة.</b></p>
+    <table class="flds">
+      <tr><td>id</td><td>المعرّف</td></tr>
+      <tr><td>code</td><td>KITCHEN / BAR</td></tr>
+      <tr><td>name_ar</td><td>الاسم المعروض</td></tr>
+      <tr><td>printer_id</td><td>الطابعة الحالية للمحطة دي</td></tr>
+    </table>
+    <div class="rel"><b>ليه مش نربط المنتج بالطابعة على طول؟</b> لأن يوم ما تجيب طابعة تانية للمطبخ، أو تفصل المشروبات الساخنة في محطة لوحدها — هتغيّر <b>سطر واحد</b> في المحطة، مش تعدّل على ٢٠٠ منتج.</div>
+  </div></div>
+
+  <div class="ent" style="border-color:var(--teal)"><div class="eh" style="background:var(--teal)"><span>الطابعة</span><span class="en2">Printer</span></div><div class="eb">
+    <p class="desc">جهاز الطباعة الحراري على الشبكة.</p>
+    <table class="flds">
+      <tr><td>id / name</td><td>الاسم (طابعة المطبخ)</td></tr>
+      <tr><td>ip_address / port</td><td>عنوانها على الشبكة</td></tr>
+      <tr><td>type</td><td>STATION / RECEIPT</td></tr>
+      <tr><td>paper_width</td><td>عرض الورق (58 أو 80 مم)</td></tr>
+      <tr><td>is_online</td><td>آخر حالة معروفة</td></tr>
+      <tr><td>last_seen_at</td><td>آخر مرة ردّت</td></tr>
+    </table>
+  </div></div>
+
+  <div class="ent" style="border-color:var(--marker)"><div class="eh" style="background:var(--marker)"><span>مهمة الطباعة</span><span class="en2">PrintJob</span></div><div class="eb">
+    <p class="desc"><b>أهم كيان في النظام كله.</b> كل تذكرة هتتطبع بتتسجّل هنا كصف بحالة — مش نداء طباعة عابر.</p>
+    <table class="flds">
+      <tr><td>id</td><td>المعرّف</td></tr>
+      <tr><td>order_id</td><td>الأوردر التابع له</td></tr>
+      <tr><td>printer_id</td><td>رايحة لأنهي طابعة</td></tr>
+      <tr><td>ticket_type</td><td><b>NEW · ADDITION · CANCELLATION · RECEIPT · REPRINT</b></td></tr>
+      <tr><td>status</td><td>PENDING · PRINTING · PRINTED · FAILED</td></tr>
+      <tr><td>payload</td><td>محتوى التذكرة المتولّد</td></tr>
+      <tr><td>attempts</td><td>عدد المحاولات</td></tr>
+      <tr><td>last_error</td><td>سبب آخر فشل</td></tr>
+      <tr><td>idempotency_key</td><td><b>يمنع الطباعة المكررة</b></td></tr>
+      <tr><td>created_at / printed_at</td><td>التوقيتات</td></tr>
+    </table>
+    <div class="rel"><b>ليه صف في الداتابيز مش مجرد نداء؟</b> عشان لو الطابعة وقعت، التذكرة تفضل محفوظة وتتعاد لوحدها لما ترجع — والكاشير يشوف على شاشته إن فيه تذكرة فشلت. من غير ده، الأوردر بيضيع في صمت.</div>
+  </div></div>
+
+  <h3 style="font-size:24px;margin-top:30px">🧾 المجموعة التالتة — الأوردر</h3>
+
+  <div class="ent" style="border-color:var(--grape)"><div class="eh" style="background:var(--grape)"><span>الترابيزة</span><span class="en2">CafeTable</span></div><div class="eb">
+    <p class="desc">الأربعين ترابيزة. حالتها مشتقّة من الأوردر المفتوح عليها، مش محفوظة لوحدها.</p>
+    <table class="flds">
+      <tr><td>id / number</td><td>رقم الترابيزة</td></tr>
+      <tr><td>zone</td><td>المنطقة (داخلي / خارجي / دور تاني)</td></tr>
+      <tr><td>seats</td><td>عدد الكراسي</td></tr>
+      <tr><td>is_active</td><td>شغالة ولا مقفولة</td></tr>
+    </table>
+    <div class="rel"><b>قرار تصميمي:</b> ما نحطش حقل <span class="en">status</span> على الترابيزة. الحالة بتتحسب: فيها أوردر مفتوح؟ يبقى مشغولة. ده بيمنع تضارب بين حالتين محفوظتين.</div>
+  </div></div>
+
+  <div class="ent" style="border-color:var(--grape)"><div class="eh" style="background:var(--grape)"><span>الأوردر</span><span class="en2">Order</span></div><div class="eb">
+    <p class="desc">الفاتورة المفتوحة على الترابيزة. هو الـ<span class="en">aggregate root</span> — كل تعديل على الأصناف لازم يعدّي عليه.</p>
+    <table class="flds">
+      <tr><td>id / order_number</td><td>رقم متسلسل يومي للعرض</td></tr>
+      <tr><td>table_id</td><td>الترابيزة (أو NULL للتيك أواي)</td></tr>
+      <tr><td>type</td><td>DINE_IN / TAKEAWAY</td></tr>
+      <tr><td>status</td><td>OPEN · SENT · PAID · CLOSED · VOIDED</td></tr>
+      <tr><td>opened_by / closed_by</td><td>مين فتحها ومين قفلها</td></tr>
+      <tr><td>shift_id</td><td>الوردية</td></tr>
+      <tr><td>subtotal / discount / service / total</td><td>المبالغ</td></tr>
+      <tr><td>guest_count</td><td>عدد الأفراد</td></tr>
+      <tr><td>opened_at / closed_at</td><td>التوقيتات</td></tr>
+      <tr><td>version</td><td><b>للقفل التفاؤلي</b> — يمنع تعديلين متزامنين</td></tr>
+    </table>
+    <div class="rel"><b>العلاقات:</b> أوردر ← أصناف كتير · ← مدفوعات كتير · ← مهام طباعة كتير</div>
+  </div></div>
+
+  <div class="ent" style="border-color:var(--grape)"><div class="eh" style="background:var(--grape)"><span>صنف في الأوردر</span><span class="en2">OrderItem</span></div><div class="eb">
+    <p class="desc">سطر واحد في الفاتورة. أهم حاجة فيه: <b>حالته الخاصة</b> — لأن كل صنف له رحلته المستقلة مع الطباعة.</p>
+    <table class="flds">
+      <tr><td>id / order_id</td><td>الأوردر التابع له</td></tr>
+      <tr><td>product_id</td><td>المنتج</td></tr>
+      <tr><td>product_name_snapshot</td><td><b>نسخة من الاسم وقت البيع</b></td></tr>
+      <tr><td>unit_price_snapshot</td><td><b>نسخة من السعر وقت البيع</b></td></tr>
+      <tr><td>station_snapshot</td><td>المحطة وقت البيع</td></tr>
+      <tr><td>revenue_line_snapshot</td><td>خط الإيراد وقت البيع</td></tr>
+      <tr><td>quantity</td><td>الكمية</td></tr>
+      <tr><td>status</td><td><b>NEW · SENT · CANCELLED</b></td></tr>
+      <tr><td>note</td><td>ملاحظة (بدون سكر)</td></tr>
+      <tr><td>added_by / cancelled_by</td><td>مين ضافه ومين لغاه</td></tr>
+      <tr><td>cancel_reason</td><td>سبب الإلغاء</td></tr>
+    </table>
+    <div class="rel"><b>ليه بناخد نسخة من السعر والاسم؟</b> لأنك لو غيّرت سعر القهوة بكرة، الفواتير القديمة لازم تفضل بسعرها القديم. من غير كده تقاريرك التاريخية هتتغيّر لوحدها — وده كارثة محاسبية.</div>
+  </div></div>
+
+  <h3 style="font-size:24px;margin-top:30px">💰 المجموعة الرابعة — الفلوس</h3>
+
+  <div class="ent"><div class="eh"><span>الدفعة</span><span class="en2">Payment</span></div><div class="eb">
+    <p class="desc">عملية تحصيل. <b>أوردر واحد ممكن يكون له أكتر من دفعة</b> — لأن العملاء بيقسّموا الحساب.</p>
+    <table class="flds">
+      <tr><td>id / order_id</td><td>الأوردر</td></tr>
+      <tr><td>method</td><td>CASH · CARD · WALLET</td></tr>
+      <tr><td>amount</td><td>المبلغ</td></tr>
+      <tr><td>received / change</td><td>المدفوع والباقي (للكاش)</td></tr>
+      <tr><td>reference</td><td>رقم مرجعي للفيزا</td></tr>
+      <tr><td>paid_at / cashier_id</td><td>التوقيت والكاشير</td></tr>
+    </table>
+  </div></div>
+
+  <div class="ent"><div class="eh"><span>الوردية</span><span class="en2">Shift</span></div><div class="eb">
+    <p class="desc">فترة عمل كاشير معيّن — من فتح الدرج لحد تسليمه.</p>
+    <table class="flds">
+      <tr><td>id / user_id</td><td>الكاشير</td></tr>
+      <tr><td>opened_at / closed_at</td><td>البداية والنهاية</td></tr>
+      <tr><td>opening_float</td><td>الكاش اللي بدأ بيه</td></tr>
+      <tr><td>expected_cash</td><td>المفروض يكون في الدرج (محسوب)</td></tr>
+      <tr><td>counted_cash</td><td>اللي اتعدّ فعلاً</td></tr>
+      <tr><td>variance</td><td><b>الفرق — عجز ولا زيادة</b></td></tr>
+    </table>
+    <div class="rel"><b>ليه مهمة:</b> من غير ورديات، مش هتعرف العجز حصل مع مين ولا إمتى. ودي أهم أداة رقابة على الكاش في أي كافيه.</div>
+  </div></div>
+
+  <div class="ent"><div class="eh"><span>الخصم</span><span class="en2">Discount</span></div><div class="eb">
+    <p class="desc">تخفيض على الفاتورة أو على صنف.</p>
+    <table class="flds">
+      <tr><td>type</td><td>PERCENT / AMOUNT</td></tr>
+      <tr><td>value / max_value</td><td>القيمة والحد الأقصى</td></tr>
+      <tr><td>scope</td><td>ORDER / ITEM</td></tr>
+      <tr><td>requires_supervisor</td><td>محتاج اعتماد</td></tr>
+      <tr><td>reason</td><td>السبب — إلزامي</td></tr>
+    </table>
+  </div></div>
+
+  <div class="ent"><div class="eh"><span>المصروف</span><span class="en2">Expense</span></div><div class="eb">
+    <p class="desc">أي فلوس بتخرج — خامات، صيانة، إيجار، أقساط.</p>
+    <table class="flds">
+      <tr><td>type</td><td>خامات · إيجار · مرتبات · صيانة · أقساط</td></tr>
+      <tr><td>revenue_line</td><td><b>أكل / بوفيه / مشترك</b></td></tr>
+      <tr><td>amount / expense_date</td><td>المبلغ والتاريخ</td></tr>
+      <tr><td>is_recurring</td><td>ثابت شهري ولا لأ</td></tr>
+      <tr><td>paid_from_drawer</td><td>اتدفع من درج الكاشير؟</td></tr>
+    </table>
+    <div class="rel"><b>مهم:</b> المصروف اللي بيتدفع من الدرج لازم يتخصم من الكاش المتوقع في الوردية، وإلا هيبان عجز وهمي</div>
+  </div></div>
+
+  <h3 style="font-size:24px;margin-top:30px">🔐 المجموعة الخامسة — النظام</h3>
+
+  <div class="ent"><div class="eh"><span>المستخدم والدور</span><span class="en2">User / Role</span></div><div class="eb">
+    <table class="flds">
+      <tr><td>username / password_hash</td><td>بيانات الدخول</td></tr>
+      <tr><td>full_name / pin</td><td>الاسم ورقم سري سريع للشاشة</td></tr>
+      <tr><td>role_id</td><td>CASHIER / SUPERVISOR / ADMIN</td></tr>
+      <tr><td>is_active</td><td>مفعّل</td></tr>
+    </table>
+    <div class="rel"><b>فكرة عملية:</b> لوجين كامل أول اليوم، وبعدها <span class="en">PIN</span> قصير لاعتماد المشرف على الاستثناءات — بدل ما يعمل تسجيل خروج ودخول كل مرة</div>
+  </div></div>
+
+  <div class="ent"><div class="eh"><span>سجل التدقيق</span><span class="en2">AuditLog</span></div><div class="eb">
+    <p class="desc">كل عملية حساسة بتتسجّل هنا. <b>الجدول ده بيتكتب فيه بس — مفيش تعديل ولا حذف.</b></p>
+    <table class="flds">
+      <tr><td>user_id / action</td><td>مين وعمل إيه</td></tr>
+      <tr><td>entity_type / entity_id</td><td>على أنهي حاجة</td></tr>
+      <tr><td>old_value / new_value</td><td>قبل وبعد</td></tr>
+      <tr><td>reason</td><td>السبب لو مطلوب</td></tr>
+      <tr><td>terminal_id / created_at</td><td>من أنهي جهاز وإمتى</td></tr>
+    </table>
+    <div class="rel"><b>اللي بيتسجّل إجبارياً:</b> إلغاء صنف · إلغاء أوردر · خصم · فتح فاتورة مقفولة · تعديل سعر · فرق في الدرج · إعادة طباعة</div>
+  </div></div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">03 · ERD</span>
+  <h2>خريطة العلاقات</h2>
+  <div class="card">
+    <svg viewBox="0 0 880 470" aria-label="مخطط علاقات الكيانات">
+      <defs><marker id="ar1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8A8F98"/></marker></defs>
+      <g font-family="Cairo" font-size="12" text-anchor="middle">
+        <rect x="20" y="20" width="120" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="80" y="41">القسم</text><text x="80" y="57" font-size="9" font-family="DejaVu Sans Mono">Category</text>
+        <rect x="20" y="110" width="120" height="46" rx="9" fill="#FFC93C" stroke="#16181C" stroke-width="3"/><text x="80" y="131">المنتج</text><text x="80" y="147" font-size="9" font-family="DejaVu Sans Mono">Product</text>
+        <rect x="20" y="200" width="120" height="46" rx="9" fill="#E8FBF8" stroke="#0E9E9E" stroke-width="3"/><text x="80" y="221">المحطة</text><text x="80" y="237" font-size="9" font-family="DejaVu Sans Mono">Station</text>
+        <rect x="20" y="290" width="120" height="46" rx="9" fill="#E8FBF8" stroke="#0E9E9E" stroke-width="3"/><text x="80" y="311">الطابعة</text><text x="80" y="327" font-size="9" font-family="DejaVu Sans Mono">Printer</text>
+
+        <rect x="240" y="110" width="130" height="46" rx="9" fill="#EFEBFF" stroke="#6C5CE7" stroke-width="4"/><text x="305" y="131">صنف الأوردر</text><text x="305" y="147" font-size="9" font-family="DejaVu Sans Mono">OrderItem</text>
+        <rect x="240" y="20" width="130" height="46" rx="9" fill="#EFEBFF" stroke="#6C5CE7" stroke-width="3"/><text x="305" y="41">الترابيزة</text><text x="305" y="57" font-size="9" font-family="DejaVu Sans Mono">CafeTable</text>
+        <rect x="440" y="60" width="140" height="56" rx="10" fill="#EFEBFF" stroke="#6C5CE7" stroke-width="5"/><text x="510" y="84">الأوردر</text><text x="510" y="103" font-size="9" font-family="DejaVu Sans Mono">Order (root)</text>
+
+        <rect x="440" y="170" width="140" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="510" y="191">الدفعة</text><text x="510" y="207" font-size="9" font-family="DejaVu Sans Mono">Payment</text>
+        <rect x="240" y="270" width="130" height="46" rx="9" fill="#FFEDE6" stroke="#F25C26" stroke-width="4"/><text x="305" y="291">مهمة طباعة</text><text x="305" y="307" font-size="9" font-family="DejaVu Sans Mono">PrintJob</text>
+        <rect x="440" y="270" width="140" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="510" y="291">الوردية</text><text x="510" y="307" font-size="9" font-family="DejaVu Sans Mono">Shift</text>
+        <rect x="660" y="170" width="140" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="730" y="191">المستخدم</text><text x="730" y="207" font-size="9" font-family="DejaVu Sans Mono">User</text>
+        <rect x="660" y="270" width="140" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="730" y="291">سجل التدقيق</text><text x="730" y="307" font-size="9" font-family="DejaVu Sans Mono">AuditLog</text>
+        <rect x="660" y="60" width="140" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="730" y="81">الخصم</text><text x="730" y="97" font-size="9" font-family="DejaVu Sans Mono">Discount</text>
+        <rect x="240" y="360" width="130" height="46" rx="9" fill="#fff" stroke="#16181C" stroke-width="3"/><text x="305" y="381">المصروف</text><text x="305" y="397" font-size="9" font-family="DejaVu Sans Mono">Expense</text>
+      </g>
+      <g stroke="#8A8F98" stroke-width="2.5" fill="none" marker-end="url(#ar1)">
+        <path d="M80,68 L80,106"/>
+        <path d="M80,158 L80,196"/>
+        <path d="M80,248 L80,286"/>
+        <path d="M142,130 L236,130"/>
+        <path d="M372,128 L438,110"/>
+        <path d="M372,42 L438,68"/>
+        <path d="M510,118 L510,166"/>
+        <path d="M510,118 L370,268"/>
+        <path d="M578,90 L656,84"/>
+        <path d="M580,290 L510,270" />
+        <path d="M730,218 L730,266"/>
+        <path d="M660,192 L582,192"/>
+        <path d="M140,300 L236,292"/>
+      </g>
+      <g font-family="Cairo" font-size="10" fill="#8A8F98">
+        <text x="90" y="90">1..n</text><text x="90" y="180">n..1</text><text x="90" y="270">n..1</text>
+        <text x="180" y="122">1..n</text><text x="395" y="120">n..1</text>
+        <text x="520" y="145">1..n</text><text x="420" y="215">1..n</text>
+      </g>
+      <text x="440" y="445" text-anchor="middle" font-family="Lalezar" font-size="18" fill="#6C5CE7">الأوردر هو الـ aggregate root — كل تعديل على الأصناف بيعدّي عليه</text>
+    </svg>
+  </div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">04 · LIFECYCLE</span>
+  <h2>دورة حياة الأوردر</h2>
+  <p class="lede">دوس على كل مرحلة وشوف الحالة بتتغيّر وإيه اللي بيتطبع.</p>
+  <div class="card">
+    <div class="steps" id="lcSteps">
+      <button class="btn" data-s="0">١ · فتح</button>
+      <button class="btn off" data-s="1">٢ · إضافة أصناف</button>
+      <button class="btn off" data-s="2">٣ · إرسال</button>
+      <button class="btn off" data-s="3">٤ · إضافة بعد الإرسال</button>
+      <button class="btn off" data-s="4">٥ · إلغاء صنف</button>
+      <button class="btn off" data-s="5">٦ · دفع</button>
+      <button class="btn off" data-s="6">٧ · إقفال</button>
+    </div>
+    <svg viewBox="0 0 860 300" aria-label="دورة حياة الأوردر">
+      <g font-family="Cairo" font-size="12" text-anchor="middle">
+        <rect id="s0" x="20" y="110" width="110" height="50" rx="10" fill="#FFC93C" stroke="#16181C" stroke-width="3"/>
+        <text x="75" y="132">مفتوح</text><text x="75" y="150" font-size="9" font-family="DejaVu Sans Mono">OPEN</text>
+
+        <rect id="s1" x="200" y="110" width="110" height="50" rx="10" fill="#fff" stroke="#16181C" stroke-width="3"/>
+        <text x="255" y="132">اتبعت</text><text x="255" y="150" font-size="9" font-family="DejaVu Sans Mono">SENT</text>
+
+        <rect id="s2" x="380" y="110" width="110" height="50" rx="10" fill="#fff" stroke="#16181C" stroke-width="3"/>
+        <text x="435" y="132">اتدفع</text><text x="435" y="150" font-size="9" font-family="DejaVu Sans Mono">PAID</text>
+
+        <rect id="s3" x="560" y="110" width="110" height="50" rx="10" fill="#fff" stroke="#16181C" stroke-width="3"/>
+        <text x="615" y="132">مقفول</text><text x="615" y="150" font-size="9" font-family="DejaVu Sans Mono">CLOSED</text>
+
+        <rect id="s4" x="380" y="220" width="110" height="46" rx="10" fill="#fff" stroke="#16181C" stroke-width="3" opacity=".4"/>
+        <text x="435" y="240" opacity=".4">ملغي</text><text x="435" y="256" font-size="9" font-family="DejaVu Sans Mono" opacity=".4">VOIDED</text>
+      </g>
+      <g stroke="#16181C" stroke-width="2.5" fill="none">
+        <path d="M132,135 L196,135"/><path d="M312,135 L376,135"/><path d="M492,135 L556,135"/>
+        <path d="M255,50 L255,106" id="loopA" opacity="0" stroke="#0E9E9E"/>
+        <path d="M200,135 Q160,60 250,48" id="loopB" opacity="0" stroke="#0E9E9E"/>
+        <path d="M255,164 L420,216" stroke="#F25C26" stroke-dasharray="6 4" opacity=".4"/>
+      </g>
+      <text x="255" y="38" text-anchor="middle" font-family="Cairo" font-size="11" fill="#0E9E9E" id="loopLbl" opacity="0">إضافة / إلغاء</text>
+      <rect x="20" y="200" width="330" height="80" rx="10" fill="#FFF6D8" stroke="#16181C" stroke-width="3" id="printBox"/>
+      <text x="185" y="224" text-anchor="middle" font-family="Lalezar" font-size="16" id="pTitle">مفيش طباعة لسه</text>
+      <text x="185" y="250" text-anchor="middle" font-family="Cairo" font-size="12" fill="#4A4F57" id="pLine1">—</text>
+      <text x="185" y="270" text-anchor="middle" font-family="Cairo" font-size="12" fill="#4A4F57" id="pLine2">—</text>
+    </svg>
+    <p class="cap" id="lcDesc">الكاشير فتح ترابيزة ١٢. الأوردر اتولد بحالة OPEN ومفيش أي تذكرة اتطبعت.</p>
+  </div>
+
+  <div class="note warn"><b>أهم انتقال في الدورة كلها: <span class="en">OPEN → SENT</span></b><br>
+  قبل الإرسال، الأوردر ملك الكاشير لوحده — يضيف ويشيل زي ما هو عايز من غير أي أثر. <b>بعد الإرسال، المطبخ بقى يعرف</b> — فأي تعديل من دلوقتي لازم يطلع تذكرة توضّحه. ده الخط الفاصل في النظام كله.</div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">05 · PRINTING</span>
+  <h2>منطق الطباعة</h2>
+  <div class="card" style="background:#FFF6D8">
+    <p class="big">أوردر واحد على الشاشة ← أكتر من تذكرة على الطابعات</p>
+  </div>
+  <div class="card">
+    <h3>مثال: أوردر فيه أكل ومشروبات</h3>
+    <svg viewBox="0 0 820 250" aria-label="تقسيم الأوردر على الطابعات">
+      <rect x="20" y="60" width="190" height="130" rx="12" fill="#fff" stroke="#16181C" stroke-width="3"/>
+      <text x="115" y="85" text-anchor="middle" font-family="Cairo" font-size="14" font-weight="700">ترابيزة ١٢</text>
+      <g font-family="Cairo" font-size="12" text-anchor="start">
+        <text x="40" y="110">٢ برجر</text>
+        <text x="40" y="132">١ بطاطس</text>
+        <text x="40" y="154">٢ لاتيه</text>
+        <text x="40" y="176">١ عصير</text>
+      </g>
+      <rect x="300" y="30" width="200" height="80" rx="12" fill="#FFEDE6" stroke="#F25C26" stroke-width="3"/>
+      <text x="400" y="55" text-anchor="middle" font-family="Cairo" font-size="13" font-weight="700">تذكرة المطبخ</text>
+      <text x="400" y="78" text-anchor="middle" font-family="Cairo" font-size="11">٢ برجر · ١ بطاطس</text>
+      <text x="400" y="97" text-anchor="middle" font-family="Cairo" font-size="10" fill="#F25C26">المشروبات مش ظاهرة</text>
+
+      <rect x="300" y="140" width="200" height="80" rx="12" fill="#E8FBF8" stroke="#0E9E9E" stroke-width="3"/>
+      <text x="400" y="165" text-anchor="middle" font-family="Cairo" font-size="13" font-weight="700">تذكرة البار</text>
+      <text x="400" y="188" text-anchor="middle" font-family="Cairo" font-size="11">٢ لاتيه · ١ عصير</text>
+      <text x="400" y="207" text-anchor="middle" font-family="Cairo" font-size="10" fill="#0E9E9E">الأكل مش ظاهر</text>
+
+      <rect x="590" y="85" width="200" height="80" rx="12" fill="#fff" stroke="#16181C" stroke-width="3"/>
+      <text x="690" y="110" text-anchor="middle" font-family="Cairo" font-size="13" font-weight="700">فاتورة الكاشير</text>
+      <text x="690" y="133" text-anchor="middle" font-family="Cairo" font-size="11">كل الأصناف + الإجمالي</text>
+      <text x="690" y="152" text-anchor="middle" font-family="Cairo" font-size="10" fill="#8A8F98">وقت الدفع بس</text>
+
+      <g stroke="#16181C" stroke-width="2.5" fill="none">
+        <path d="M212,105 L296,70"/><path d="M212,145 L296,180"/><path d="M502,125 L586,125" stroke-dasharray="6 4"/>
+      </g>
+    </svg>
+    <p class="cap">التقسيم بيحصل حسب <b>محطة</b> كل صنف — والمنتج بيعرف محطته من إعداداته</p>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>أنواع التذاكر الخمسة</h3>
+      <p><b>١ · جديدة <span class="en">(NEW)</span></b> — أول إرسال، كل الأصناف<br>
+      <b>٢ · إضافة <span class="en">(ADDITION)</span></b> — الأصناف الجديدة بس، ومكتوب عليها بوضوح «إضافة»<br>
+      <b>٣ · إلغاء <span class="en">(CANCELLATION)</span></b> — الصنف الملغي، بخط عريض ومميز<br>
+      <b>٤ · فاتورة <span class="en">(RECEIPT)</span></b> — للعميل وقت الدفع<br>
+      <b>٥ · إعادة طباعة <span class="en">(REPRINT)</span></b> — نسخة تانية، <b>لازم تكون مختومة «إعادة طباعة»</b></p></div>
+    <div class="card" style="border-color:var(--marker)"><h3>لو الطابعة وقعت</h3>
+      <p>١ · المهمة بتفضل <span class="en">PENDING</span> في الداتابيز<br>
+      ٢ · النظام بيحاول تاني بفواصل متزايدة<br>
+      ٣ · <b>تنبيه أحمر يظهر على شاشة الكاشير</b><br>
+      ٤ · الكاشير يقدر يعيد المحاولة يدوي، أو يوجّه التذكرة لطابعة تانية<br>
+      ٥ · لو فشلت خالص، الأوردر <b>ما يتقفلش</b> من غير اعتماد مشرف</p>
+      <p style="margin-bottom:0" class="mini"><b>الفكرة:</b> فشل الطباعة لازم يبقى <b>مرئي</b>، مش يروح في اللوج</p></div>
+  </div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">06 · RULES</span>
+  <h2>قواعد العمل</h2>
+  <p class="lede">دي القواعد اللي النظام هيتبني عليها. اللي عليها إطار برتقالي = قاعدة حرجة، كسرها معناه فلوس ضايعة أو أوردر تايه.</p>
+
+  <div class="card">
+    <h3>🧾 الأوردر</h3>
+<div class="rule"><div class="rn">1</div><div class="rb"><b>الأوردر لازم يكون على ترابيزة أو تيك أواي</b>مينفعش أوردر معلّق من غير مصدر.</div></div><div class="rule"><div class="rn">2</div><div class="rb"><b>ترابيزة واحدة = أوردر مفتوح واحد</b>لو عايز تفصل حسابين على نفس الترابيزة، ده بيتعمل بتقسيم الفاتورة وقت الدفع مش بأوردرين.</div></div><div class="rule"><div class="rn">3</div><div class="rb"><b>قبل الإرسال: تعديل حر</b>إضافة وحذف وتغيير كمية من غير أي أثر ولا تذكرة — لأن المطبخ لسه ما يعرفش.</div></div><div class="rule crit"><div class="rn">4</div><div class="rb"><b>بعد الإرسال: كل تعديل له تذكرة</b>إضافة صنف = تذكرة إضافة · إلغاء صنف = تذكرة إلغاء. مفيش تعديل صامت.</div></div><div class="rule crit"><div class="rn">5</div><div class="rb"><b>إلغاء صنف اتبعت يحتاج مشرف + سبب</b>لأن الخامة اتصرفت فعلاً. السبب بيتسجّل في سجل التدقيق.</div></div><div class="rule crit"><div class="rn">6</div><div class="rb"><b>مينفعش تقفل أوردر فيه صنف لسه ما اتبعتش</b>إما تبعته أو تشيله — عشان ما يحصلش إن العميل دفع تمن حاجة المطبخ ما عرفش بيها.</div></div><div class="rule"><div class="rn">7</div><div class="rb"><b>الكمية أكبر من صفر</b>تقليل الكمية بعد الإرسال = إلغاء جزئي، وله تذكرة.</div></div><div class="rule"><div class="rn">8</div><div class="rb"><b>الأوردر المفتوح أكتر من ٤ ساعات يتنبّه عليه</b>غالباً نسيان — والتنبيه بيمنع فواتير تايهة آخر اليوم.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>🖨️ الطباعة</h3>
+<div class="rule crit"><div class="rn">9</div><div class="rb"><b>كل صنف بيروح لمحطته</b>التقسيم أوتوماتيك حسب محطة المنتج — الكاشير ما بيختارش طابعة.</div></div><div class="rule"><div class="rn">10</div><div class="rb"><b>مفيش تذكرة فاضية</b>لو الأوردر كله مشروبات، تذكرة المطبخ ما تطبعش أصلاً.</div></div><div class="rule"><div class="rn">11</div><div class="rb"><b>كل تذكرة عليها: رقم الأوردر · الترابيزة · الوقت · الكاشير</b>عشان لو حصل خلاف، التذكرة نفسها فيها كل المعلومات.</div></div><div class="rule crit"><div class="rn">12</div><div class="rb"><b>تذكرة الإضافة فيها الجديد بس</b>مش الأوردر كله تاني — عشان المطبخ ما يعملش الأكل مرتين.</div></div><div class="rule crit"><div class="rn">13</div><div class="rb"><b>إعادة الطباعة لازم تبان إنها إعادة</b>ختم واضح «إعادة طباعة» — وإلا المطبخ هيحضّر الطلب مرتين.</div></div><div class="rule crit"><div class="rn">14</div><div class="rb"><b>مهمة الطباعة بتتسجّل قبل ما تتبعت</b>لو الكهربا قطعت في النص، التذكرة موجودة في الداتابيز وهتتعاد.</div></div><div class="rule crit"><div class="rn">15</div><div class="rb"><b>مفتاح idempotency على كل مهمة</b>دبل كليك على «إرسال» ما يطبعش مرتين.</div></div><div class="rule crit"><div class="rn">16</div><div class="rb"><b>فشل الطباعة يظهر على الشاشة</b>تنبيه أحمر — مش رسالة في اللوج محدش بيقراها.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>💰 الدفع والكاش</h3>
+<div class="rule"><div class="rn">17</div><div class="rb"><b>مينفعش دفع أوردر لسه ما اتبعتش</b></div></div><div class="rule crit"><div class="rn">18</div><div class="rb"><b>مجموع الدفعات = إجمالي الفاتورة بالظبط</b>ولا مليم زيادة ولا نقصان.</div></div><div class="rule"><div class="rn">19</div><div class="rb"><b>الدفع الجزئي مسموح</b>العميل يدفع كاش جزء وفيزا جزء — لحد ما يكتمل المبلغ.</div></div><div class="rule"><div class="rn">20</div><div class="rb"><b>الفاتورة تتطبع بعد اكتمال الدفع</b></div></div><div class="rule crit"><div class="rn">21</div><div class="rb"><b>فتح فاتورة مقفولة يحتاج مدير + سبب</b>وبتتسجّل في التدقيق إجبارياً.</div></div><div class="rule"><div class="rn">22</div><div class="rb"><b>الوردية ما تتقفلش والأوردرات لسه مفتوحة</b></div></div><div class="rule crit"><div class="rn">23</div><div class="rb"><b>فرق الدرج بيتسجّل ومش بيتخفي</b>العجز أو الزيادة بيتحفظوا بالرقم مهما كانوا.</div></div><div class="rule"><div class="rn">24</div><div class="rb"><b>المصروف من الدرج بيتخصم من الكاش المتوقع</b>وإلا هيبان عجز وهمي في الوردية.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>📦 المنتجات والأسعار</h3>
+<div class="rule crit"><div class="rn">25</div><div class="rb"><b>السعر بيتاخد نسخة منه وقت البيع</b>تغيير السعر بكرة ما يأثرش على فواتير النهارده.</div></div><div class="rule crit"><div class="rn">26</div><div class="rb"><b>كل منتج لازم له محطة</b>منتج من غير محطة ما ينفعش يتباع — النظام ما هيعرفش يطبعه فين.</div></div><div class="rule"><div class="rn">27</div><div class="rb"><b>كل منتج له خط إيراد: أكل أو بوفيه</b>عشان التقارير تطلع بنفس تقسيمك الحالي.</div></div><div class="rule"><div class="rn">28</div><div class="rb"><b>المنتج الموقوف مؤقتاً مش بيظهر للكاشير</b>لما الخامة تخلص، توقفه بضغطة — من غير ما تحذفه.</div></div><div class="rule crit"><div class="rn">29</div><div class="rb"><b>المنتج اللي اتباع مرة ما يتحذفش</b>يتعطّل بس — عشان الفواتير القديمة تفضل صحيحة.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>🔐 الصلاحيات والتدقيق</h3>
+<div class="rule crit"><div class="rn">30</div><div class="rb"><b>كل عملية حساسة ليها صاحب وتوقيت وجهاز</b>إلغاء · خصم · فتح فاتورة · إعادة طباعة · فرق درج.</div></div><div class="rule crit"><div class="rn">31</div><div class="rb"><b>سجل التدقيق بيتكتب فيه بس</b>مفيش تعديل ولا حذف — ولا حتى للمدير.</div></div><div class="rule"><div class="rn">32</div><div class="rb"><b>الجلسة بتتقفل بعد فترة خمول</b>عشان محدش يستخدم جهاز مفتوح باسم كاشير تاني.</div></div>
+  </div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">07 · EDGE CASES</span>
+  <h2>الحالات الشاذة</h2>
+  <p class="lede">دي اللي بتقع الأنظمة. كل واحدة لازم يكون ليها قرار مكتوب قبل ما نكتب سطر كود.</p>
+<div class="edge"><div class="qh"><span>العميل غيّر رأيه بعد ما الأوردر اتبعت — وقال إنه ما طلبش الصنف ده</span><span>+</span></div><div class="qb">الصنف اتحضّر فعلاً والخامة اتصرفت. القرار: <b>إلغاء بموافقة مشرف + سبب مكتوب</b>، تذكرة إلغاء بتطبع للمحطة، والصنف يفضل ظاهر في الأوردر بحالة «ملغي» مش يختفي. <br><br>ليه ما يختفيش؟ عشان تقدر تطلع تقرير آخر الشهر بالأصناف الملغية ومين لغاها — ده مؤشر مهم على الهدر وعلى التدريب.</div></div><div class="edge"><div class="qh"><span>الطابعة وقعت والأوردر اتبعت</span><span>+</span></div><div class="qb">المهمة بتفضل <span class='en'>PENDING</span>، والنظام بيحاول تاني بفواصل متزايدة. تنبيه أحمر بيظهر للكاشير. الكاشير يقدر يعيد المحاولة، أو يوجّه التذكرة لطابعة تانية مؤقتاً، أو يطبعها على طابعة الكاشير ويوديها بإيده. <b>الأوردر ما يتقفلش وفيه تذكرة فشلت من غير اعتماد مشرف.</b></div></div><div class="edge"><div class="qh"><span>الكهربا قطعت والأوردر في النص</span><span>+</span></div><div class="qb">الأوردر المحفوظ بيفضل في الداتابيز بحالته الأخيرة. أي مهام طباعة معلّقة بتتعاد لما النظام يرجع. <b>وده بالظبط سبب إن مهمة الطباعة بتتسجّل قبل ما تتبعت.</b><br><br>لو التسجيل كان بعد النجاح، كنا هنفقد التذاكر اللي كانت في النص.</div></div><div class="edge"><div class="qh"><span>اتنين كاشير فتحوا نفس الترابيزة في نفس اللحظة</span><span>+</span></div><div class="qb">لو قررنا إن الكاشير بس هو اللي بيدخّل من جهاز واحد، المشكلة دي بتختفي. لو فيه أكتر من جهاز: <b>قفل تفاؤلي بعمود <span class='en'>version</span></b> — التاني يستلم رسالة «الأوردر اتعدّل، حدّث الشاشة» ويعيد المحاولة.</div></div><div class="edge"><div class="qh"><span>العميل عايز يقسّم الحساب بين شخصين</span><span>+</span></div><div class="qb">مش أوردرين — دفعتين على نفس الأوردر. النظام بيسمح بدفع جزئي، والفاتورة بتتطبع بعد اكتمال المبلغ. <br><br><b>لو عايز فاتورتين منفصلتين بالأصناف</b>، دي ميزة أعقد (تقسيم بالصنف) — تتأجل لمرحلة تانية إلا لو بتحصل كتير عندك.</div></div><div class="edge"><div class="qh"><span>العميل قام من غير ما يدفع</span><span>+</span></div><div class="qb">الأوردر بيتحوّل لـ<span class='en'>VOIDED</span> باعتماد مدير وسبب. المبلغ بيتسجّل كخسارة في تقرير منفصل — <b>مش بيتشال كأنه ما حصلش</b>. عشان تعرف ده بيحصل كام مرة في الشهر وعلى أنهي ترابيزات.</div></div><div class="edge"><div class="qh"><span>الترابيزة اتنقلت — العملاء غيّروا مكانهم</span><span>+</span></div><div class="qb">نقل الأوردر من ترابيزة لترابيزة مسموح، وبيتسجّل في التدقيق. <b>ما يحصلش أي طباعة</b> — المطبخ ما يهموش المكان. بس لو الأوردر لسه ما اتبعتش، النقل عادي خالص.</div></div><div class="edge"><div class="qh"><span>صنف خلص من المخزن بعد ما اتطلب</span><span>+</span></div><div class="qb">المطبخ بيبلّغ الكاشير شفهياً (مفيش شاشة). الكاشير بيلغي الصنف بموافقة مشرف، وبيوقف المنتج مؤقتاً من الشاشة عشان محدش يطلبه تاني. <br><br><b>ملاحظة:</b> ده بيوضّح ليه <span class='en'>is_available</span> منفصل عن <span class='en'>is_active</span> — الأول للتوقيف المؤقت والتاني للحذف من المنيو.</div></div><div class="edge"><div class="qh"><span>الكاشير نسي يقفل الوردية وسابها مفتوحة لتاني يوم</span><span>+</span></div><div class="qb">النظام بينبّه لو فيه وردية مفتوحة أكتر من ١٢ ساعة. والمدير يقدر يقفلها بأثر رجعي مع تسجيل إن الإقفال كان متأخر. <b>ما نسمحش بورديتين مفتوحتين لنفس المستخدم في نفس الوقت.</b></div></div><div class="edge"><div class="qh"><span>المدير عايز يغيّر سعر منتج في نص اليوم</span><span>+</span></div><div class="qb">التغيير بيسري على الأوردرات <b>الجديدة</b> بس. الأوردرات المفتوحة بتفضل بالسعر القديم لأنها أخدت نسخة منه وقت الإضافة.<br><br>ده مش تفصيلة — ده الفرق بين نظام محاسبي سليم ونظام تقاريره التاريخية بتتغيّر لوحدها.</div></div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">08 · REPORTING</span>
+  <h2>التقارير — ونفس تقسيمك الحالي</h2>
+  <p class="lede">إنت بتمسك الأكل والبوفيه كخطين منفصلين. النظام هيطلعلك نفس التقسيم ده أوتوماتيك، من غير ما تحسبه بإيدك.</p>
+  <div class="card">
+    <h3>التقرير اليومي</h3>
+    <div class="card" style="padding:0;overflow:hidden;box-shadow:none;margin:10px 0">
+      <table>
+        <thead><tr><th>اليوم</th><th>إجمالي الأكل</th><th>إجمالي البوفيه</th><th>الإجمالي</th><th>مصاريف</th><th>الصافي</th></tr></thead>
+        <tbody>
+          <tr><td>٢٠٢٦-٠٨-٠١</td><td>٤٬٢٠٠</td><td>٦٬٨٠٠</td><td>١١٬٠٠٠</td><td>٢٬١٠٠</td><td>٨٬٩٠٠</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-bottom:0"><b>إزاي بيتحسب؟</b> كل صنف عنده <span class="en">revenue_line</span> (أكل / بوفيه) مأخوذ نسخة منه وقت البيع. فالتقرير مجرد تجميع — مفيش تخمين ولا إدخال يدوي.</p>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>تقارير تشغيلية</h3>
+      <p>• مبيعات اليوم بالتفصيل والساعة<br>
+      • الأصناف الأكتر مبيعاً<br>
+      • متوسط قيمة الفاتورة<br>
+      • معدل دوران الترابيزات<br>
+      • تقرير الوردية والعجز<br>
+      • الأصناف الملغية ومين لغاها</p></div>
+    <div class="card"><h3>تقارير مالية</h3>
+      <p>• صافي الأكل مقابل صافي البوفيه<br>
+      • المصاريف بالنوع<br>
+      • الالتزامات الثابتة (إيجار وأقساط)<br>
+      • مقارنة شهرية<br>
+      • تحصيل كاش مقابل فيزا</p></div>
+  </div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">09 · MY OPINION</span>
+  <h2>ملاحظات وتحديات على التصميم</h2>
+  <div class="grid g2">
+    <div class="card" style="border-color:var(--marker)"><h3>⚠️ غياب الشاشات مخاطرة حقيقية</h3>
+      <p>من غير شاشة في المطبخ، النظام <b>ما يعرفش</b> إن الطلب اتعمل. مش هتقدر تقيس وقت التحضير ولا تعرف الطلب اتأخر فين.</p>
+      <p style="margin-bottom:0"><b>اقتراح رخيص:</b> تابلت قديم على الحيطة يعرض صفحة ويب فيها الطلبات المفتوحة، وزرار واحد «تم». مش KDS كامل — بس بيديك <b>وقت التحضير</b> كمؤشر، وده هيغيّر فهمك للكافيه.</p></div>
+
+    <div class="card"><h3>💡 التيك أواي لازم يتحدد دلوقتي</h3>
+      <p>الأوردر مربوط بترابيزة. لو فيه طلبات خارجية، محتاجين <span class="en">order.type</span> و<span class="en">table_id</span> يقبل <span class="en">NULL</span> من أول يوم — إضافته بعدين هتلمس كل حاجة.</p></div>
+
+    <div class="card"><h3>💡 الأصناف المركّبة</h3>
+      <p>لو عندك كومبو (ساندويتش + مشروب بسعر واحد)، ده بيعقّد التقسيم بين الأكل والبوفيه. <b>قرار مطلوب:</b> نوزّع القيمة بنسبة، ولا نمنع الكومبو في المرحلة الأولى؟</p></div>
+
+    <div class="card"><h3>💡 الخدمة والضريبة</h3>
+      <p>فيه نسبة خدمة؟ ضريبة قيمة مضافة؟ دول بيأثروا على شكل الفاتورة وعلى التقارير. لازم يتحسموا قبل تصميم جدول الأوردر.</p></div>
+
+    <div class="card"><h3>🔒 النسخ الاحتياطي</h3>
+      <p>الداتابيز على جهاز واحد في الكافيه. جهاز يقع = الشغل كله يقف والبيانات ممكن تضيع.</p>
+      <p style="margin-bottom:0"><b>الحد الأدنى:</b> نسخة احتياطية أوتوماتيك كل ساعة على هارد خارجي أو جهاز تاني في الكافيه. ده مش رفاهية.</p></div>
+
+    <div class="card"><h3>🔒 الكهربا</h3>
+      <p>انقطاع كهربا وسط أوردر = بيانات ممكن تتلخبط. <span class="en">UPS</span> صغير على السيرفر والراوتر بيحل ٩٠٪ من المشكلة دي بتكلفة بسيطة.</p></div>
+  </div>
+</section>
+
+<section class="rv">
+  <span class="eyebrow">10 · DECISIONS</span>
+  <h2>قرارات مطلوبة منك</h2>
+  <div class="card" style="background:#FFF6D8">
+    <div class="rule"><div class="rn">١</div><div class="rb"><b>لو السيرفر وقع، الكاشير يقف ولا يكمّل؟</b>ده أهم قرار في المشروع كله — بيحدد المعمارية من الأساس</div></div>
+    <div class="rule"><div class="rn">٢</div><div class="rb"><b>الكاشير بس هو اللي بيدخّل الأوردر، ولا الويتر كمان؟</b>لو أكتر من واحد، محتاجين قفل وقواعد تعارض</div></div>
+    <div class="rule"><div class="rn">٣</div><div class="rb"><b>فيه تيك أواي؟</b>لو أيوه، هيتصمّم من أول يوم</div></div>
+    <div class="rule"><div class="rn">٤</div><div class="rb"><b>خدمة وضريبة؟</b>بكام ومحسوبين إزاي</div></div>
+    <div class="rule"><div class="rn">٥</div><div class="rb"><b>الخصم مسموح لمين وبحد أقصى كام؟</b></div></div>
+    <div class="rule"><div class="rn">٦</div><div class="rb"><b>ورديات فعلية ولا يوم واحد؟</b>لو فيه أكتر من كاشير في اليوم، الورديات ضرورية للرقابة</div></div>
+    <div class="rule"><div class="rn">٧</div><div class="rb"><b>الفاتورة عربي ولا إنجليزي ولا الاتنين؟</b>ده بيأثر على إعداد الطابعة الحرارية — والعربي على الطابعات الحرارية له تحدياته</div></div>
+  </div>
+</section>
+
+<footer style="margin:52px 0 40px;text-align:center;border-top:3px solid #16181C;padding-top:20px">
+  <p style="font-family:'Lalezar';font-size:22px;margin-bottom:6px">الخلاصة</p>
+  <p style="max-width:680px;margin:0 auto;color:#3A3F47">النظام ده مش عن الشاشات — ده عن <b>إن الأوردر يوصل للمطبخ ويوصل صح</b>. وبما إن مفيش شاشة هناك، الطابعة هي كل حاجة. أي قرار تصميمي بيتقاس بسؤال واحد: هل ده بيقلل احتمال إن أوردر يضيع؟</p>
+</footer>
+</main>
+
+<script>
+(function(){
+  var L=[
+   {s:0,t:'مفيش طباعة لسه',a:'—',b:'—',d:'الكاشير فتح ترابيزة ١٢. الأوردر اتولد بحالة OPEN ومفيش أي تذكرة اتطبعت.',loop:0},
+   {s:0,t:'مفيش طباعة لسه',a:'٢ برجر · ١ بطاطس · ٢ لاتيه',b:'التعديل حر تماماً في المرحلة دي',d:'الكاشير بيضيف ويشيل زي ما هو عايز. المطبخ لسه ما يعرفش حاجة، فمفيش أثر لأي تعديل.',loop:0},
+   {s:1,t:'اتطبعت تذكرتين',a:'🍳 المطبخ: ٢ برجر · ١ بطاطس',b:'🥤 البار: ٢ لاتيه',d:'أول ما ضغط «إرسال»، الأوردر اتقسم حسب محطة كل صنف. من دلوقتي أي تعديل لازم يطلع تذكرة.',loop:1},
+   {s:1,t:'تذكرة إضافة',a:'🥤 البار: ١ عصير (إضافة)',b:'الجديد بس — مش الأوردر كله',d:'العميل طلب عصير كمان. التذكرة فيها الصنف الجديد فقط، ومكتوب عليها «إضافة» بوضوح عشان البار ما يعملش الطلب الأول تاني.',loop:1},
+   {s:1,t:'تذكرة إلغاء',a:'🍳 المطبخ: ❌ إلغاء ١ بطاطس',b:'باعتماد مشرف + سبب مسجّل',d:'العميل عدل عن البطاطس. الصنف بيفضل ظاهر في الأوردر بحالة «ملغي» مش بيختفي — عشان تقدر تتابع الهدر آخر الشهر.',loop:1},
+   {s:2,t:'فاتورة العميل',a:'🧾 كل الأصناف + الإجمالي',b:'بعد اكتمال المبلغ بالظبط',d:'الدفع اتم — ممكن كاش أو فيزا أو الاتنين. الفاتورة بتتطبع بعد ما مجموع الدفعات يساوي الإجمالي تماماً.',loop:0},
+   {s:3,t:'خلاص',a:'الترابيزة بقت فاضية',b:'الأوردر دخل في تقارير اليوم',d:'الأوردر اتقفل. الترابيزة رجعت متاحة، والمبيعات اتقسمت أوتوماتيك بين خط الأكل وخط البوفيه في التقرير.',loop:0}
+  ];
+  function set(n){
+    var st=L[n];
+    ['s0','s1','s2','s3'].forEach(function(id,i){
+      var e=document.getElementById(id);
+      e.setAttribute('fill', i===st.s?'#FFC93C':'#fff');
+      e.setAttribute('stroke-width', i===st.s?5:3);
+    });
+    document.getElementById('loopA').style.opacity = st.loop?1:0;
+    document.getElementById('loopB').style.opacity = st.loop?1:0;
+    document.getElementById('loopLbl').style.opacity = st.loop?1:0;
+    document.getElementById('pTitle').textContent=st.t;
+    document.getElementById('pLine1').textContent=st.a;
+    document.getElementById('pLine2').textContent=st.b;
+    document.getElementById('lcDesc').textContent=st.d;
+    document.getElementById('printBox').setAttribute('fill', st.t.indexOf('مفيش')>=0?'#F6F1E4':'#FFF6D8');
+    document.querySelectorAll('#lcSteps .btn').forEach(function(b,i){b.classList.toggle('off',i!==n);});
+  }
+  document.querySelectorAll('#lcSteps .btn').forEach(function(b){
+    b.addEventListener('click',function(){set(+b.dataset.s);});});
+  set(0);
+
+  document.querySelectorAll('.edge').forEach(function(e){
+    e.querySelector('.qh').addEventListener('click',function(){e.classList.toggle('on');});
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var bar=document.getElementById('bar');
+  window.addEventListener('scroll',function(){
+    var h=document.documentElement.scrollHeight-window.innerHeight;
+    bar.style.width=(h>0?(window.scrollY/h)*100:0)+'%';
+  },{passive:true});
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
+  },{threshold:.1});
+  document.querySelectorAll('.rv').forEach(function(el){io.observe(el);});
+  document.querySelectorAll('.qi').forEach(function(q){
+    q.querySelector('.qq').addEventListener('click',function(){q.classList.toggle('on');});
+  });
+})();
+</script>
+
+</body>
+</html>
