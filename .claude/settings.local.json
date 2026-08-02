@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openssl rand *)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('base64'\\)\\)\")",
+      "Read(//tmp/**)",
+      "Bash(curl -s -i -X POST http://localhost:8080/api/expenses -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"type\":\"MAINTENANCE\",\"revenueLine\":\"SHARED\",\"amount\":20.00,\"expenseDate\":\"2026-08-02\",\"recurring\":false,\"paidFromDrawer\":true}')"
+    ]
+  }
+}

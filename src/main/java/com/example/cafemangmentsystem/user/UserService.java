@@ -1,0 +1,85 @@
+package com.example.cafemangmentsystem.user;
+
+import com.example.cafemangmentsystem.user.dto.ChangePasswordRequest;
+import com.example.cafemangmentsystem.user.dto.CreateUserRequest;
+import com.example.cafemangmentsystem.user.dto.UpdateUserRequest;
+import com.example.cafemangmentsystem.user.dto.UserResponse;
+import com.example.cafemangmentsystem.user.entity.User;
+import com.example.cafemangmentsystem.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserResponse create(CreateUserRequest request) {
+        if (userRepository.findByUsername(request.username()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already taken: " + request.username());
+        }
+
+        User user = User.builder()
+                .username(request.username())
+                .fullName(request.fullName())
+                .passwordHash(passwordEncoder.encode(request.password()))
+                .pinHash(request.pin() == null ? null : passwordEncoder.encode(request.pin()))
+                .role(request.role())
+                .build();
+
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> findAll() {
+        return userRepository.findAll().stream()
+                .map(UserResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse findById(Long id) {
+        return UserResponse.from(getOrThrow(id));
+    }
+
+    public UserResponse update(Long id, UpdateUserRequest request) {
+        User user = getOrThrow(id);
+        user.setFullName(request.fullName());
+        user.setRole(request.role());
+        if (request.pin() != null) {
+            user.setPinHash(passwordEncoder.encode(request.pin()));
+        }
+        return UserResponse.from(user);
+    }
+
+    public void changePassword(Long id, ChangePasswordRequest request) {
+        User user = getOrThrow(id);
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+    }
+
+    public UserResponse deactivate(Long id, Long deactivatedByUserId) {
+        User user = getOrThrow(id);
+        user.deactivate(deactivatedByUserId);
+        return UserResponse.from(user);
+    }
+
+    public UserResponse activate(Long id) {
+        User user = getOrThrow(id);
+        user.activate();
+        return UserResponse.from(user);
+    }
+
+    private User getOrThrow(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + id));
+    }
+}
