@@ -28,11 +28,28 @@ function createWindow() {
     },
   });
 
-  // Start Spring Boot backend (uses jar from target directory)
-  const javaExe = 'java';
-  const jarPath = path.join(__dirname, 'target', 'cafe-mangment-system-0.0.1-SNAPSHOT.jar');
+  // Start Spring Boot backend (uses jar from target directory in dev, or resources/backend.jar in prod)
+  const fs = require('fs');
+  let javaExe = 'java';
+  let jarPath = '';
+
+  if (app.isPackaged) {
+    jarPath = path.join(process.resourcesPath, 'backend.jar');
+    const embeddedJre = path.join(process.resourcesPath, 'jre', 'bin', 'java.exe');
+    if (fs.existsSync(embeddedJre)) {
+      javaExe = embeddedJre;
+    }
+  } else {
+    jarPath = path.join(__dirname, 'target', 'cafe-mangment-system-0.0.1-SNAPSHOT.jar');
+    const devJre = path.join(__dirname, 'jre', 'bin', 'java.exe');
+    if (fs.existsSync(devJre)) {
+      javaExe = devJre;
+    }
+  }
+
   const spring = spawn(javaExe, ['-jar', jarPath], { detached: true, stdio: 'ignore' });
-  // Note: ensure Java is in PATH // Poll backend health endpoint
+
+  // Poll backend health endpoint
   const interval = setInterval(() => {
     http.get('http://localhost:8080/actuator/health', res => {
       if (res.statusCode === 200) {

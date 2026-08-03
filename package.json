@@ -20,6 +20,16 @@
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      {
+        "from": "target/cafe-mangment-system-0.0.1-SNAPSHOT.jar",
+        "to": "backend.jar"
+      },
+      {
+        "from": "jre",
+        "to": "jre"
+      }
+    ],
     "win": {
       "target": [
         {

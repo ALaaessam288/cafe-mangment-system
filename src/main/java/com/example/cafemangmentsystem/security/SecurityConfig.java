@@ -57,7 +57,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/shifts/debug-orders").permitAll()
                 .requestMatchers("/api/platform/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .anyRequest().authenticated()
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().permitAll()
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(restAuthenticationEntryPoint)
