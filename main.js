@@ -73,17 +73,27 @@ function createWindow() {
   const logDir = path.join(app.getPath('userData'), 'logs');
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
   const logFilePath = path.join(logDir, 'backend.log');
-  const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+  
+  // Open log file synchronously to get a valid file descriptor immediately
+  const logFd = fs.openSync(logFilePath, 'a');
+
+  function writeLog(msg) {
+    try {
+      fs.writeSync(logFd, msg);
+    } catch (e) {
+      console.error('Failed to write log:', e);
+    }
+  }
 
   // Write initialization diagnostics to backend.log
-  logStream.write(`[LAUNCHER] --- Startup at ${new Date().toISOString()} ---\n`);
-  logStream.write(`[LAUNCHER] app.isPackaged: ${app.isPackaged}\n`);
-  logStream.write(`[LAUNCHER] Resolved javaExe: ${javaExe}\n`);
-  logStream.write(`[LAUNCHER] Resolved jarPath: ${jarPath}\n`);
+  writeLog(`[LAUNCHER] --- Startup at ${new Date().toISOString()} ---\n`);
+  writeLog(`[LAUNCHER] app.isPackaged: ${app.isPackaged}\n`);
+  writeLog(`[LAUNCHER] Resolved javaExe: ${javaExe}\n`);
+  writeLog(`[LAUNCHER] Resolved jarPath: ${jarPath}\n`);
 
   if (!fs.existsSync(jarPath)) {
     const errorMsg = `ملف الباكند مش موجود:\n${jarPath}\n\nشغّل build.ps1 الأول.`;
-    logStream.write(`[LAUNCHER] ERROR: ${errorMsg}\n`);
+    writeLog(`[LAUNCHER] ERROR: ${errorMsg}\n`);
     dialog.showErrorBox('خطأ في التشغيل', errorMsg);
     app.quit();
     return;
@@ -92,7 +102,7 @@ function createWindow() {
   // ── Launch Spring Boot ──
   const spawnOptions = {
     detached: false,
-    stdio: ['ignore', logStream, logStream]
+    stdio: ['ignore', logFd, logFd]
   };
 
   // If using plain 'java' command, execute via shell to ensure path expansion works on Windows
@@ -100,7 +110,7 @@ function createWindow() {
     spawnOptions.shell = true;
   }
 
-  logStream.write(`[LAUNCHER] Spawning backend process...\n`);
+  writeLog(`[LAUNCHER] Spawning backend process...\n`);
   
   springProcess = spawn(javaExe, [
     '-jar', jarPath,
@@ -110,13 +120,13 @@ function createWindow() {
 
   springProcess.on('error', (err) => {
     const errorMsg = `فشل تشغيل الباكند:\n${err.message}\n\nتأكد إن Java مثبتة على الجهاز.`;
-    logStream.write(`[LAUNCHER] SPAWN ERROR: ${err.message}\n`);
+    writeLog(`[LAUNCHER] SPAWN ERROR: ${err.message}\n`);
     dialog.showErrorBox('فشل تشغيل الباكند', errorMsg);
     app.quit();
   });
 
   springProcess.on('close', (code) => {
-    logStream.write(`[LAUNCHER] Backend process closed with code: ${code}\n`);
+    writeLog(`[LAUNCHER] Backend process closed with code: ${code}\n`);
   });
 
   // ── Poll health endpoint until backend is ready ──
@@ -127,7 +137,7 @@ function createWindow() {
     if (attempts > MAX_WAIT) {
       clearInterval(interval);
       const errorMsg = 'الباكند استغرق وقت طويل جداً للبدء. افتح ملف اللوج:\n' + logFilePath;
-      logStream.write(`[LAUNCHER] TIMEOUT: Actuator health did not respond after 120s.\n`);
+      writeLog(`[LAUNCHER] TIMEOUT: Actuator health did not respond after 120s.\n`);
       dialog.showErrorBox('تأخر التشغيل', errorMsg);
       app.quit();
       return;
@@ -136,7 +146,7 @@ function createWindow() {
     http.get('http://localhost:8080/actuator/health', (res) => {
       if (res.statusCode === 200) {
         clearInterval(interval);
-        logStream.write(`[LAUNCHER] Backend is healthy! Loading app UI.\n`);
+        writeLog(`[LAUNCHER] Backend is healthy! Loading app UI.\n`);
         mainWindow.loadURL('http://localhost:8080');
         mainWindow.maximize();
         mainWindow.show();
