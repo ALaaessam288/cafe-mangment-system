@@ -26,7 +26,7 @@ public class TenantOwnerProvisioner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void createOwner(String username, String fullName, String rawPassword) {
         User owner = User.builder()
                 .username(username)
