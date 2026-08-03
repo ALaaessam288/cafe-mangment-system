@@ -1,7 +1,7 @@
 package com.example.cafemangmentsystem.employee;
 
+import com.example.cafemangmentsystem.employee.dto.EmployeeDto;
 import com.example.cafemangmentsystem.employee.dto.EmployeeRequest;
-import com.example.cafemangmentsystem.employee.dto.EmployeeResponse;
 import com.example.cafemangmentsystem.employee.entity.Employee;
 import com.example.cafemangmentsystem.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,62 +11,51 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
 
-    public EmployeeResponse create(EmployeeRequest request) {
-        Employee employee = Employee.builder()
-                .fullName(request.fullName())
-                .position(request.position())
-                .phone(request.phone())
-                .dailyWage(request.dailyWage())
-                .hireDate(request.hireDate())
-                .build();
-
-        return EmployeeResponse.from(employeeRepository.save(employee));
-    }
-
     @Transactional(readOnly = true)
-    public List<EmployeeResponse> findAll() {
+    public List<EmployeeDto> findAll() {
         return employeeRepository.findAll().stream()
-                .map(EmployeeResponse::from)
-                .toList();
+                .map(EmployeeDto::from)
+                .collect(Collectors.toList());
     }
 
-    @Transactional(readOnly = true)
-    public EmployeeResponse findById(Long id) {
-        return EmployeeResponse.from(getOrThrow(id));
+    @Transactional
+    public EmployeeDto create(EmployeeRequest request) {
+        Employee employee = Employee.builder()
+                .name(request.name())
+                .jobTitle(request.jobTitle())
+                .baseSalary(request.baseSalary())
+                .active(request.active() != null ? request.active() : true)
+                .build();
+        return EmployeeDto.from(employeeRepository.save(employee));
     }
 
-    public EmployeeResponse update(Long id, EmployeeRequest request) {
-        Employee employee = getOrThrow(id);
-        employee.setFullName(request.fullName());
-        employee.setPosition(request.position());
-        employee.setPhone(request.phone());
-        employee.setDailyWage(request.dailyWage());
-        employee.setHireDate(request.hireDate());
-        return EmployeeResponse.from(employee);
+    @Transactional
+    public EmployeeDto update(Long id, EmployeeRequest request) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+
+        employee.setName(request.name());
+        employee.setJobTitle(request.jobTitle());
+        employee.setBaseSalary(request.baseSalary());
+        if (request.active() != null) {
+            employee.setActive(request.active());
+        }
+
+        return EmployeeDto.from(employeeRepository.save(employee));
     }
 
-    public EmployeeResponse deactivate(Long id, Long deactivatedByUserId) {
-        Employee employee = getOrThrow(id);
-        employee.deactivate(deactivatedByUserId);
-        return EmployeeResponse.from(employee);
-    }
-
-    public EmployeeResponse activate(Long id) {
-        Employee employee = getOrThrow(id);
-        employee.activate();
-        return EmployeeResponse.from(employee);
-    }
-
-    Employee getOrThrow(Long id) {
-        return employeeRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found: " + id));
+    @Transactional
+    public void delete(Long id) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+        employeeRepository.delete(employee);
     }
 }

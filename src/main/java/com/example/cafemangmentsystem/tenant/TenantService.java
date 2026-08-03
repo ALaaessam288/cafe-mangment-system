@@ -4,6 +4,7 @@ import com.example.cafemangmentsystem.common.tenant.TenantContext;
 import com.example.cafemangmentsystem.tenant.dto.TenantResponse;
 import com.example.cafemangmentsystem.tenant.entity.Tenant;
 import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
+import com.example.cafemangmentsystem.tenant.dto.PublicTenantDto;
 import com.example.cafemangmentsystem.tenant.platform.TenantOwnerProvisioner;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse;
@@ -15,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +51,14 @@ public class TenantService {
         return tenantRepository.findById(id)
                 .map(TenantResponse::from)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PublicTenantDto> findAllPublic() {
+        return tenantRepository.findAll().stream()
+                .filter(t -> LOGINABLE.contains(t.getStatus()))
+                .map(t -> new PublicTenantDto(t.getSlug(), t.getName(), t.getBusinessType().name()))
+                .collect(Collectors.toList());
     }
 
     public ProvisionTenantResponse provision(ProvisionTenantRequest request) {

@@ -32,7 +32,7 @@ public class PlatformApiKeyFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                      @NonNull HttpServletResponse response,
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
-        if (!request.getRequestURI().startsWith("/api/platform/")) {
+        if (request.getMethod().equalsIgnoreCase("OPTIONS") || !request.getRequestURI().startsWith("/api/platform/")) {
             filterChain.doFilter(request, response);
             return;
         }

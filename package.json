@@ -1,0 +1,33 @@
+{
+  "name": "cafe-pos",
+  "version": "1.0.0",
+  "description": "Electron wrapper for Cafe Management System",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "npx electron-builder build --win --publish never"
+  },
+  "dependencies": {
+    "mysql2": "^3.23.2"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.example.cafepos",
+    "productName": "CafePOS",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "resources/icon.ico"
+    }
+  }
+}

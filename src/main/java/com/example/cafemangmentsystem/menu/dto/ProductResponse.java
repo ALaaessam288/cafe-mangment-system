@@ -18,9 +18,7 @@ public record ProductResponse(
         BigDecimal price,
         boolean available,
         boolean active,
-        String prepNote,
-        boolean trackInventory,
-        int stockQuantity
+        String prepNote
 ) {
     public static ProductResponse from(Product product) {
         return new ProductResponse(
@@ -35,8 +33,6 @@ public record ProductResponse(
                 product.getPrice(),
                 product.isAvailable(),
                 product.isActive(),
-                product.getPrepNote(),
-                product.isTrackInventory(),
-                product.getStockQuantity());
+                product.getPrepNote());
     }
 }

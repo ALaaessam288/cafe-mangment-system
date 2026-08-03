@@ -8,6 +8,8 @@ import com.example.cafemangmentsystem.discount.entity.DiscountScope;
 import com.example.cafemangmentsystem.discount.entity.DiscountType;
 import com.example.cafemangmentsystem.discount.repository.DiscountRepository;
 import com.example.cafemangmentsystem.menu.entity.Product;
+import com.example.cafemangmentsystem.menu.entity.ProductOption;
+import com.example.cafemangmentsystem.menu.repository.ProductOptionRepository;
 import com.example.cafemangmentsystem.menu.repository.ProductRepository;
 import com.example.cafemangmentsystem.order.dto.AddOrderItemRequest;
 import com.example.cafemangmentsystem.order.dto.CancelOrderItemRequest;
@@ -67,6 +69,7 @@ public class OrderService {
     private final PrintJobService printJobService;
     private final DiscountRepository discountRepository;
     private final TenantRepository tenantRepository;
+    private final ProductOptionRepository productOptionRepository;
 
     public OrderResponse open(Long userId, OpenOrderRequest request) {
         Shift shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
@@ -148,20 +151,34 @@ public class OrderService {
 
         int quantity = request.quantity() == null ? 1 : request.quantity();
 
-        if (product.isTrackInventory()) {
-            if (product.getStockQuantity() < quantity) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Out of stock: " + product.getNameAr());
-            }
-            product.setStockQuantity(product.getStockQuantity() - quantity);
-        }
-
         User addedBy = userRepository.findById(userId).orElseThrow();
+
+        BigDecimal unitPrice = product.getPrice();
+        String productName = product.getNameAr();
+
+        if (request.optionIds() != null && !request.optionIds().isEmpty()) {
+            List<ProductOption> options = productOptionRepository.findAllById(request.optionIds());
+            if (!options.isEmpty()) {
+                StringBuilder sb = new StringBuilder(productName);
+                sb.append(" (");
+                for (int i = 0; i < options.size(); i++) {
+                    ProductOption opt = options.get(i);
+                    unitPrice = unitPrice.add(opt.getPriceDelta());
+                    sb.append(opt.getNameAr());
+                    if (i < options.size() - 1) {
+                        sb.append(" + ");
+                    }
+                }
+                sb.append(")");
+                productName = sb.toString();
+            }
+        }
 
         OrderItem item = OrderItem.builder()
                 .order(order)
                 .product(product)
-                .productNameSnapshot(product.getNameAr())
-                .unitPriceSnapshot(product.getPrice())
+                .productNameSnapshot(productName)
+                .unitPriceSnapshot(unitPrice)
                 .stationSnapshot(product.getStation().getCode())
                 .revenueLineSnapshot(product.getRevenueLine())
                 .quantity(quantity)
@@ -191,7 +208,6 @@ public class OrderService {
         item.setCancelledBy(cancelledBy);
         item.setCancelReason(request.reason());
 
-        restoreStockIfTracked(item);
         recalcTotals(order);
 
         if (wasSent) {
@@ -271,10 +287,6 @@ public class OrderService {
         order.setClosedBy(closedBy);
         order.setClosedAt(Instant.now());
         order.setVoidReason(request.reason());
-
-        orderItemRepository.findAllByOrderId(orderId).stream()
-                .filter(i -> i.getStatus() != OrderItemStatus.CANCELLED)
-                .forEach(this::restoreStockIfTracked);
 
         return toResponse(order);
     }
@@ -374,13 +386,6 @@ public class OrderService {
         capped = capped.min(base);
 
         return capped.max(BigDecimal.ZERO);
-    }
-
-    private void restoreStockIfTracked(OrderItem item) {
-        Product product = item.getProduct();
-        if (product.isTrackInventory()) {
-            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-        }
     }
 
     private void requireOpenForModification(Order order) {

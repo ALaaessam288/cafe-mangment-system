@@ -62,12 +62,11 @@ public class Expense extends TenantScopedEntity {
     @JoinColumn(name = "shift_id")
     private Shift shift;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "recorded_by", nullable = false)
-    private User recordedBy;
-
-    /** Only set (and only allowed) when type is SALARIES - which staff member this payout is for. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
     private Employee employee;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "recorded_by", nullable = false)
+    private User recordedBy;
 }

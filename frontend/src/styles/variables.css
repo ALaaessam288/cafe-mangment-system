@@ -1,0 +1,124 @@
+/* ============================================================
+   WANAS CAFÉ POS — CSS DESIGN TOKENS
+   ============================================================ */
+
+:root {
+  /* ── Backgrounds ── */
+  --bg-app:        #0b0d13;
+  --bg-primary:    #0f1117;
+  --bg-secondary:  #161922;
+  --bg-tertiary:   #1e2130;
+  --bg-elevated:   #252839;
+  --bg-hover:      #2a2e45;
+  --bg-active:     #313654;
+
+  /* ── Borders ── */
+  --border-subtle:   rgba(255, 255, 255, 0.05);
+  --border-default:  rgba(255, 255, 255, 0.08);
+  --border-strong:   rgba(255, 255, 255, 0.14);
+  --border-focus:    #f59e0b;
+
+  /* ── Brand / Accent (Amber) ── */
+  --accent:          #f59e0b;
+  --accent-hover:    #fbbf24;
+  --accent-dim:      rgba(245, 158, 11, 0.15);
+  --accent-text:     #fef3c7;
+
+  /* ── Semantic Colors ── */
+  --success:         #10b981;
+  --success-dim:     rgba(16, 185, 129, 0.15);
+  --success-text:    #d1fae5;
+
+  --danger:          #ef4444;
+  --danger-hover:    #f87171;
+  --danger-dim:      rgba(239, 68, 68, 0.15);
+  --danger-text:     #fee2e2;
+
+  --warning:         #f59e0b;
+  --warning-dim:     rgba(245, 158, 11, 0.12);
+  --warning-text:    #fef3c7;
+
+  --info:            #3b82f6;
+  --info-dim:        rgba(59, 130, 246, 0.15);
+  --info-text:       #dbeafe;
+
+  --neutral:         #64748b;
+  --neutral-dim:     rgba(100, 116, 139, 0.15);
+
+  /* ── Text ── */
+  --text-primary:    #f1f5f9;
+  --text-secondary:  #94a3b8;
+  --text-muted:      #64748b;
+  --text-disabled:   #334155;
+  --text-inverse:    #0f1117;
+
+  /* ── Typography ── */
+  --font-sans:      'Cairo', system-ui, -apple-system, sans-serif;
+  --font-mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --text-xs:    11px;
+  --text-sm:    13px;
+  --text-base:  14px;
+  --text-md:    16px;
+  --text-lg:    18px;
+  --text-xl:    20px;
+  --text-2xl:   24px;
+  --text-3xl:   30px;
+  --text-4xl:   36px;
+
+  --fw-light:    300;
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --lh-tight:   1.25;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.75;
+
+  /* ── Spacing ── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+
+  /* ── Border Radius ── */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md:   0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg:   0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-xl:   0 16px 48px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 20px rgba(245, 158, 11, 0.2);
+
+  /* ── Layout ── */
+  --sidebar-width:       220px;
+  --sidebar-collapsed:   64px;
+  --topbar-height:       56px;
+  --table-panel-width:   260px;
+  --order-panel-width:   320px;
+
+  /* ── Transitions ── */
+  --transition-fast:    0.12s ease;
+  --transition-normal:  0.2s ease;
+  --transition-slow:    0.35s ease;
+
+  /* ── Z-Index ── */
+  --z-sidebar:   100;
+  --z-topbar:    200;
+  --z-dropdown:  300;
+  --z-modal:     400;
+  --z-toast:     500;
+  --z-splash:    999;
+}

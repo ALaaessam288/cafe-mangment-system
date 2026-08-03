@@ -1,0 +1,49 @@
+.page {
+  padding: 1rem;
+}
+
+.page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.page__title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.page__subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.page__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.page__filters {
+  margin-bottom: 1.5rem;
+  max-width: 400px;
+}
+
+.inactive-row {
+  opacity: 0.6;
+  background-color: var(--bg-secondary);
+}
+
+.checkbox-label {
+  user-select: none;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+}

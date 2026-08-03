@@ -34,7 +34,6 @@ public class ProductService {
                 .nameEn(request.nameEn())
                 .price(request.price())
                 .prepNote(request.prepNote())
-                .trackInventory(request.trackInventory())
                 .build();
 
         return ProductResponse.from(productRepository.save(product));
@@ -62,7 +61,6 @@ public class ProductService {
         product.setNameEn(request.nameEn());
         product.setPrice(request.price());
         product.setPrepNote(request.prepNote());
-        product.setTrackInventory(request.trackInventory());
         return ProductResponse.from(product);
     }
 

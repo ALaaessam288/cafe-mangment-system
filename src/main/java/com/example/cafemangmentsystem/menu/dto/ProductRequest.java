@@ -14,7 +14,6 @@ public record ProductRequest(
         @NotBlank String nameAr,
         String nameEn,
         @NotNull @Positive BigDecimal price,
-        String prepNote,
-        boolean trackInventory
+        String prepNote
 ) {
 }

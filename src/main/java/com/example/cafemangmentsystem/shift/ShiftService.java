@@ -1,9 +1,6 @@
 package com.example.cafemangmentsystem.shift;
 
 import com.example.cafemangmentsystem.expense.repository.ExpenseRepository;
-import com.example.cafemangmentsystem.order.entity.Order;
-import com.example.cafemangmentsystem.order.entity.OrderStatus;
-import com.example.cafemangmentsystem.order.repository.OrderRepository;
 import com.example.cafemangmentsystem.payment.entity.PaymentMethod;
 import com.example.cafemangmentsystem.payment.repository.PaymentRepository;
 import com.example.cafemangmentsystem.register.entity.Register;
@@ -37,7 +34,6 @@ public class ShiftService {
     private final RegisterRepository registerRepository;
     private final PaymentRepository paymentRepository;
     private final ExpenseRepository expenseRepository;
-    private final OrderRepository orderRepository;
 
     public ShiftResponse open(Long userId, OpenShiftRequest request) {
         if (shiftRepository.existsByUserIdAndClosedAtIsNull(userId)) {
@@ -96,52 +92,6 @@ public class ShiftService {
     }
 
     @Transactional(readOnly = true)
-    public ShiftReportResponse generateReport(Long shiftId) {
-        Shift shift = getOrThrow(shiftId);
-
-        List<Order> orders = orderRepository.findAllByShiftId(shiftId);
-        List<Order> voidedOrders = orders.stream().filter(o -> o.getStatus() == OrderStatus.VOIDED).toList();
-        List<Order> countedOrders = orders.stream().filter(o -> o.getStatus() != OrderStatus.VOIDED).toList();
-
-        BigDecimal grossSales = countedOrders.stream().map(Order::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalDiscount = countedOrders.stream().map(Order::getDiscount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal netSales = countedOrders.stream().map(Order::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal cashCollected = paymentRepository.sumAmountByShiftIdAndMethod(shiftId, PaymentMethod.CASH);
-        BigDecimal walletCollected = paymentRepository.sumAmountByShiftIdAndMethod(shiftId, PaymentMethod.WALLET);
-        BigDecimal instapayCollected = paymentRepository.sumAmountByShiftIdAndMethod(shiftId, PaymentMethod.INSTAPAY);
-        BigDecimal totalCollected = cashCollected.add(walletCollected).add(instapayCollected);
-
-        BigDecimal drawerExpenses = expenseRepository.sumDrawerAmountByShiftId(shiftId);
-        BigDecimal expectedCash = shift.getClosedAt() != null
-                ? shift.getExpectedCash()
-                : shift.getOpeningFloat().add(cashCollected).subtract(drawerExpenses);
-
-        return new ShiftReportResponse(
-                shift.getId(),
-                shift.getUser().getId(),
-                shift.getUser().getFullName(),
-                shift.getRegister().getId(),
-                shift.getRegister().getName(),
-                shift.getOpenedAt(),
-                shift.getClosedAt(),
-                countedOrders.size(),
-                voidedOrders.size(),
-                grossSales,
-                totalDiscount,
-                netSales,
-                cashCollected,
-                walletCollected,
-                instapayCollected,
-                totalCollected,
-                drawerExpenses,
-                shift.getOpeningFloat(),
-                expectedCash,
-                shift.getCountedCash(),
-                shift.getVariance());
-    }
-
-    @Transactional(readOnly = true)
     public ShiftResponse findById(Long id) {
         return ShiftResponse.from(getOrThrow(id));
     }
@@ -155,6 +105,19 @@ public class ShiftService {
     @Transactional(readOnly = true)
     public Optional<ShiftResponse> findCurrentForUser(Long userId) {
         return shiftRepository.findByUserIdAndClosedAtIsNull(userId).map(ShiftResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public ShiftReportResponse getShiftReport(Long shiftId) {
+        ShiftResponse shiftResponse = ShiftResponse.from(getOrThrow(shiftId));
+
+        BigDecimal cash = paymentRepository.sumAmountByShiftIdAndMethod(shiftId, PaymentMethod.CASH);
+        BigDecimal instapay = paymentRepository.sumAmountByShiftIdAndMethod(shiftId, PaymentMethod.INSTAPAY);
+        BigDecimal wallet = paymentRepository.sumAmountByShiftIdAndMethod(shiftId, PaymentMethod.WALLET);
+        
+        BigDecimal totalRevenue = cash.add(instapay).add(wallet);
+
+        return new ShiftReportResponse(shiftResponse, totalRevenue, cash, instapay, wallet);
     }
 
     Shift getOrThrow(Long id) {

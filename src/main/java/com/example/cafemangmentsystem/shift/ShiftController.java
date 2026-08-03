@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @RestController
 @RequestMapping("/api/shifts")
@@ -29,6 +32,7 @@ import java.util.List;
 public class ShiftController {
 
     private final ShiftService shiftService;
+    private final JdbcTemplate jdbcTemplate;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -57,24 +61,29 @@ public class ShiftController {
     @GetMapping("/{id}")
     public ShiftResponse findById(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         ShiftResponse shift = shiftService.findById(id);
-        requireOwnerOrPrivileged(shift.userId(), principal);
-        return shift;
-    }
-
-    @GetMapping("/{id}/report")
-    public ShiftReportResponse report(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
-        ShiftReportResponse report = shiftService.generateReport(id);
-        requireOwnerOrPrivileged(report.userId(), principal);
-        return report;
-    }
-
-    private void requireOwnerOrPrivileged(Long shiftUserId, UserPrincipal principal) {
-        boolean isOwner = shiftUserId.equals(principal.getId());
+        boolean isOwner = shift.userId().equals(principal.getId());
         boolean isPrivileged = principal.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_SUPERVISOR"));
         if (!isOwner && !isPrivileged) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own shift");
         }
+        return shift;
+    }
+
+    @GetMapping("/{id}/report")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    public ShiftReportResponse getReport(@PathVariable Long id) {
+        return shiftService.getShiftReport(id);
+    }
+
+    @GetMapping("/debug-payments")
+    public ResponseEntity<List<Map<String, Object>>> debugPayments() {
+        return ResponseEntity.ok(jdbcTemplate.queryForList("SELECT * FROM payments"));
+    }
+
+    @GetMapping("/debug-orders")
+    public ResponseEntity<List<Map<String, Object>>> debugOrders() {
+        return ResponseEntity.ok(jdbcTemplate.queryForList("SELECT * FROM orders"));
     }
 
     @GetMapping

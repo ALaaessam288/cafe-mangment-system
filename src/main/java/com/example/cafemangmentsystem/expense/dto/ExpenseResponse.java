@@ -32,6 +32,7 @@ public record ExpenseResponse(
                 expense.getShift() == null ? null : expense.getShift().getId(),
                 expense.getRecordedBy().getId(),
                 expense.getEmployee() == null ? null : expense.getEmployee().getId(),
-                expense.getEmployee() == null ? null : expense.getEmployee().getFullName());
+                expense.getEmployee() == null ? null : expense.getEmployee().getName()
+        );
     }
 }
