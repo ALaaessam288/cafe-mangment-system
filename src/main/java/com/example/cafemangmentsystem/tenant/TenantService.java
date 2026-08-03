@@ -6,6 +6,7 @@ import com.example.cafemangmentsystem.tenant.entity.Tenant;
 import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
 import com.example.cafemangmentsystem.tenant.dto.PublicTenantDto;
 import com.example.cafemangmentsystem.tenant.platform.TenantOwnerProvisioner;
+import com.example.cafemangmentsystem.tenant.platform.TenantSaver;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse;
 import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -29,6 +31,7 @@ public class TenantService {
 
     private final TenantRepository tenantRepository;
     private final TenantOwnerProvisioner tenantOwnerProvisioner;
+    private final TenantSaver tenantSaver;
 
     /**
      * Resolves a tenant for login. Deliberately throws the same {@link BadCredentialsException}
@@ -61,8 +64,22 @@ public class TenantService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Provisions a new tenant + its owner user.
+     *
+     * SQLite is single-writer: two concurrent transactions cause SQLITE_BUSY.
+     * We must NOT hold an outer transaction while calling sub-transactions, so
+     * this method runs with NOT_SUPPORTED (suspends any ambient transaction).
+     *
+     * Sequence (each step commits fully before the next opens a connection):
+     *   1. TenantSaver.existsBySlug()  — REQUIRES_NEW → commits → releases lock
+     *   2. TenantSaver.save()          — REQUIRES_NEW → commits → releases lock
+     *   3. TenantContext.set(tenantId) — no DB work
+     *   4. TenantOwnerProvisioner      — REQUIRES_NEW → commits → releases lock
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ProvisionTenantResponse provision(ProvisionTenantRequest request) {
-        if (tenantRepository.existsBySlug(request.slug())) {
+        if (tenantSaver.existsBySlug(request.slug())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + request.slug());
         }
 
@@ -74,14 +91,16 @@ public class TenantService {
                 .timezone(request.timezone() == null ? "UTC" : request.timezone())
                 .currency(request.currency() == null ? "USD" : request.currency())
                 .build();
-        tenant = tenantRepository.save(tenant);
 
-        // Set before calling into the REQUIRES_NEW bean: that call opens a brand new Hibernate
-        // session, and @TenantId resolves the tenant identifier at session-open time - it has to
-        // already be correct by the time that happens, not set from inside the callee.
+        // Step 1: save tenant in its own transaction → commits, releases SQLite write lock
+        tenant = tenantSaver.save(tenant);
+
+        // Step 2: set tenant context so Hibernate stamps correct tenant_id on the user INSERT
         TenantContext.set(tenant.getId());
         try {
-            tenantOwnerProvisioner.createOwner(request.ownerUsername(), request.ownerFullName(), request.ownerPassword());
+            // Step 3: save owner in its own transaction → commits, releases SQLite write lock
+            tenantOwnerProvisioner.createOwner(
+                    request.ownerUsername(), request.ownerFullName(), request.ownerPassword());
         } finally {
             TenantContext.clear();
         }
