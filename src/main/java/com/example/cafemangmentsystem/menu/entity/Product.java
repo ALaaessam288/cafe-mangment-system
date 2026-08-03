@@ -54,4 +54,12 @@ public class Product extends SoftDeletableEntity {
 
     @Column(name = "prep_note")
     private String prepNote;
+
+    @Column(name = "stock_quantity", nullable = false)
+    @Builder.Default
+    private int stockQuantity = 0;
+
+    @Column(name = "track_inventory", nullable = false)
+    @Builder.Default
+    private boolean trackInventory = false;
 }

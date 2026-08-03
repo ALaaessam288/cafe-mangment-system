@@ -47,7 +47,18 @@ function createWindow() {
     }
   }
 
-  const spring = spawn(javaExe, ['-jar', jarPath], { detached: true, stdio: 'ignore' });
+  // Create log stream to capture backend stdout/stderr in user data folder
+  const logDir = path.join(app.getPath('userData'), 'logs');
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  const logFile = path.join(logDir, 'backend.log');
+  const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+  const spring = spawn(javaExe, ['-jar', jarPath], { 
+    detached: true, 
+    stdio: ['ignore', logStream, logStream] 
+  });
 
   // Poll backend health endpoint
   const interval = setInterval(() => {
