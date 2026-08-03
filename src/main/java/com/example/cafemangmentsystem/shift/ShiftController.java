@@ -3,6 +3,7 @@ package com.example.cafemangmentsystem.shift;
 import com.example.cafemangmentsystem.security.UserPrincipal;
 import com.example.cafemangmentsystem.shift.dto.CloseShiftRequest;
 import com.example.cafemangmentsystem.shift.dto.OpenShiftRequest;
+import com.example.cafemangmentsystem.shift.dto.ShiftReportResponse;
 import com.example.cafemangmentsystem.shift.dto.ShiftResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @RestController
 @RequestMapping("/api/shifts")
@@ -28,6 +32,7 @@ import java.util.List;
 public class ShiftController {
 
     private final ShiftService shiftService;
+    private final JdbcTemplate jdbcTemplate;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -63,6 +68,22 @@ public class ShiftController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own shift");
         }
         return shift;
+    }
+
+    @GetMapping("/{id}/report")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    public ShiftReportResponse getReport(@PathVariable Long id) {
+        return shiftService.getShiftReport(id);
+    }
+
+    @GetMapping("/debug-payments")
+    public ResponseEntity<List<Map<String, Object>>> debugPayments() {
+        return ResponseEntity.ok(jdbcTemplate.queryForList("SELECT * FROM payments"));
+    }
+
+    @GetMapping("/debug-orders")
+    public ResponseEntity<List<Map<String, Object>>> debugOrders() {
+        return ResponseEntity.ok(jdbcTemplate.queryForList("SELECT * FROM orders"));
     }
 
     @GetMapping

@@ -28,7 +28,8 @@ import java.util.Set;
 @Transactional
 public class PaymentService {
 
-    private static final Set<OrderStatus> PAYABLE_STATUSES = EnumSet.of(OrderStatus.OPEN, OrderStatus.SENT);
+    private static final Set<OrderStatus> PAYABLE_STATUSES =
+            EnumSet.of(OrderStatus.OPEN, OrderStatus.SENT, OrderStatus.SERVED, OrderStatus.READY_FOR_PICKUP);
 
     private final PaymentRepository paymentRepository;
     private final OrderService orderService;

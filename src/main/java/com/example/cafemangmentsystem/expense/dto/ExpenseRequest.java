@@ -14,6 +14,7 @@ public record ExpenseRequest(
         @NotNull @Positive BigDecimal amount,
         @NotNull LocalDate expenseDate,
         boolean recurring,
-        boolean paidFromDrawer
+        boolean paidFromDrawer,
+        Long employeeId
 ) {
 }

@@ -67,6 +67,11 @@ public class OrderController {
         return orderService.send(id);
     }
 
+    @PutMapping("/{id}/serve")
+    public OrderResponse serve(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return orderService.serveOrder(id, principal.getId());
+    }
+
     @PutMapping("/{id}/table")
     public OrderResponse transferTable(@PathVariable Long id, @Valid @RequestBody TransferTableRequest request) {
         return orderService.transferTable(id, request);

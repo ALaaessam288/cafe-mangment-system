@@ -1,0 +1,197 @@
+/* ── DataTable (shared across all management pages) ── */
+.data-table-wrap {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.data-table thead tr {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.data-table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: right;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+  background: var(--bg-tertiary);
+}
+
+.data-table__mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.data-table__number {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+}
+
+.data-table__muted {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.data-table__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.data-table-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Page Filter Bar ── */
+.page-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.page-filters__search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+/* ── Form grid ── */
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-grid--2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+/* ── Select field ── */
+.field-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field-select__label {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+}
+
+.field-select__control {
+  height: 38px;
+  background: var(--bg-tertiary);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.field-select__control:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.field-select__control option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* ── Toggle switch ── */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.toggle__track {
+  width: 36px;
+  height: 20px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  position: relative;
+  transition: background var(--transition-normal), border-color var(--transition-normal);
+}
+
+.toggle__track--on {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  transition: transform var(--transition-normal);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.toggle__track--on .toggle__thumb {
+  transform: translateX(16px);
+}
+
+/* ── Section card ── */
+.section-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.section-card__title {
+  font-size: var(--text-md);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}

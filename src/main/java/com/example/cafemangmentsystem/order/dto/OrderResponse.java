@@ -17,6 +17,7 @@ public record OrderResponse(
         OrderStatus status,
         Long openedByUserId,
         Long closedByUserId,
+        Long servedByUserId,
         Long shiftId,
         BigDecimal subtotal,
         BigDecimal discount,
@@ -25,8 +26,12 @@ public record OrderResponse(
         BigDecimal amountPaid,
         BigDecimal balanceDue,
         Integer guestCount,
+        String customerName,
+        String customerPhone,
+        Instant pickupAt,
         Instant openedAt,
         Instant closedAt,
+        Instant servedAt,
         String voidReason,
         List<OrderItemResponse> items
 ) {
@@ -41,6 +46,7 @@ public record OrderResponse(
                 order.getStatus(),
                 order.getOpenedBy().getId(),
                 order.getClosedBy() == null ? null : order.getClosedBy().getId(),
+                order.getServedBy() == null ? null : order.getServedBy().getId(),
                 order.getShift().getId(),
                 order.getSubtotal(),
                 order.getDiscount(),
@@ -49,8 +55,12 @@ public record OrderResponse(
                 amountPaid,
                 balanceDue,
                 order.getGuestCount(),
+                order.getCustomerName(),
+                order.getCustomerPhone(),
+                order.getPickupAt(),
                 order.getOpenedAt(),
                 order.getClosedAt(),
+                order.getServedAt(),
                 order.getVoidReason(),
                 items);
     }

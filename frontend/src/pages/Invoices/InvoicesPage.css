@@ -1,0 +1,186 @@
+.invoices-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.invoices-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  padding-top: 0;
+}
+
+.invoices-list {
+  flex: 2;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+.active-row {
+  background: var(--accent-dim) !important;
+}
+
+.invoice-details-panel {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.invoice-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.invoice-receipt-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.invoice-receipt {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+  background: white; /* Receipt is always white */
+  color: black;
+  font-family: var(--font-sans);
+}
+
+.receipt-header {
+  text-align: center;
+  margin-bottom: var(--space-4);
+  border-bottom: 2px dashed #ccc;
+  padding-bottom: var(--space-4);
+}
+
+.receipt-header h2 {
+  font-size: var(--text-xl);
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--space-2);
+}
+
+.receipt-header p {
+  font-size: var(--text-sm);
+  color: #333;
+}
+
+.receipt-items {
+  width: 100%;
+  margin-bottom: var(--space-4);
+  border-collapse: collapse;
+}
+
+.receipt-items th, .receipt-items td {
+  padding: 8px 4px;
+  font-size: var(--text-sm);
+  border-bottom: 1px dashed #eee;
+}
+
+.cancelled-item {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.receipt-totals {
+  border-top: 2px dashed #ccc;
+  padding-top: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: var(--text-sm);
+}
+
+.receipt-total {
+  font-weight: var(--fw-bold);
+  font-size: var(--text-md);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+
+.receipt-footer {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: #555;
+  border-top: 2px dashed #ccc;
+  padding-top: var(--space-4);
+}
+
+.invoice-actions {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-default);
+}
+
+.invoice-actions button {
+  flex: 1;
+  justify-content: center;
+}
+
+/* ═══════════════════════════════════════
+   PRINT RECEIPT STYLES
+═══════════════════════════════════════ */
+@media print {
+  body.printing-invoice .sidebar,
+  body.printing-invoice .page__header,
+  body.printing-invoice .invoices-list,
+  body.printing-invoice .invoice-actions,
+  body.printing-invoice .invoice-empty,
+  body.printing-invoice .no-print {
+    display: none !important;
+  }
+
+  body.printing-invoice,
+  body.printing-invoice #root,
+  body.printing-invoice .app-layout,
+  body.printing-invoice .app-main,
+  body.printing-invoice .invoices-page,
+  body.printing-invoice .invoices-layout,
+  body.printing-invoice .invoice-details-panel,
+  body.printing-invoice .invoice-receipt-wrapper {
+    display: block !important;
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body.printing-invoice .invoice-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm !important;
+    margin: 0;
+    padding: 10px;
+    background: white;
+    color: black;
+    border: none;
+    font-family: sans-serif;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

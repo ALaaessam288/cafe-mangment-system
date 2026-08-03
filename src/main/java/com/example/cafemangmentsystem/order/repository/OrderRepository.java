@@ -18,4 +18,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     boolean existsByTableIdAndStatusIn(Long tableId, Collection<OrderStatus> statuses);
 
     List<Order> findAllByStatus(OrderStatus status);
+
+    List<Order> findByStatus(OrderStatus status);
 }

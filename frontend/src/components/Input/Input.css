@@ -1,0 +1,101 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.field__required {
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+/* ── Wrapper ── */
+.field__wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.field__wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.field__wrapper--error {
+  border-color: var(--danger);
+}
+
+.field__wrapper--error:focus-within {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-dim);
+}
+
+/* Sizes */
+.field__wrapper--sm { height: 32px; }
+.field__wrapper--md { height: 38px; }
+.field__wrapper--lg { height: 44px; }
+
+/* ── Input ── */
+.field__input {
+  flex: 1;
+  height: 100%;
+  padding: 0 var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  background: transparent;
+  min-width: 0;
+}
+
+.field__input::placeholder { color: var(--text-muted); }
+.field__input--pl { padding-inline-start: 36px; }
+.field__input--pr { padding-inline-end: 36px; }
+
+/* ── Icons ── */
+.field__icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.field__icon--left  { 
+  inset-inline-start: var(--space-2);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.field__icon--right {
+  inset-inline-end: var(--space-2);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.field__icon:hover { color: var(--text-secondary); }
+
+/* ── Messages ── */
+.field__error {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  margin-top: 2px;
+}
+
+.field__hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/expenses")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+@PreAuthorize("hasAnyRole('ADMIN','CASHIER','SUPERVISOR')")
 public class ExpenseController {
 
     private final ExpenseService expenseService;

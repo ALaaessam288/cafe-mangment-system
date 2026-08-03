@@ -48,14 +48,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                TenantContext.set(jwtService.extractTenantId(token));
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                try {
+                    TenantContext.set(jwtService.extractTenantId(token));
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                if (jwtService.isTokenValid(token, userDetails.getUsername()) && userDetails.isEnabled()) {
-                    var authToken = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                    if (jwtService.isTokenValid(token, userDetails.getUsername()) && userDetails.isEnabled()) {
+                        var authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails, null, userDetails.getAuthorities());
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
+                } catch (Exception e) {
+                    // Invalid token, expired user, or non-existent user: allow filter chain to proceed unauthenticated
                 }
             }
 

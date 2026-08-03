@@ -1,0 +1,43 @@
+/* ── Settings Page ── */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.settings-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+
+.settings-info-item:last-child {
+  border-bottom: none;
+}
+
+.settings-info-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: var(--fw-medium);
+}
+
+.settings-info-value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}

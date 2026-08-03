@@ -53,6 +53,10 @@ public class Order extends TenantScopedEntity {
     @JoinColumn(name = "closed_by")
     private User closedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "served_by")
+    private User servedBy;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shift_id", nullable = false)
     private Shift shift;
@@ -76,11 +80,25 @@ public class Order extends TenantScopedEntity {
     @Column(name = "guest_count")
     private Integer guestCount;
 
+    /** Takeaway only - how staff identifies whose order this is at the counter, no table to go by. */
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_phone")
+    private String customerPhone;
+
+    /** Takeaway only, and only for RESTAURANT tenants - a call-ahead/scheduled pickup time. */
+    @Column(name = "pickup_at")
+    private Instant pickupAt;
+
     @Column(name = "opened_at", nullable = false)
     private Instant openedAt;
 
     @Column(name = "closed_at")
     private Instant closedAt;
+
+    @Column(name = "served_at")
+    private Instant servedAt;
 
     /**
      * Not part of the documented Order schema. AuditLog (the doc's intended home for

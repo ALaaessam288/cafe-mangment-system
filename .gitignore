@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Node / Electron / Build ###
+node_modules/
+dist/
+*.log
+*.original

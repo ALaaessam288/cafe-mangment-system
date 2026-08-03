@@ -8,6 +8,8 @@ import com.example.cafemangmentsystem.discount.entity.DiscountScope;
 import com.example.cafemangmentsystem.discount.entity.DiscountType;
 import com.example.cafemangmentsystem.discount.repository.DiscountRepository;
 import com.example.cafemangmentsystem.menu.entity.Product;
+import com.example.cafemangmentsystem.menu.entity.ProductOption;
+import com.example.cafemangmentsystem.menu.repository.ProductOptionRepository;
 import com.example.cafemangmentsystem.menu.repository.ProductRepository;
 import com.example.cafemangmentsystem.order.dto.AddOrderItemRequest;
 import com.example.cafemangmentsystem.order.dto.CancelOrderItemRequest;
@@ -28,6 +30,10 @@ import com.example.cafemangmentsystem.payment.repository.PaymentRepository;
 import com.example.cafemangmentsystem.printing.PrintJobService;
 import com.example.cafemangmentsystem.shift.entity.Shift;
 import com.example.cafemangmentsystem.shift.repository.ShiftRepository;
+import com.example.cafemangmentsystem.common.tenant.TenantContext;
+import com.example.cafemangmentsystem.tenant.entity.BusinessType;
+import com.example.cafemangmentsystem.tenant.entity.Tenant;
+import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
 import com.example.cafemangmentsystem.user.entity.User;
 import com.example.cafemangmentsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +56,8 @@ import java.util.Set;
 @Transactional
 public class OrderService {
 
-    private static final Set<OrderStatus> OPEN_STATUSES = EnumSet.of(OrderStatus.OPEN, OrderStatus.SENT);
+    private static final Set<OrderStatus> OPEN_STATUSES =
+            EnumSet.of(OrderStatus.OPEN, OrderStatus.SENT, OrderStatus.SERVED, OrderStatus.READY_FOR_PICKUP);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -61,6 +68,8 @@ public class OrderService {
     private final PaymentRepository paymentRepository;
     private final PrintJobService printJobService;
     private final DiscountRepository discountRepository;
+    private final TenantRepository tenantRepository;
+    private final ProductOptionRepository productOptionRepository;
 
     public OrderResponse open(Long userId, OpenOrderRequest request) {
         Shift shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
@@ -73,12 +82,29 @@ public class OrderService {
             if (request.tableId() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dine-in orders require a tableId");
             }
+            if (request.customerName() != null || request.customerPhone() != null || request.pickupAt() != null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dine-in orders must not include takeaway pickup details");
+            }
             table = getActiveTableOrThrow(request.tableId());
             if (orderRepository.existsByTableIdAndStatusIn(table.getId(), OPEN_STATUSES)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Table " + table.getNumber() + " already has an open order");
             }
-        } else if (request.tableId() != null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Takeaway orders must not have a tableId");
+        } else {
+            if (request.tableId() != null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Takeaway orders must not have a tableId");
+            }
+            if (request.customerName() == null || request.customerName().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Takeaway orders require a customerName");
+            }
+            if (request.pickupAt() != null) {
+                Tenant tenant = tenantRepository.findById(TenantContext.get()).orElseThrow();
+                if (tenant.getBusinessType() != BusinessType.RESTAURANT && tenant.getBusinessType() != BusinessType.CAFE_AND_RESTAURANT) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Scheduled pickup is only available for restaurant tenants");
+                }
+                if (request.pickupAt().isBefore(Instant.now())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pickupAt must be in the future");
+                }
+            }
         }
 
         Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
@@ -92,6 +118,9 @@ public class OrderService {
                 .openedBy(openedBy)
                 .shift(shift)
                 .guestCount(request.guestCount())
+                .customerName(request.customerName())
+                .customerPhone(request.customerPhone())
+                .pickupAt(request.pickupAt())
                 .openedAt(Instant.now())
                 .build();
 
@@ -120,16 +149,39 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Product is not available: " + product.getNameAr());
         }
 
+        int quantity = request.quantity() == null ? 1 : request.quantity();
+
         User addedBy = userRepository.findById(userId).orElseThrow();
+
+        BigDecimal unitPrice = product.getPrice();
+        String productName = product.getNameAr();
+
+        if (request.optionIds() != null && !request.optionIds().isEmpty()) {
+            List<ProductOption> options = productOptionRepository.findAllById(request.optionIds());
+            if (!options.isEmpty()) {
+                StringBuilder sb = new StringBuilder(productName);
+                sb.append(" (");
+                for (int i = 0; i < options.size(); i++) {
+                    ProductOption opt = options.get(i);
+                    unitPrice = unitPrice.add(opt.getPriceDelta());
+                    sb.append(opt.getNameAr());
+                    if (i < options.size() - 1) {
+                        sb.append(" + ");
+                    }
+                }
+                sb.append(")");
+                productName = sb.toString();
+            }
+        }
 
         OrderItem item = OrderItem.builder()
                 .order(order)
                 .product(product)
-                .productNameSnapshot(product.getNameAr())
-                .unitPriceSnapshot(product.getPrice())
+                .productNameSnapshot(productName)
+                .unitPriceSnapshot(unitPrice)
                 .stationSnapshot(product.getStation().getCode())
                 .revenueLineSnapshot(product.getRevenueLine())
-                .quantity(request.quantity() == null ? 1 : request.quantity())
+                .quantity(quantity)
                 .status(OrderItemStatus.NEW)
                 .note(request.note())
                 .addedBy(addedBy)
@@ -178,6 +230,28 @@ public class OrderService {
         itemsToSend.forEach(i -> i.setStatus(OrderItemStatus.SENT));
 
         printJobService.createKitchenTickets(order, itemsToSend, isFirstSend);
+
+        return toResponse(order);
+    }
+
+    /**
+     * Marks the kitchen work as delivered to the customer - SERVED for dine-in (at the table),
+     * READY_FOR_PICKUP for takeaway (waiting at the counter). Only valid straight out of SENT -
+     * if items get added afterward and re-sent to the kitchen, {@link #send} moves the order back
+     * to SENT, and this has to be called again once the new items are out too.
+     */
+    public OrderResponse serveOrder(Long orderId, Long userId) {
+        Order order = getOrThrow(orderId);
+
+        if (order.getStatus() != OrderStatus.SENT) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is " + order.getStatus() + " and cannot be marked served");
+        }
+
+        User servedBy = userRepository.findById(userId).orElseThrow();
+
+        order.setStatus(order.getType() == OrderType.DINE_IN ? OrderStatus.SERVED : OrderStatus.READY_FOR_PICKUP);
+        order.setServedBy(servedBy);
+        order.setServedAt(Instant.now());
 
         return toResponse(order);
     }

@@ -1,6 +1,7 @@
 package com.example.cafemangmentsystem.expense.entity;
 
 import com.example.cafemangmentsystem.common.entity.TenantScopedEntity;
+import com.example.cafemangmentsystem.employee.entity.Employee;
 import com.example.cafemangmentsystem.menu.entity.RevenueLine;
 import com.example.cafemangmentsystem.shift.entity.Shift;
 import com.example.cafemangmentsystem.user.entity.User;
@@ -60,6 +61,10 @@ public class Expense extends TenantScopedEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shift_id")
     private Shift shift;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
+    private Employee employee;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "recorded_by", nullable = false)
