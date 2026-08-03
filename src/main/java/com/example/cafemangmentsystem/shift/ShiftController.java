@@ -3,6 +3,7 @@ package com.example.cafemangmentsystem.shift;
 import com.example.cafemangmentsystem.security.UserPrincipal;
 import com.example.cafemangmentsystem.shift.dto.CloseShiftRequest;
 import com.example.cafemangmentsystem.shift.dto.OpenShiftRequest;
+import com.example.cafemangmentsystem.shift.dto.ShiftReportResponse;
 import com.example.cafemangmentsystem.shift.dto.ShiftResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -56,13 +57,24 @@ public class ShiftController {
     @GetMapping("/{id}")
     public ShiftResponse findById(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         ShiftResponse shift = shiftService.findById(id);
-        boolean isOwner = shift.userId().equals(principal.getId());
+        requireOwnerOrPrivileged(shift.userId(), principal);
+        return shift;
+    }
+
+    @GetMapping("/{id}/report")
+    public ShiftReportResponse report(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        ShiftReportResponse report = shiftService.generateReport(id);
+        requireOwnerOrPrivileged(report.userId(), principal);
+        return report;
+    }
+
+    private void requireOwnerOrPrivileged(Long shiftUserId, UserPrincipal principal) {
+        boolean isOwner = shiftUserId.equals(principal.getId());
         boolean isPrivileged = principal.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_SUPERVISOR"));
         if (!isOwner && !isPrivileged) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own shift");
         }
-        return shift;
     }
 
     @GetMapping
