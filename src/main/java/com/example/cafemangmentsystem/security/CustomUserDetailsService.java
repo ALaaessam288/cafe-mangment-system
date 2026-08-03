@@ -7,6 +7,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 @RequiredArgsConstructor
@@ -19,13 +21,22 @@ public class CustomUserDetailsService implements UserDetailsService {
      * JwtAuthenticationFilter, both of which resolve the tenant before calling this) - usernames
      * are only unique per tenant, so looking one up without a tenant is meaningless.
      */
+    private static final Logger log = LoggerFactory.getLogger(CustomUserDetailsService.class);
+
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        if (TenantContext.get() == null) {
+        // Log tenant context and username for debugging
+        Long tenantId = TenantContext.get();
+        log.debug("Loading user '{}', tenantId={}", username, tenantId);
+        if (tenantId == null) {
+            log.warn("No tenant context for username: {}", username);
             throw new UsernameNotFoundException("No tenant context for username: " + username);
         }
         return userRepository.findByUsername(username)
                 .map(UserPrincipal::new)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+                .orElseThrow(() -> {
+                    log.warn("User not found: {} for tenantId={}", username, tenantId);
+                    return new UsernameNotFoundException("User not found: " + username);
+                });
     }
 }

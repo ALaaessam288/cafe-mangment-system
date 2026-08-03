@@ -31,7 +31,6 @@ public class User extends SoftDeletableEntity {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    /** رقم سري قصير لاعتماد المشرف على الاستثناءات من غير تسجيل خروج/دخول */
     @Column(name = "pin_hash")
     private String pinHash;
 

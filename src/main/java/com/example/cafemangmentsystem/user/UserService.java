@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,6 +24,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * Uses REQUIRES_NEW so this runs in a brand-new Hibernate session.
+     * Hibernate resolves the @TenantId value once, at session-open time.
+     * By the time an authenticated request reaches here, TenantContext is
+     * already set by the JwtAuthenticationFilter — but the surrounding
+     * @Transactional session was opened BEFORE that, so it carries
+     * tenant_id=0.  Forcing a new session here means the session opens
+     * AFTER TenantContext is set, and Hibernate stamps the correct id.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UserResponse create(CreateUserRequest request) {
         if (userRepository.findByUsername(request.username()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already taken: " + request.username());

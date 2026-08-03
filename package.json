@@ -1,15 +1,13 @@
 {
   "name": "cafe-pos",
   "version": "1.0.0",
-  "description": "Electron wrapper for Cafe Management System",
+  "description": "نظام إدارة الكافيه – CafePOS Desktop",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "npx electron-builder build --win --publish never"
   },
-  "dependencies": {
-    "mysql2": "^3.23.2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^24.13.3"
@@ -17,9 +15,16 @@
   "build": {
     "appId": "com.example.cafepos",
     "productName": "CafePOS",
+    "copyright": "Copyright © 2026 CafePOS",
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "main.js",
+      "electron/**/*",
+      "resources/**/*",
+      "node_modules/**/*"
+    ],
     "extraResources": [
       {
         "from": "target/cafe-mangment-system-0.0.1-SNAPSHOT.jar",
@@ -27,7 +32,8 @@
       },
       {
         "from": "jre",
-        "to": "jre"
+        "to": "jre",
+        "filter": ["**/*", "!placeholder.txt"]
       }
     ],
     "win": {
@@ -38,6 +44,13 @@
         }
       ],
       "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CafePOS"
     }
   }
 }

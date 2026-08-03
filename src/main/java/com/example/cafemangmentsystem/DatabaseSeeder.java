@@ -1,0 +1,63 @@
+package com.example.cafemangmentsystem;
+
+import com.example.cafemangmentsystem.tenant.TenantService;
+import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
+import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest;
+import com.example.cafemangmentsystem.tenant.entity.BusinessType;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
+@Component
+public class DatabaseSeeder implements CommandLineRunner {
+
+    private final TenantRepository tenantRepository;
+    private final TenantService tenantService;
+
+    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService) {
+        this.tenantRepository = tenantRepository;
+        this.tenantService = tenantService;
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        if (tenantRepository.count() == 0) {
+            System.out.println("[SEEDER] Database is empty. Seeding default tenants...");
+            
+            // 1. Seed tenant wanas
+            try {
+                ProvisionTenantRequest req1 = new ProvisionTenantRequest(
+                    "Wanas Cafe",
+                    "wanas",
+                    BusinessType.CAFE,
+                    "admin",
+                    "password123",
+                    "Admin User",
+                    "Africa/Cairo",
+                    "EGP"
+                );
+                tenantService.provision(req1);
+                System.out.println("[SEEDER] Default tenant 'wanas' seeded successfully!");
+            } catch (Exception e) {
+                System.err.println("[SEEDER] Failed to seed 'wanas': " + e.getMessage());
+            }
+
+            // 2. Seed tenant wanas-cafe (for jeox user)
+            try {
+                ProvisionTenantRequest req2 = new ProvisionTenantRequest(
+                    "ونس",
+                    "wanas-cafe",
+                    BusinessType.CAFE,
+                    "jeox",
+                    "12345678",
+                    "Jeo X",
+                    "Africa/Cairo",
+                    "EGP"
+                );
+                tenantService.provision(req2);
+                System.out.println("[SEEDER] Default tenant 'wanas-cafe' seeded successfully!");
+            } catch (Exception e) {
+                System.err.println("[SEEDER] Failed to seed 'wanas-cafe': " + e.getMessage());
+            }
+        }
+    }
+}
