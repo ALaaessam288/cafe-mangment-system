@@ -54,4 +54,14 @@ public class Product extends SoftDeletableEntity {
 
     @Column(name = "prep_note")
     private String prepNote;
+
+    /** When false, {@code stockQuantity} is not enforced and orders can always add this product. */
+    @Column(name = "track_inventory", nullable = false)
+    @Builder.Default
+    private boolean trackInventory = false;
+
+    /** Only meaningful when {@code trackInventory} is true. Changed only via StockAdjustment or a sale/cancel. */
+    @Column(name = "stock_quantity", nullable = false)
+    @Builder.Default
+    private int stockQuantity = 0;
 }

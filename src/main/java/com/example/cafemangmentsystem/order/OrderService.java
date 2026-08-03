@@ -146,6 +146,15 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Product is not available: " + product.getNameAr());
         }
 
+        int quantity = request.quantity() == null ? 1 : request.quantity();
+
+        if (product.isTrackInventory()) {
+            if (product.getStockQuantity() < quantity) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Out of stock: " + product.getNameAr());
+            }
+            product.setStockQuantity(product.getStockQuantity() - quantity);
+        }
+
         User addedBy = userRepository.findById(userId).orElseThrow();
 
         OrderItem item = OrderItem.builder()
@@ -155,7 +164,7 @@ public class OrderService {
                 .unitPriceSnapshot(product.getPrice())
                 .stationSnapshot(product.getStation().getCode())
                 .revenueLineSnapshot(product.getRevenueLine())
-                .quantity(request.quantity() == null ? 1 : request.quantity())
+                .quantity(quantity)
                 .status(OrderItemStatus.NEW)
                 .note(request.note())
                 .addedBy(addedBy)
@@ -182,6 +191,7 @@ public class OrderService {
         item.setCancelledBy(cancelledBy);
         item.setCancelReason(request.reason());
 
+        restoreStockIfTracked(item);
         recalcTotals(order);
 
         if (wasSent) {
@@ -261,6 +271,10 @@ public class OrderService {
         order.setClosedBy(closedBy);
         order.setClosedAt(Instant.now());
         order.setVoidReason(request.reason());
+
+        orderItemRepository.findAllByOrderId(orderId).stream()
+                .filter(i -> i.getStatus() != OrderItemStatus.CANCELLED)
+                .forEach(this::restoreStockIfTracked);
 
         return toResponse(order);
     }
@@ -360,6 +374,13 @@ public class OrderService {
         capped = capped.min(base);
 
         return capped.max(BigDecimal.ZERO);
+    }
+
+    private void restoreStockIfTracked(OrderItem item) {
+        Product product = item.getProduct();
+        if (product.isTrackInventory()) {
+            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+        }
     }
 
     private void requireOpenForModification(Order order) {
