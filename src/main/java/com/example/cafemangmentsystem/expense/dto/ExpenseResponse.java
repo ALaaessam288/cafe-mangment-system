@@ -16,7 +16,9 @@ public record ExpenseResponse(
         boolean recurring,
         boolean paidFromDrawer,
         Long shiftId,
-        Long recordedByUserId
+        Long recordedByUserId,
+        Long employeeId,
+        String employeeName
 ) {
     public static ExpenseResponse from(Expense expense) {
         return new ExpenseResponse(
@@ -28,6 +30,8 @@ public record ExpenseResponse(
                 expense.isRecurring(),
                 expense.isPaidFromDrawer(),
                 expense.getShift() == null ? null : expense.getShift().getId(),
-                expense.getRecordedBy().getId());
+                expense.getRecordedBy().getId(),
+                expense.getEmployee() == null ? null : expense.getEmployee().getId(),
+                expense.getEmployee() == null ? null : expense.getEmployee().getFullName());
     }
 }
