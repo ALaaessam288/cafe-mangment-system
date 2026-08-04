@@ -6,20 +6,38 @@ import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest
 import com.example.cafemangmentsystem.tenant.entity.BusinessType;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Component
 public class DatabaseSeeder implements CommandLineRunner {
 
     private final TenantRepository tenantRepository;
     private final TenantService tenantService;
+    private final JdbcTemplate jdbcTemplate;
 
-    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService) {
+    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService, JdbcTemplate jdbcTemplate) {
         this.tenantRepository = tenantRepository;
         this.tenantService = tenantService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
     public void run(String... args) throws Exception {
+        // Run database corrections first (BAR products/order items should map to BUFFET revenue line)
+        try {
+            jdbcTemplate.execute(
+                "UPDATE products SET revenue_line = 'BUFFET' " +
+                "WHERE station_id IN (SELECT id FROM stations WHERE code = 'BAR') AND revenue_line = 'FOOD'"
+            );
+            jdbcTemplate.execute(
+                "UPDATE order_items SET revenue_line_snapshot = 'BUFFET' " +
+                "WHERE station_snapshot = 'BAR' AND revenue_line_snapshot = 'FOOD'"
+            );
+            System.out.println("[SEEDER] Corrected BAR products/order items to BUFFET revenue line.");
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Failed to correct revenue lines: " + e.getMessage());
+        }
+
         if (tenantRepository.count() == 0) {
             System.out.println("[SEEDER] Database is empty. Seeding default tenants...");
             

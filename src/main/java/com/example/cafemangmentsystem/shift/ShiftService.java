@@ -103,6 +103,14 @@ public class ShiftService {
     }
 
     @Transactional(readOnly = true)
+    public List<ShiftResponse> findAllByUserId(Long userId, boolean openOnly) {
+        List<Shift> shifts = openOnly ? 
+                shiftRepository.findAllByUserIdAndClosedAtIsNull(userId) : 
+                shiftRepository.findAllByUserId(userId);
+        return shifts.stream().map(ShiftResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
     public Optional<ShiftResponse> findCurrentForUser(Long userId) {
         return shiftRepository.findByUserIdAndClosedAtIsNull(userId).map(ShiftResponse::from);
     }

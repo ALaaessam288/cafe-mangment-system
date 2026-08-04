@@ -35,11 +35,12 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '',
+    nameAr: '',
+    nameEn: '',
     price: '',
     categoryId: '',
     stationId: '',
-    revenueLine: 'FOOD',
+    revenueLine: 'BUFFET',
     available: true,
   });
 
@@ -160,7 +161,7 @@ export default function ProductsPage() {
         price: product.price,
         categoryId: product.categoryId,
         stationId: product.stationId || (stations.length > 0 ? stations[0].id : ''),
-        revenueLine: product.revenueLine || 'FOOD',
+        revenueLine: product.revenueLine || 'BUFFET',
         available: product.available,
       });
       loadProductOptions(product.id);
@@ -171,7 +172,7 @@ export default function ProductsPage() {
         price: '',
         categoryId: categories.length > 0 ? categories[0].id : '',
         stationId: stations.length > 0 ? stations[0].id : '',
-        revenueLine: 'FOOD',
+        revenueLine: 'BUFFET',
         available: true,
       });
       setProductOptions([]);
@@ -415,14 +416,14 @@ export default function ProductsPage() {
               </div>
               
               <div className="field-select">
-                <label className="field-select__label">نوع الإيراد</label>
+                <label className="field-select__label">نوع الإيراد (القسم المالي)</label>
                 <select
                   className="field-select__control"
                   value={form.revenueLine}
                   onChange={(e) => setForm({ ...form, revenueLine: e.target.value })}
                 >
-                  <option value="FOOD">مأكولات ومشروبات (Food/Beverage)</option>
-                  <option value="BUFFET">بوفيه (Buffet)</option>
+                  <option value="BUFFET">مشروبات (الكافيه / البوفيه)</option>
+                  <option value="FOOD">مأكولات (المطعم / المطبخ)</option>
                 </select>
               </div>
             </div>

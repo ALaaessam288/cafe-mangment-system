@@ -71,8 +71,14 @@ public class ShiftController {
     }
 
     @GetMapping("/{id}/report")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
-    public ShiftReportResponse getReport(@PathVariable Long id) {
+    public ShiftReportResponse getReport(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        ShiftResponse shift = shiftService.findById(id);
+        boolean isOwner = shift.userId().equals(principal.getId());
+        boolean isPrivileged = principal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_SUPERVISOR"));
+        if (!isOwner && !isPrivileged) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own shift report");
+        }
         return shiftService.getShiftReport(id);
     }
 
@@ -87,8 +93,14 @@ public class ShiftController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
-    public List<ShiftResponse> findAll(@RequestParam(required = false, defaultValue = "false") boolean openOnly) {
-        return shiftService.findAll(openOnly);
+    public List<ShiftResponse> findAll(@AuthenticationPrincipal UserPrincipal principal,
+                                       @RequestParam(required = false, defaultValue = "false") boolean openOnly) {
+        boolean isPrivileged = principal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_SUPERVISOR"));
+        if (isPrivileged) {
+            return shiftService.findAll(openOnly);
+        } else {
+            return shiftService.findAllByUserId(principal.getId(), openOnly);
+        }
     }
 }
