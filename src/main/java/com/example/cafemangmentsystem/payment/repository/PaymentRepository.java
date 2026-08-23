@@ -13,9 +13,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findAllByOrderId(Long orderId);
 
+    List<Payment> findByOrderIdIn(List<Long> orderIds);
+
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.id = :orderId")
     BigDecimal sumAmountByOrderId(@Param("orderId") Long orderId);
 
-    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.shift.id = :shiftId AND p.method = :method")
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.shift.id = :shiftId AND p.method = :method " +
+           "AND p.order.status != com.example.cafemangmentsystem.order.entity.OrderStatus.VOIDED")
     BigDecimal sumAmountByShiftIdAndMethod(@Param("shiftId") Long shiftId, @Param("method") PaymentMethod method);
 }

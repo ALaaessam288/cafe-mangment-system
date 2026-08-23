@@ -5,6 +5,7 @@ import com.example.cafemangmentsystem.user.dto.ChangePasswordRequest;
 import com.example.cafemangmentsystem.user.dto.CreateUserRequest;
 import com.example.cafemangmentsystem.user.dto.UpdateUserRequest;
 import com.example.cafemangmentsystem.user.dto.UserResponse;
+import com.example.cafemangmentsystem.user.entity.Role;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -35,44 +37,54 @@ public class UserController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
-    public UserResponse create(@Valid @RequestBody CreateUserRequest request) {
+    public UserResponse create(@Valid @RequestBody CreateUserRequest request, @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN")) && request.role() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can manage admin accounts");
+        }
         return userService.create(request);
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public List<UserResponse> findAll() {
         return userService.findAll();
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public UserResponse findById(@PathVariable Long id) {
         return userService.findById(id);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public UserResponse update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    public UserResponse update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request, @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN")) && request.role() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can manage admin accounts");
+        }
         return userService.update(id, request);
     }
 
     @PutMapping("/{id}/password")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public void changePassword(@PathVariable Long id, @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(id, request);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public UserResponse deactivate(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        UserResponse target = userService.findById(id);
+        if (principal.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN")) && target.role() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can manage admin accounts");
+        }
         return userService.deactivate(id, principal.getId());
     }
 
     @PutMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public UserResponse activate(@PathVariable Long id) {
         return userService.activate(id);
     }

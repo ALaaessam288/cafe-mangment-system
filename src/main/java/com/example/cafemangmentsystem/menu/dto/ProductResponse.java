@@ -23,10 +23,10 @@ public record ProductResponse(
     public static ProductResponse from(Product product) {
         return new ProductResponse(
                 product.getId(),
-                product.getCategory().getId(),
-                product.getCategory().getNameAr(),
-                product.getStation().getId(),
-                product.getStation().getCode(),
+                product.getCategory() != null ? product.getCategory().getId() : null,
+                product.getCategory() != null ? product.getCategory().getNameAr() : null,
+                product.getStation() != null ? product.getStation().getId() : null,
+                product.getStation() != null ? product.getStation().getCode() : null,
                 product.getRevenueLine(),
                 product.getNameAr(),
                 product.getNameEn(),

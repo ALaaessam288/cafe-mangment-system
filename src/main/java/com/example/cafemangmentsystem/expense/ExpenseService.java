@@ -33,9 +33,16 @@ public class ExpenseService {
 
         Shift shift = null;
         if (request.paidFromDrawer()) {
-            shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
-                            "You must have an open shift to pay an expense from the drawer"));
+            shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId).orElse(null);
+            if (shift == null) {
+                List<Shift> openShifts = shiftRepository.findAllByClosedAtIsNull();
+                if (!openShifts.isEmpty()) {
+                    shift = openShifts.get(openShifts.size() - 1);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "You must have an open shift to pay an expense from the drawer");
+                }
+            }
         }
         
         Employee employee = null;
@@ -51,6 +58,7 @@ public class ExpenseService {
                 .expenseDate(request.expenseDate())
                 .recurring(request.recurring())
                 .paidFromDrawer(request.paidFromDrawer())
+                .notes(request.notes())
                 .shift(shift)
                 .employee(employee)
                 .recordedBy(recordedBy)

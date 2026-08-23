@@ -7,6 +7,17 @@ public record LoginResponse(
         Long userId,
         String username,
         String fullName,
-        String role
+        String role,
+        String tenantName,
+        String tenantSlug,
+        String subscriptionPlan,
+        String planDisplayName,
+        java.time.Instant trialEndsAt,
+        java.time.Instant subscriptionEndsAt,
+        Integer maxTables,
+        Integer maxUsers,
+        Integer maxProducts,
+        Boolean includesKds,
+        Boolean includesExpenses
 ) {
 }

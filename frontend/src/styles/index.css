@@ -46,6 +46,10 @@
 .text-md       { font-size: var(--text-md); }
 .text-lg       { font-size: var(--text-lg); }
 
+.text-start    { text-align: start; }
+.text-center   { text-align: center; }
+.text-end      { text-align: end; }
+
 .text-primary   { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
 .text-muted     { color: var(--text-muted); }

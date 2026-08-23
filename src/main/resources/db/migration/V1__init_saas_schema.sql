@@ -1,0 +1,366 @@
+-- Flyway V1 Initial PostgreSQL SaaS Database Schema for Caffio POS Platform
+
+CREATE TABLE IF NOT EXISTS tenants (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    business_type VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    timezone VARCHAR(50) DEFAULT 'Africa/Cairo',
+    currency VARCHAR(10) DEFAULT 'EGP',
+    subscription_plan VARCHAR(50) DEFAULT 'TRIAL',
+    trial_ends_at TIMESTAMP WITH TIME ZONE,
+    subscription_ends_at TIMESTAMP WITH TIME ZONE,
+    max_tables INT DEFAULT 15,
+    max_users INT DEFAULT 5,
+    max_products INT DEFAULT 100,
+    owner_whatsapp VARCHAR(50),
+    whatsapp_alerts_enabled BOOLEAN DEFAULT FALSE,
+    service_charge_percent INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by BIGINT,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    pin_hash VARCHAR(255),
+    CONSTRAINT uk_users_tenant_username UNIQUE (tenant_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by BIGINT,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    display_order INT DEFAULT 0,
+    icon VARCHAR(100),
+    color VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS products (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by BIGINT,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    category_id BIGINT REFERENCES categories(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    description TEXT,
+    image_url VARCHAR(500),
+    station_code VARCHAR(50) DEFAULT 'KITCHEN',
+    revenue_line VARCHAR(50) DEFAULT 'FOOD',
+    available BOOLEAN NOT NULL DEFAULT TRUE,
+    track_inventory BOOLEAN DEFAULT FALSE,
+    stock_quantity INT DEFAULT 0,
+    min_stock_threshold INT DEFAULT 5
+);
+
+CREATE TABLE IF NOT EXISTS product_options (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    price_modifier NUMERIC(12, 2) DEFAULT 0.00,
+    is_required BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS cafe_tables (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by BIGINT,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    number INT NOT NULL,
+    capacity INT DEFAULT 4,
+    label VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'EMPTY',
+    zone VARCHAR(50) DEFAULT 'MAIN_HALL',
+    CONSTRAINT uk_tables_tenant_number UNIQUE (tenant_id, number)
+);
+
+CREATE TABLE IF NOT EXISTS registers (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by BIGINT,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS shifts (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    register_id BIGINT REFERENCES registers(id) ON DELETE SET NULL,
+    opened_by_user_id BIGINT REFERENCES users(id),
+    closed_by_user_id BIGINT REFERENCES users(id),
+    opened_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_at TIMESTAMP WITH TIME ZONE,
+    opening_cash NUMERIC(12, 2) DEFAULT 0.00,
+    expected_cash NUMERIC(12, 2) DEFAULT 0.00,
+    actual_cash NUMERIC(12, 2) DEFAULT 0.00,
+    difference NUMERIC(12, 2) DEFAULT 0.00,
+    status VARCHAR(50) DEFAULT 'OPEN',
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    table_id BIGINT REFERENCES cafe_tables(id) ON DELETE SET NULL,
+    register_id BIGINT REFERENCES registers(id) ON DELETE SET NULL,
+    shift_id BIGINT REFERENCES shifts(id) ON DELETE SET NULL,
+    order_type VARCHAR(50) NOT NULL DEFAULT 'DINE_IN',
+    status VARCHAR(50) NOT NULL DEFAULT 'OPEN',
+    subtotal NUMERIC(12, 2) DEFAULT 0.00,
+    discount NUMERIC(12, 2) DEFAULT 0.00,
+    service NUMERIC(12, 2) DEFAULT 0.00,
+    delivery_fee NUMERIC(12, 2) DEFAULT 0.00,
+    total NUMERIC(12, 2) DEFAULT 0.00,
+    customer_name VARCHAR(255),
+    customer_phone VARCHAR(50),
+    customer_address TEXT,
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    product_id BIGINT REFERENCES products(id) ON DELETE SET NULL,
+    product_name_snapshot VARCHAR(255) NOT NULL,
+    unit_price_snapshot NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    quantity INT NOT NULL DEFAULT 1,
+    total_price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    notes TEXT,
+    status VARCHAR(50) DEFAULT 'NEW',
+    options_summary TEXT
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    payment_method VARCHAR(50) NOT NULL DEFAULT 'CASH',
+    reference_number VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL,
+    description TEXT,
+    amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    recorded_by VARCHAR(255),
+    type VARCHAR(50) DEFAULT 'GENERAL',
+    reference_id BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS debts (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    debtor_name VARCHAR(255) NOT NULL,
+    debtor_phone VARCHAR(50),
+    amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    paid_amount NUMERIC(12, 2) DEFAULT 0.00,
+    status VARCHAR(50) DEFAULT 'UNPAID',
+    notes TEXT,
+    due_date TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE IF NOT EXISTS employees (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    job_title VARCHAR(100),
+    phone VARCHAR(50),
+    base_salary NUMERIC(12, 2) DEFAULT 0.00
+);
+
+CREATE TABLE IF NOT EXISTS employee_transactions (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    notes TEXT,
+    transaction_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS stock_adjustments (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    adjustment_type VARCHAR(50) NOT NULL,
+    quantity_changed INT NOT NULL,
+    reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS stations (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS printers (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) DEFAULT 'THERMAL_80MM',
+    ip_address VARCHAR(100),
+    port INT DEFAULT 9100
+);
+
+CREATE TABLE IF NOT EXISTS print_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    printer_id BIGINT REFERENCES printers(id) ON DELETE SET NULL,
+    status VARCHAR(50) DEFAULT 'PENDING',
+    error_message TEXT,
+    content TEXT
+);
+
+CREATE TABLE IF NOT EXISTS tenant_activity_logs (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    details TEXT,
+    performed_by VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(500) NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Indexing for performance and isolation
+CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_products_tenant ON products(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_categories_tenant ON categories(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_orders_tenant ON orders(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_shifts_tenant ON shifts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_tenant ON expenses(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_debts_tenant ON debts(tenant_id);

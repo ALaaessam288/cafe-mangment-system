@@ -1,5 +1,6 @@
 package com.example.cafemangmentsystem.security.jwt;
 
+import com.example.cafemangmentsystem.security.SecretMaterial;
 import com.example.cafemangmentsystem.security.UserPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -18,9 +19,16 @@ public class JwtService {
     private final SecretKey signingKey;
     private final long expirationMs;
 
-    public JwtService(@Value("${jwt.secret}") String secret,
+    /**
+     * {@code jwt.secret} is intentionally empty by default. Leaving it unset makes each
+     * installation generate and persist its own key (see {@link SecretMaterial}); setting it -
+     * usually via the {@code JWT_SECRET} environment variable - pins a known key for server
+     * deployments and tests.
+     */
+    public JwtService(@Value("${jwt.secret:}") String secret,
                        @Value("${jwt.expiration-ms}") long expirationMs) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        String resolved = SecretMaterial.resolveOrGenerate(secret, "jwt.key", 64);
+        this.signingKey = Keys.hmacShaKeyFor(resolved.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
 

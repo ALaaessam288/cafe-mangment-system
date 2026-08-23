@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,9 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
-import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
+
+import com.example.cafemangmentsystem.shift.dto.SetSnacksNetRequest;
 
 @RestController
 @RequestMapping("/api/shifts")
@@ -32,10 +32,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class ShiftController {
 
     private final ShiftService shiftService;
-    private final JdbcTemplate jdbcTemplate;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('CASHIER')")
     public ShiftResponse open(@AuthenticationPrincipal UserPrincipal principal, @Valid @RequestBody OpenShiftRequest request) {
         return shiftService.open(principal.getId(), request);
     }
@@ -47,9 +47,21 @@ public class ShiftController {
     }
 
     @PutMapping("/{id}/force-close")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public ShiftResponse forceClose(@PathVariable Long id, @Valid @RequestBody CloseShiftRequest request) {
         return shiftService.forceClose(id, request);
+    }
+
+    @PutMapping("/{id}/snacks-net")
+    public ShiftResponse setSnacksNet(@PathVariable Long id, @Valid @RequestBody SetSnacksNetRequest request) {
+        return shiftService.setSnacksNet(id, request.amount());
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        shiftService.delete(id);
     }
 
     @GetMapping("/me/current")
@@ -80,16 +92,6 @@ public class ShiftController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own shift report");
         }
         return shiftService.getShiftReport(id);
-    }
-
-    @GetMapping("/debug-payments")
-    public ResponseEntity<List<Map<String, Object>>> debugPayments() {
-        return ResponseEntity.ok(jdbcTemplate.queryForList("SELECT * FROM payments"));
-    }
-
-    @GetMapping("/debug-orders")
-    public ResponseEntity<List<Map<String, Object>>> debugOrders() {
-        return ResponseEntity.ok(jdbcTemplate.queryForList("SELECT * FROM orders"));
     }
 
     @GetMapping

@@ -1,5 +1,5 @@
 import client from './client';
 
 export const reportsApi = {
-  getFinancialReport: () => client.get('/reports/financial').then((res) => res.data),
+  getFinancialReport: (params) => client.get('/reports/financial', { params }).then((res) => res.data),
 };

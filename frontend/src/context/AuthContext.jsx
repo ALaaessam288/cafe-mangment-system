@@ -58,10 +58,21 @@ export function AuthProvider({ children }) {
       storage.setTenantSlug(tenantSlug);
 
       const userInfo = {
-        id:       data.userId,
-        username: data.username,
-        fullName: data.fullName,
-        role:     data.role,
+        id:                 data.userId,
+        username:           data.username,
+        fullName:           data.fullName,
+        role:               data.role,
+        tenantName:         data.tenantName,
+        tenantSlug:         data.tenantSlug || tenantSlug,
+        subscriptionPlan:   data.subscriptionPlan || 'TRIAL',
+        planDisplayName:    data.planDisplayName || 'فترة تجريبية',
+        trialEndsAt:        data.trialEndsAt,
+        subscriptionEndsAt: data.subscriptionEndsAt,
+        maxTables:          data.maxTables ?? 5,
+        maxUsers:           data.maxUsers ?? 2,
+        maxProducts:        data.maxProducts ?? 30,
+        includesKds:        data.includesKds ?? false,
+        includesExpenses:   data.includesExpenses ?? false,
       };
       storage.setUser(userInfo);
       setUser(userInfo);
@@ -73,6 +84,47 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  /* ── Login with PIN ── */
+  const loginPin = useCallback(async (tenantSlug, pin) => {
+    setIsLoading(true);
+    try {
+      const data = await authApi.loginPin(tenantSlug, pin);
+      storage.setAccessToken(data.token);
+      storage.setRefreshToken(data.refreshToken);
+      storage.setTenantSlug(tenantSlug);
+
+      const userInfo = {
+        id:                 data.userId,
+        username:           data.username,
+        fullName:           data.fullName,
+        role:               data.role,
+        tenantName:         data.tenantName,
+        tenantSlug:         data.tenantSlug || tenantSlug,
+        subscriptionPlan:   data.subscriptionPlan || 'TRIAL',
+        planDisplayName:    data.planDisplayName || 'فترة تجريبية',
+        trialEndsAt:        data.trialEndsAt,
+        subscriptionEndsAt: data.subscriptionEndsAt,
+        maxTables:          data.maxTables ?? 5,
+        maxUsers:           data.maxUsers ?? 2,
+        maxProducts:        data.maxProducts ?? 30,
+        includesKds:        data.includesKds ?? false,
+        includesExpenses:   data.includesExpenses ?? false,
+      };
+      storage.setUser(userInfo);
+      setUser(userInfo);
+      return { success: true, defaultRoute: ROLE_DEFAULT_ROUTE[data.role] };
+    } catch (err) {
+      return { success: false, message: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const isTrial = false;
+  const isExpired = false;
+  const canAccess = useCallback(() => true, []);
+  const quotaRemaining = useCallback(() => Infinity, []);
+
   const value = {
     user,
     role:            user?.role ?? null,
@@ -80,8 +132,13 @@ export function AuthProvider({ children }) {
     isLoading,
     isInitialized,
     login,
+    loginPin,
     logout,
     hasRole:   (...roles) => roles.includes(user?.role),
+    isTrial,
+    isExpired,
+    canAccess,
+    quotaRemaining
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -26,6 +26,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,10 +78,24 @@ public class PrintJobService {
             return;
         }
 
-        String payload = "=== CANCELLATION ===\n"
-                + "Order #" + order.getOrderNumber() + "\n"
-                + "CANCEL: " + item.getQuantity() + " x " + item.getProductNameSnapshot()
-                + " - reason: " + item.getCancelReason() + "\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append(LINE);
+        sb.append("      *** إلغاء صنف ***\n");
+        sb.append("      ").append(stationLabel(item.getStationSnapshot())).append("\n");
+        sb.append(LINE);
+        sb.append("رقم الأوردر : #").append(order.getOrderNumber()).append("\n");
+        if (order.getTable() != null) {
+            sb.append("الطاولة    : ").append(order.getTable().getNumber()).append("\n");
+        } else {
+            sb.append("النوع      : تيك أواي\n");
+        }
+        sb.append("الوقت      : ").append(TIME_FMT.format(Instant.now())).append("\n");
+        sb.append(LINE);
+        sb.append("  ").append(item.getQuantity()).append(" x  ").append(fullItemName(item)).append("\n");
+        sb.append("  >> السبب: ")
+                .append(item.getCancelReason() == null ? "-" : item.getCancelReason()).append("\n");
+        sb.append(LINE);
+        String payload = sb.toString();
 
         String idempotencyKey = deterministicKey(order.getId() + ":CANCELLATION:" + item.getId());
         saveJob(order, station.getPrinter(), TicketType.CANCELLATION, payload, idempotencyKey);
@@ -149,23 +166,89 @@ public class PrintJobService {
         return UUID.nameUUIDFromBytes(raw.getBytes()).toString();
     }
 
+    private static final String LINE = "================================\n";
+    private static final String THIN = "--------------------------------\n";
+    private static final DateTimeFormatter TIME_FMT =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd  HH:mm").withZone(ZoneId.systemDefault());
+
+    /** Arabic label + intended recipient, so the runner hands the right slip to the right person. */
+    private String stationLabel(StationCode code) {
+        return switch (code) {
+            case KITCHEN -> "المطبخ  /  الشيف";
+            case BAR -> "المشروبات  /  الباريستا";
+        };
+    }
+
+    private String ticketTypeLabel(TicketType type) {
+        return switch (type) {
+            case NEW -> "طلب جديد";
+            case ADDITION -> "إضافة على طلب";
+            case CANCELLATION -> "إلغاء صنف";
+            case RECEIPT -> "فاتورة";
+            case REPRINT -> "إعادة طباعة";
+        };
+    }
+
+    /** "القسم - الصنف" as the user requires; falls back to product name alone if category is missing. */
+    private String fullItemName(OrderItem item) {
+        String category = item.getCategoryNameSnapshot();
+        if (category == null || category.isBlank()) {
+            return item.getProductNameSnapshot();
+        }
+        return category + " - " + item.getProductNameSnapshot();
+    }
+
     private String buildKitchenPayload(Order order, List<OrderItem> items, TicketType ticketType, StationCode stationCode) {
         StringBuilder sb = new StringBuilder();
-        sb.append("=== ").append(stationCode).append(" TICKET (").append(ticketType).append(") ===\n");
-        sb.append("Order #").append(order.getOrderNumber());
+
+        sb.append(LINE);
+        sb.append("        ").append(stationLabel(stationCode)).append("\n");
+        sb.append("        ").append(ticketTypeLabel(ticketType)).append("\n");
+        sb.append(LINE);
+
+        sb.append("رقم الأوردر : #").append(order.getOrderNumber()).append("\n");
         if (order.getTable() != null) {
-            sb.append(" - Table ").append(order.getTable().getNumber());
+            sb.append("الطاولة    : ").append(order.getTable().getNumber()).append("\n");
         } else {
-            sb.append(" - TAKEAWAY");
-        }
-        sb.append("\n");
-        for (OrderItem item : items) {
-            sb.append(" - ").append(item.getQuantity()).append(" x ").append(item.getProductNameSnapshot());
-            if (item.getNote() != null && !item.getNote().isBlank()) {
-                sb.append(" (").append(item.getNote()).append(")");
+            sb.append("النوع      : تيك أواي\n");
+            if (order.getCustomerName() != null && !order.getCustomerName().isBlank()) {
+                sb.append("العميل     : ").append(order.getCustomerName()).append("\n");
             }
-            sb.append("\n");
         }
+        if (order.getGuestCount() != null) {
+            sb.append("عدد الأفراد: ").append(order.getGuestCount()).append("\n");
+        }
+        if (order.getOpenedBy() != null && order.getOpenedBy().getFullName() != null) {
+            sb.append("الكابتن    : ").append(order.getOpenedBy().getFullName()).append("\n");
+        }
+        sb.append("الوقت      : ").append(TIME_FMT.format(Instant.now())).append("\n");
+        sb.append(LINE);
+
+        // Group by category so the chef/barista reads one section per menu section.
+        Map<String, List<OrderItem>> byCategory = items.stream()
+                .collect(Collectors.groupingBy(
+                        i -> i.getCategoryNameSnapshot() == null || i.getCategoryNameSnapshot().isBlank()
+                                ? "أخرى" : i.getCategoryNameSnapshot(),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        int totalQty = 0;
+        for (Map.Entry<String, List<OrderItem>> entry : byCategory.entrySet()) {
+            sb.append("[ ").append(entry.getKey()).append(" ]\n");
+            for (OrderItem item : entry.getValue()) {
+                totalQty += item.getQuantity();
+                sb.append("  ").append(item.getQuantity()).append(" x  ")
+                        .append(fullItemName(item)).append("\n");
+                if (item.getNote() != null && !item.getNote().isBlank()) {
+                    sb.append("     >> ملاحظة: ").append(item.getNote()).append("\n");
+                }
+            }
+            sb.append(THIN);
+        }
+
+        sb.append("إجمالي الأصناف : ").append(items.size())
+                .append("   |   الكمية : ").append(totalQty).append("\n");
+        sb.append(LINE);
         return sb.toString();
     }
 
@@ -178,7 +261,7 @@ public class PrintJobService {
                 continue;
             }
             BigDecimal lineTotal = item.getUnitPriceSnapshot().multiply(BigDecimal.valueOf(item.getQuantity()));
-            sb.append(" - ").append(item.getQuantity()).append(" x ").append(item.getProductNameSnapshot())
+            sb.append(" - ").append(item.getQuantity()).append(" x ").append(fullItemName(item))
                     .append(" @ ").append(item.getUnitPriceSnapshot()).append(" = ").append(lineTotal).append("\n");
         }
         sb.append("Subtotal: ").append(order.getSubtotal()).append("\n");

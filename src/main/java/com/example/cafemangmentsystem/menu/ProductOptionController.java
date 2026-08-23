@@ -31,21 +31,21 @@ public class ProductOptionController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public ProductOptionResponse create(@PathVariable Long productId, @Valid @RequestBody ProductOptionRequest request) {
         return productOptionService.create(productId, request);
     }
 
     @PutMapping("/{optionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public ProductOptionResponse update(@PathVariable Long productId, @PathVariable Long optionId,
                                          @Valid @RequestBody ProductOptionRequest request) {
         return productOptionService.update(productId, optionId, request);
     }
 
     @DeleteMapping("/{optionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public void delete(@PathVariable Long productId, @PathVariable Long optionId) {
         productOptionService.delete(productId, optionId);
     }

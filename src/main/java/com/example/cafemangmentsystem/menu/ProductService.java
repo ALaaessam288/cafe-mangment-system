@@ -8,6 +8,7 @@ import com.example.cafemangmentsystem.menu.repository.CategoryRepository;
 import com.example.cafemangmentsystem.menu.repository.ProductRepository;
 import com.example.cafemangmentsystem.station.entity.Station;
 import com.example.cafemangmentsystem.station.repository.StationRepository;
+import com.example.cafemangmentsystem.tenant.QuotaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,8 +25,11 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final StationRepository stationRepository;
+    private final QuotaService quotaService;
 
     public ProductResponse create(ProductRequest request) {
+        quotaService.checkProductQuota(productRepository.count());
+        
         Product product = Product.builder()
                 .category(getCategoryOrThrow(request.categoryId()))
                 .station(getStationOrThrow(request.stationId()))
@@ -45,6 +49,12 @@ public class ProductService {
                 ? productRepository.findAll()
                 : productRepository.findAllByCategoryId(categoryId);
         return products.stream().map(ProductResponse::from).toList();
+    }
+    
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getTopSellers(int limit) {
+        return productRepository.findTopSellers(org.springframework.data.domain.PageRequest.of(0, limit))
+                .stream().map(ProductResponse::from).toList();
     }
 
     @Transactional(readOnly = true)

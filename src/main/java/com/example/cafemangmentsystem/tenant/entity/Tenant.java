@@ -44,4 +44,34 @@ public class Tenant extends BaseEntity {
 
     @Column(nullable = false)
     private String currency;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_plan", nullable = false)
+    @Builder.Default
+    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.TRIAL;
+
+    @Column(name = "trial_ends_at")
+    private java.time.Instant trialEndsAt;
+
+    @Column(name = "subscription_ends_at")
+    private java.time.Instant subscriptionEndsAt;
+
+    @Column(name = "max_tables")
+    private Integer maxTables;
+
+    @Column(name = "max_users")
+    private Integer maxUsers;
+
+    @Column(name = "max_products")
+    private Integer maxProducts;
+
+    @Column(name = "service_charge_percent")
+    private Integer serviceChargePercent;
+
+    @Column(name = "owner_whatsapp")
+    private String ownerWhatsapp;
+
+    @Column(name = "whatsapp_alerts_enabled")
+    @Builder.Default
+    private Boolean whatsappAlertsEnabled = false;
 }

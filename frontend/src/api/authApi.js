@@ -2,7 +2,13 @@ import client from './client';
 
 export const authApi = {
   login: (tenantSlug, username, password) =>
-    client.post('/auth/login', { tenantSlug, username, password }).then((r) => r.data),
+    client.post('/auth/login', { tenantSlug, username: username || undefined, password }).then((r) => r.data),
+
+  loginPin: (tenantSlug, pin) =>
+    client.post('/auth/login-pin', { tenantSlug, pin }).then((r) => r.data),
+
+  getTenantUsers: (tenantSlug) =>
+    client.get('/auth/tenant-users', { params: { tenantSlug } }).then((r) => r.data),
 
   refresh: (refreshToken) =>
     client.post('/auth/refresh', { refreshToken }).then((r) => r.data),

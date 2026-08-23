@@ -24,9 +24,30 @@ import org.springframework.transaction.annotation.Transactional;
 public class TenantAwareAuthenticator {
 
     private final AuthenticationManager authenticationManager;
+    private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Authentication authenticate(String username, String password) {
         return authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.example.cafemangmentsystem.user.entity.User authenticateByPin(String pin) {
+        return userRepository.findAll().stream()
+                .filter(u -> u.getPinHash() != null && passwordEncoder.matches(pin, u.getPinHash()))
+                .findFirst()
+                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Invalid PIN"));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.example.cafemangmentsystem.user.entity.User authenticateByPassword(String password) {
+        return userRepository.findAll().stream()
+                .filter(u -> u.isActive() && (
+                        (u.getPasswordHash() != null && passwordEncoder.matches(password, u.getPasswordHash())) ||
+                        (u.getPinHash() != null && passwordEncoder.matches(password, u.getPinHash()))
+                ))
+                .findFirst()
+                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Invalid password"));
     }
 }

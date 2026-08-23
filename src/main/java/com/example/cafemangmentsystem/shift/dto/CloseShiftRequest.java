@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
 
 public record CloseShiftRequest(
-        @NotNull @PositiveOrZero BigDecimal countedCash
+        @NotNull @PositiveOrZero BigDecimal countedCash,
+        BigDecimal snacksNet
 ) {
 }

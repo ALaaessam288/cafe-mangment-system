@@ -62,4 +62,7 @@ public class Product extends SoftDeletableEntity {
     @Column(name = "track_inventory", nullable = false)
     @Builder.Default
     private boolean trackInventory = false;
+
+    @Column(name = "min_stock_threshold")
+    private Integer minStockThreshold;
 }

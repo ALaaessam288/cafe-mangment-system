@@ -38,26 +38,26 @@ public class CafeTableController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public CafeTableResponse create(@Valid @RequestBody CafeTableRequest request) {
         return cafeTableService.create(request);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public CafeTableResponse update(@PathVariable Long id, @Valid @RequestBody CafeTableRequest request) {
         return cafeTableService.update(id, request);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public CafeTableResponse deactivate(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return cafeTableService.deactivate(id, principal.getId());
     }
 
     @PutMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public CafeTableResponse activate(@PathVariable Long id) {
         return cafeTableService.activate(id);
     }

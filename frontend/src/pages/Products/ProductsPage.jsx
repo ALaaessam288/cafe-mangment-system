@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Plus, Edit2, Search, Sliders, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Search, Sliders, Trash2, ArrowUpDown } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { stationsApi } from '../../api/stationsApi';
 import { useToast } from '../../context/ToastContext';
@@ -10,6 +10,7 @@ import Badge from '../../components/Badge/Badge';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
+import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import { ROLES } from '../../utils/constants';
 
 const stationNames = {
@@ -29,6 +30,10 @@ export default function ProductsPage() {
   // Filters
   const [search, setSearch] = useState('');
   const [filterCatId, setFilterCatId] = useState('');
+  const [filterStationId, setFilterStationId] = useState('');
+  const [filterAvailable, setFilterAvailable] = useState('ALL'); // ALL | AVAILABLE | UNAVAILABLE
+  const [filterActive, setFilterActive] = useState('ALL'); // ALL | ACTIVE | INACTIVE
+  const [sortBy, setSortBy] = useState('NAME_ASC');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -68,9 +73,10 @@ export default function ProductsPage() {
     e.preventDefault();
     if (!newOptionForm.nameAr.trim() || newOptionForm.priceDelta === '') return;
     
+    const parsedPrice = parseFloat(newOptionForm.priceDelta);
     const optionPayload = {
       nameAr: newOptionForm.nameAr.trim(),
-      priceDelta: parseFloat(newOptionForm.priceDelta),
+      priceDelta: isNaN(parsedPrice) ? 0 : parsedPrice,
       isDefault: newOptionForm.isDefault
     };
 
@@ -144,14 +150,43 @@ export default function ProductsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Derived filtered data
+  // Derived filtered + sorted data
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
-      const matchesCat = filterCatId ? p.categoryId === filterCatId : true;
-      return matchesSearch && matchesCat;
+    const q = search.trim().toLowerCase();
+    const result = products.filter((p) => {
+      const matchesSearch = !q || (p.name || '').toLowerCase().includes(q);
+      // Select values are always strings; product ids are numbers - compare as strings.
+      const matchesCat = filterCatId ? String(p.categoryId) === String(filterCatId) : true;
+      const matchesStation = filterStationId ? String(p.stationId) === String(filterStationId) : true;
+      const matchesAvailable =
+        filterAvailable === 'ALL' ? true :
+        filterAvailable === 'AVAILABLE' ? p.available :
+        !p.available;
+      const matchesActive =
+        filterActive === 'ALL' ? true :
+        filterActive === 'ACTIVE' ? p.active :
+        !p.active;
+      return matchesSearch && matchesCat && matchesStation && matchesAvailable && matchesActive;
     });
-  }, [products, search, filterCatId]);
+
+    const sorted = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'NAME_DESC':
+          return (b.name || '').localeCompare(a.name || '', 'ar');
+        case 'PRICE_ASC':
+          return (a.price || 0) - (b.price || 0);
+        case 'PRICE_DESC':
+          return (b.price || 0) - (a.price || 0);
+        case 'CATEGORY':
+          return (a.categoryNameAr || '').localeCompare(b.categoryNameAr || '', 'ar');
+        case 'NAME_ASC':
+        default:
+          return (a.name || '').localeCompare(b.name || '', 'ar');
+      }
+    });
+
+    return sorted;
+  }, [products, search, filterCatId, filterStationId, filterAvailable, filterActive, sortBy]);
 
   function handleOpenModal(product = null) {
     if (product) {
@@ -232,7 +267,7 @@ export default function ProductsPage() {
   }
 
   async function handleDeactivate(product) {
-    if (role !== ROLES.ADMIN) return;
+    if (role !== ROLES.SUPERVISOR) return;
     try {
       if (product.active) {
         await menuApi.deactivateProduct(product.id);
@@ -248,13 +283,14 @@ export default function ProductsPage() {
 
   return (
     <div className="page">
+      <ObserverBanner />
       <div className="page__header">
         <div>
           <h1 className="page__title">المنتجات</h1>
           <p className="page__subtitle">إدارة المنتجات والأسعار والتوافر</p>
         </div>
         <div className="page__actions">
-          {role === ROLES.ADMIN && (
+          {role === ROLES.SUPERVISOR && (
             <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()}>
               إضافة منتج
             </Button>
@@ -282,13 +318,61 @@ export default function ProductsPage() {
             ))}
           </select>
         </div>
+        <div className="field-select">
+          <select
+            className="field-select__control"
+            value={filterStationId}
+            onChange={(e) => setFilterStationId(e.target.value)}
+          >
+            <option value="">كل أماكن التجهيز</option>
+            {stations.map((s) => (
+              <option key={s.id} value={s.id}>{s.nameAr}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field-select">
+          <select
+            className="field-select__control"
+            value={filterAvailable}
+            onChange={(e) => setFilterAvailable(e.target.value)}
+          >
+            <option value="ALL">كل حالات التوافر</option>
+            <option value="AVAILABLE">متاح فقط</option>
+            <option value="UNAVAILABLE">غير متاح فقط</option>
+          </select>
+        </div>
+        <div className="field-select">
+          <select
+            className="field-select__control"
+            value={filterActive}
+            onChange={(e) => setFilterActive(e.target.value)}
+          >
+            <option value="ALL">كل الحالات</option>
+            <option value="ACTIVE">نشط فقط</option>
+            <option value="INACTIVE">غير نشط فقط</option>
+          </select>
+        </div>
+        <div className="field-select">
+          <select
+            className="field-select__control"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            title="الترتيب"
+          >
+            <option value="NAME_ASC">الاسم (أ-ي)</option>
+            <option value="NAME_DESC">الاسم (ي-أ)</option>
+            <option value="PRICE_ASC">السعر (الأقل أولاً)</option>
+            <option value="PRICE_DESC">السعر (الأعلى أولاً)</option>
+            <option value="CATEGORY">القسم</option>
+          </select>
+        </div>
       </div>
 
       <div className="data-table-wrap">
         {loading ? (
           <div className="data-table-empty"><Spinner /></div>
         ) : filteredProducts.length === 0 ? (
-          <div className="data-table-empty">مفيش منتجات بالاسم ده.</div>
+          <div className="data-table-empty">مفيش منتجات مطابقة لخيارات البحث والفلترة.</div>
         ) : (
           <table className="data-table">
             <thead>
@@ -299,7 +383,7 @@ export default function ProductsPage() {
                 <th>مكان التجهيز</th>
                 <th>متاح</th>
                 <th>الحالة</th>
-                {role === ROLES.ADMIN && <th style={{ textAlign: 'left' }}>تحكم</th>}
+                {role === ROLES.SUPERVISOR && <th style={{ textAlign: 'left' }}>تحكم</th>}
               </tr>
             </thead>
             <tbody>
@@ -331,7 +415,7 @@ export default function ProductsPage() {
                         {prod.active ? 'نشط' : 'غير نشط'}
                       </Badge>
                     </td>
-                    {role === ROLES.ADMIN && (
+                    {role === ROLES.SUPERVISOR && (
                       <td>
                         <div className="data-table__actions" style={{ justifyContent: 'flex-end', gap: '4px' }}>
                           <Button variant="ghost" size="sm" onClick={() => handleOpenModal(prod)} title="تعديل المنتج والاختيارات">
@@ -356,11 +440,13 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {role === ROLES.ADMIN && (
+      {role === ROLES.SUPERVISOR && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          title={editingProduct ? 'تعديل منتج' : 'إضافة منتج'}
+          title={editingProduct ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد'}
+          icon={editingProduct ? '✏️' : '✨'}
+          subtitle={editingProduct ? `تعديل الصنف: ${editingProduct.name} — تحديد السعر والقسم ومكان التجهيز` : 'إضافة صنف جديد لقائمة المنيو وتعيين السعر وقسم التجهيز'}
           size="lg"
         >
           <form onSubmit={handleSave} className="form-grid">
@@ -454,6 +540,12 @@ export default function ProductsPage() {
                   placeholder="مثال: كبير"
                   value={newOptionForm.nameAr}
                   onChange={(e) => setNewOptionForm({ ...newOptionForm, nameAr: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddOption(e);
+                    }
+                  }}
                 />
                 <Input
                   label="فارق السعر (+/-)"
@@ -461,6 +553,12 @@ export default function ProductsPage() {
                   step="0.1"
                   value={newOptionForm.priceDelta}
                   onChange={(e) => setNewOptionForm({ ...newOptionForm, priceDelta: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddOption(e);
+                    }
+                  }}
                 />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center', height: '100%', paddingBottom: '6px' }}>
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', userSelect: 'none' }}>افتراضي</span>

@@ -1,0 +1,61 @@
+/* ═══════════════════════════════════════
+   DEBTS KPI SUMMARY BOXES
+═══════════════════════════════════════ */
+.debts-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.kpi-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  transition: transform var(--transition-fast);
+}
+
+.kpi-box:hover {
+  transform: translateY(-2px);
+}
+
+.kpi-box__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.kpi-box__val {
+  font-size: var(--text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+}
+
+.kpi-box--deduction .kpi-box__val { color: #ef4444; }
+.kpi-box--advance .kpi-box__val { color: #f59e0b; }
+.kpi-box--net {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+.kpi-box--net .kpi-box__val { color: var(--accent); }
+
+/* ═══════════════════════════════════════
+   SETTLE MODAL SUMMARY
+═══════════════════════════════════════ */
+.payout-summary-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4);
+  background: rgba(16, 185, 129, 0.1);
+  border-right: 4px solid #10b981;
+  border-radius: var(--radius-md);
+}
+
+.payout-amount {
+  font-size: var(--text-xl);
+  color: #10b981;
+}

@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,20 +30,26 @@ public class DiscountController {
     private final DiscountService discountService;
 
     @PostMapping("/discounts")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR', 'CASHIER')")
     @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse applyOrderDiscount(@PathVariable Long orderId, @AuthenticationPrincipal UserPrincipal principal,
                                              @Valid @RequestBody ApplyDiscountRequest request) {
-        return orderService.applyOrderDiscount(orderId, principal.getId(), request);
+        return orderService.applyOrderDiscount(orderId, principal != null ? principal.getId() : null, request);
+    }
+
+    @DeleteMapping("/discounts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR', 'CASHIER')")
+    public OrderResponse clearOrderDiscounts(@PathVariable Long orderId) {
+        return orderService.clearOrderDiscounts(orderId);
     }
 
     @PostMapping("/items/{itemId}/discounts")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR', 'CASHIER')")
     @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse applyItemDiscount(@PathVariable Long orderId, @PathVariable Long itemId,
                                             @AuthenticationPrincipal UserPrincipal principal,
                                             @Valid @RequestBody ApplyDiscountRequest request) {
-        return orderService.applyItemDiscount(orderId, itemId, principal.getId(), request);
+        return orderService.applyItemDiscount(orderId, itemId, principal != null ? principal.getId() : null, request);
     }
 
     @GetMapping("/discounts")

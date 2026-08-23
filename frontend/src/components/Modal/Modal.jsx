@@ -6,13 +6,15 @@ export default function Modal({
   isOpen,
   onClose,
   title,
+  subtitle,
+  icon,
+  badge,
   children,
   footer,
   size = 'md',
   closeOnOverlay = true,
 }) {
   const dialogRef = useRef(null);
-
   const onCloseRef = useRef(onClose);
   
   useEffect(() => {
@@ -30,30 +32,57 @@ export default function Modal({
     window.addEventListener('keydown', handleKeyDown);
     
     // Focus the modal when it opens
-    dialogRef.current?.focus();
+    const timer = setTimeout(() => {
+      dialogRef.current?.focus();
+    }, 50);
     
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   return (
     <div
-      className="modal-overlay animate-fade-in"
+      className="modal-overlay"
       onClick={closeOnOverlay ? onClose : undefined}
       role="dialog"
       aria-modal="true"
     >
       <div
         ref={dialogRef}
-        className={`modal modal--${size} animate-fade-in-scale`}
+        className={`modal modal--${size}`}
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1}
       >
+        {/* Top glowing accent line */}
+        <div className="modal__top-bar" />
+
         {/* Header */}
         <div className="modal__header">
-          <h3 className="modal__title">{title}</h3>
-          <button className="modal__close" onClick={onClose} aria-label="Close">
+          <div className="modal__header-content">
+            {icon && (
+              <div className="modal__header-icon">
+                {icon}
+              </div>
+            )}
+            <div>
+              <div className="modal__title-row">
+                <h3 className="modal__title">{title}</h3>
+                {badge && <span className="modal__badge">{badge}</span>}
+              </div>
+              {subtitle && <p className="modal__subtitle">{subtitle}</p>}
+            </div>
+          </div>
+          
+          <button 
+            className="modal__close" 
+            onClick={onClose} 
+            aria-label="إغلاق"
+            title="إغلاق النافذة (Esc)"
+          >
             <X size={18} />
           </button>
         </div>

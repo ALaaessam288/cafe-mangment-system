@@ -13,7 +13,7 @@ export const ORDER_STATUS = {
   OPEN:   'OPEN',
   SENT:   'SENT',
   CLOSED: 'CLOSED',
-  VOID:   'VOID',
+  VOID:   'VOIDED',
 };
 
 /* ── Order Types ── */
@@ -52,10 +52,13 @@ export const SHIFT_STATUS = {
 /* ── Routes ── */
 export const ROUTES = {
   SPLASH:     '/',
+  WELCOME:    '/welcome',
+  SETUP:      '/setup',
   LOGIN:      '/login',
   REGISTER:   '/register',
   DASHBOARD:  '/dashboard',
   POS:        '/pos',
+  KDS:        '/kds',
   PRODUCTS:   '/products',
   CATEGORIES: '/categories',
   TABLES:     '/tables',
@@ -65,6 +68,9 @@ export const ROUTES = {
   EMPLOYEES:  '/employees',
   REPORTS:    '/reports',
   SETTINGS:   '/settings',
+  INVENTORY:  '/inventory',
+  DEBTS:      '/debts',
+  SUPER_ADMIN: '/super-admin',
 };
 
 /* ── Role default routes ── */
@@ -76,7 +82,7 @@ export const ROLE_DEFAULT_ROUTE = {
 
 /* ── Role-allowed routes ── */
 export const ROLE_ROUTES = {
-  [ROLES.CASHIER]:    [ROUTES.POS, ROUTES.INVOICES, ROUTES.SETTINGS],
-  [ROLES.SUPERVISOR]: [ROUTES.DASHBOARD, ROUTES.POS, ROUTES.INVOICES, ROUTES.EXPENSES, ROUTES.REPORTS, ROUTES.SETTINGS],
-  [ROLES.ADMIN]:      Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN),
+  [ROLES.CASHIER]:    [ROUTES.POS, ROUTES.KDS, ROUTES.INVOICES, ROUTES.EXPENSES, ROUTES.EMPLOYEES, ROUTES.SETTINGS],
+  [ROLES.SUPERVISOR]: Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN && r !== ROUTES.SUPER_ADMIN),
+  [ROLES.ADMIN]:      Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN && r !== ROUTES.POS && r !== ROUTES.KDS),
 };

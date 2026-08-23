@@ -1,8 +1,12 @@
 package com.example.cafemangmentsystem.tenant.platform;
 
+import com.example.cafemangmentsystem.register.entity.Register;
+import com.example.cafemangmentsystem.register.repository.RegisterRepository;
 import com.example.cafemangmentsystem.user.entity.Role;
 import com.example.cafemangmentsystem.user.entity.User;
 import com.example.cafemangmentsystem.user.repository.UserRepository;
+import com.example.cafemangmentsystem.cafetable.entity.CafeTable;
+import com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -25,9 +29,11 @@ public class TenantOwnerProvisioner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RegisterRepository registerRepository;
+    private final CafeTableRepository cafeTableRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void createOwner(String username, String fullName, String rawPassword) {
+    public User createOwner(String username, String fullName, String rawPassword, Integer defaultTables) {
         User owner = User.builder()
                 .username(username)
                 .fullName(fullName)
@@ -35,5 +41,22 @@ public class TenantOwnerProvisioner {
                 .role(Role.ADMIN)
                 .build();
         userRepository.save(owner);
+
+        // Seed default cash register for this tenant
+        Register register = Register.builder()
+                .name("الدرج الرئيسي")
+                .build();
+        registerRepository.save(register);
+        
+        int tablesToCreate = defaultTables != null ? defaultTables : 5;
+        for (int i = 1; i <= tablesToCreate; i++) {
+            cafeTableRepository.save(CafeTable.builder()
+                    .number(i)
+                    .zone(com.example.cafemangmentsystem.cafetable.entity.TableZone.INDOOR)
+                    .seats(4)
+                    .build());
+        }
+        
+        return owner;
     }
 }

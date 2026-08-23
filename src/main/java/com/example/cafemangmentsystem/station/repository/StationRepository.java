@@ -11,4 +11,8 @@ public interface StationRepository extends JpaRepository<Station, Long> {
     boolean existsByCode(StationCode code);
 
     Optional<Station> findByCode(StationCode code);
+
+    Optional<Station> findFirstByCode(StationCode code);
+
+    java.util.List<Station> findAllByCode(StationCode code);
 }

@@ -36,20 +36,20 @@ public class StationController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public StationResponse create(@Valid @RequestBody StationRequest request) {
         return stationService.create(request);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public StationResponse update(@PathVariable Long id, @Valid @RequestBody StationRequest request) {
         return stationService.update(id, request);
     }
 
     @PutMapping("/{id}/printer")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public StationResponse assignPrinter(@PathVariable Long id, @Valid @RequestBody AssignPrinterRequest request) {
         return stationService.assignPrinter(id, request);
     }

@@ -73,6 +73,11 @@ public class Order extends TenantScopedEntity {
     @Builder.Default
     private BigDecimal service = BigDecimal.ZERO;
 
+    /** Takeaway only - flat delivery charge added on top of the order total. */
+    @Column(name = "delivery_fee", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal deliveryFee = BigDecimal.ZERO;
+
     @Column(nullable = false, precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
@@ -86,6 +91,9 @@ public class Order extends TenantScopedEntity {
 
     @Column(name = "customer_phone")
     private String customerPhone;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
 
     /** Takeaway only, and only for RESTAURANT tenants - a call-ahead/scheduled pickup time. */
     @Column(name = "pickup_at")

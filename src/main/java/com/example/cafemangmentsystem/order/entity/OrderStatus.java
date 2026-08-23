@@ -13,5 +13,6 @@ public enum OrderStatus {
     READY_FOR_PICKUP,
     PAID,
     CLOSED,
-    VOIDED
+    VOIDED,
+    REFUNDED
 }

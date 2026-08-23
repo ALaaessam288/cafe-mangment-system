@@ -9,4 +9,6 @@ export const shiftsApi = {
   findAll:    (openOnly = false) =>
     client.get('/shifts', { params: { openOnly } }).then((r) => r.data),
   getReport:  (id)      => client.get(`/shifts/${id}/report`).then((r) => r.data),
+  setSnacksNet: (id, amount) => client.put(`/shifts/${id}/snacks-net`, { amount }).then((r) => r.data),
+  delete:     (id)      => client.delete(`/shifts/${id}`).then((r) => r.data),
 };

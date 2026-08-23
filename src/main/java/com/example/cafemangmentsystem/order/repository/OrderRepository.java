@@ -17,7 +17,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     boolean existsByTableIdAndStatusIn(Long tableId, Collection<OrderStatus> statuses);
 
+    /**
+     * The orders currently occupying a table. Callers used to fetch every order in a status and
+     * filter in memory - three full scans of the orders table to answer a question about one
+     * table.
+     */
+    List<Order> findByTableIdAndStatusIn(Long tableId, Collection<OrderStatus> statuses);
+
     List<Order> findAllByStatus(OrderStatus status);
 
     List<Order> findByStatus(OrderStatus status);
+
+    List<Order> findAllByShiftId(Long shiftId);
 }

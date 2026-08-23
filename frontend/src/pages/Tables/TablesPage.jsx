@@ -8,6 +8,7 @@ import Badge from '../../components/Badge/Badge';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
+import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import { ROLES } from '../../utils/constants';
 
 const TABLE_ZONES = {
@@ -100,13 +101,14 @@ export default function TablesPage() {
 
   return (
     <div className="page">
+      <ObserverBanner />
       <div className="page__header">
         <div>
           <h1 className="page__title">الترابيزات</h1>
           <p className="page__subtitle">إدارة ترابيزات الكافيه وسعة الجلوس</p>
         </div>
         <div className="page__actions">
-          {role === ROLES.ADMIN && (
+          {role === ROLES.SUPERVISOR && (
             <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()}>
               إضافة ترابيزة
             </Button>
@@ -127,7 +129,7 @@ export default function TablesPage() {
                 <th>السعة</th>
                 <th>المنطقة</th>
                 <th>الحالة</th>
-                {role === ROLES.ADMIN && <th style={{ textAlign: 'left' }}>تحكم</th>}
+                {role === ROLES.SUPERVISOR && <th style={{ textAlign: 'left' }}>تحكم</th>}
               </tr>
             </thead>
             <tbody>
@@ -141,7 +143,7 @@ export default function TablesPage() {
                       {table.active ? 'نشط' : 'غير نشط'}
                     </Badge>
                   </td>
-                  {role === ROLES.ADMIN && (
+                  {role === ROLES.SUPERVISOR && (
                     <td>
                       <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
                         <Button variant="ghost" size="sm" onClick={() => handleOpenModal(table)}>
@@ -165,11 +167,14 @@ export default function TablesPage() {
         )}
       </div>
 
-      {role === ROLES.ADMIN && (
+      {role === ROLES.SUPERVISOR && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          title={editingTable ? 'تعديل ترابيزة' : 'إضافة ترابيزة'}
+          title={editingTable ? 'تعديل بيانات الترابيزة' : 'إضافة ترابيزة جديدة'}
+          icon={editingTable ? '✏️' : '🪑'}
+          subtitle={editingTable ? `تعديل سعة ومنطقة ترابيزة رقم ${editingTable.number}` : 'إضافة ترابيزة جديدة للصالة وتحديد عدد الكراسي والمنطقة'}
+          size="sm"
         >
           <form onSubmit={handleSave} className="form-grid">
             <Input
@@ -182,16 +187,16 @@ export default function TablesPage() {
               autoFocus
             />
             <Input
-              label="السعة"
+              label="سعة الترابيزة (عدد الكراسي)"
               type="number"
               min="1"
               value={form.seats}
               onChange={(e) => setForm({ ...form, seats: e.target.value })}
-              hint="عدد الكراسي"
+              hint="عدد الأفراد المتاح جلوسهم على الترابيزة"
               required
             />
             <div className="field-select">
-              <label className="field-select__label">المنطقة</label>
+              <label className="field-select__label">منطقة الصالة / الجلوس</label>
               <select
                 className="field-select__control"
                 value={form.zone}
@@ -203,9 +208,9 @@ export default function TablesPage() {
                 ))}
               </select>
             </div>
-            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px', gridColumn: '1/-1' }}>
+            <div className="form-actions">
               <Button variant="secondary" onClick={() => setIsModalOpen(false)} type="button">إلغاء</Button>
-              <Button type="submit" loading={isSaving}>حفظ الترابيزة</Button>
+              <Button type="submit" loading={isSaving} variant="primary">حفظ الترابيزة</Button>
             </div>
           </form>
         </Modal>

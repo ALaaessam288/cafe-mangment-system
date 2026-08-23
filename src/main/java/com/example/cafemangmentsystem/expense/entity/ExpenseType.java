@@ -5,5 +5,6 @@ public enum ExpenseType {
     RENT,
     SALARIES,
     MAINTENANCE,
-    INSTALLMENTS
+    INSTALLMENTS,
+    DEBTS
 }

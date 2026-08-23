@@ -15,6 +15,7 @@ public record ExpenseRequest(
         @NotNull LocalDate expenseDate,
         boolean recurring,
         boolean paidFromDrawer,
-        Long employeeId
+        Long employeeId,
+        String notes
 ) {
 }

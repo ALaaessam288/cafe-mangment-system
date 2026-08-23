@@ -27,6 +27,6 @@ public class PlatformProvisioningController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProvisionTenantResponse provision(@Valid @RequestBody ProvisionTenantRequest request) {
-        return tenantService.provision(request);
+        return tenantService.provisionWithSetup(request);
     }
 }

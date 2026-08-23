@@ -34,20 +34,25 @@ public class ProductController {
         return productService.findAll(categoryId);
     }
 
+    @GetMapping("/top-sellers")
+    public List<ProductResponse> getTopSellers(@RequestParam(defaultValue = "10") int limit) {
+        return productService.getTopSellers(limit);
+    }
+
     @GetMapping("/{id}")
     public ProductResponse findById(@PathVariable Long id) {
         return productService.findById(id);
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse create(@Valid @RequestBody ProductRequest request) {
         return productService.create(request);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public ProductResponse update(@PathVariable Long id, @Valid @RequestBody ProductRequest request) {
         return productService.update(id, request);
     }
@@ -59,13 +64,13 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public ProductResponse deactivate(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return productService.deactivate(id, principal.getId());
     }
 
     @PutMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public ProductResponse activate(@PathVariable Long id) {
         return productService.activate(id);
     }

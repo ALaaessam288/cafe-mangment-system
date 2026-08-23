@@ -11,7 +11,13 @@ public record FinancialReportDto(
         BigDecimal totalGeneralExpenses,
         BigDecimal totalWages,
         BigDecimal netProfit,
-        List<TransactionDto> transactions
+        List<TransactionDto> transactions,
+        List<ReportItemDto> productSales,
+        List<ReportItemDto> categorySales,
+        List<PaymentMethodBreakdownDto> paymentMethods,
+        BigDecimal totalOutstandingDebts,
+        int outstandingDebtsCount,
+        BigDecimal totalSnacksNet
 ) {
     public record TransactionDto(
             String id, // Or String.valueOf(id) since it can be Order or Expense

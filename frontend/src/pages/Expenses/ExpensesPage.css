@@ -1,0 +1,143 @@
+/* ═══════════════════════════════════════
+   EXPENSES — summary, breakdown, quick entry
+═══════════════════════════════════════ */
+.exp-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.exp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(150deg, rgba(30, 33, 48, 0.7) 0%, rgba(22, 25, 34, 0.9) 100%);
+}
+
+.exp-card--total {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(150deg, rgba(239, 68, 68, 0.1) 0%, rgba(22, 25, 34, 0.9) 100%);
+}
+
+.exp-card__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: var(--fw-semibold);
+}
+
+.exp-card__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.exp-card--total .exp-card__value { color: var(--danger-hover); }
+
+.exp-card__sub { font-size: 10px; color: var(--text-muted); }
+
+.exp-card__split {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.exp-card__split b {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  margin-inline-start: 4px;
+}
+
+/* Where the money went */
+.exp-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  background: rgba(22, 25, 34, 0.5);
+}
+
+.exp-breakdown__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-xs);
+}
+
+.exp-breakdown__label {
+  flex: 0 0 130px;
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+}
+
+.exp-breakdown__bar {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.exp-breakdown__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--accent) 0%, #fbbf24 100%);
+}
+
+.exp-breakdown__amount {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: var(--fw-bold);
+}
+
+.exp-breakdown__pct {
+  flex: 0 0 34px;
+  text-align: end;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Quick amounts in the entry form */
+.exp-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.exp-preset {
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: rgba(30, 33, 48, 0.6);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.exp-preset:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  background: var(--accent-dim);
+}
+
+.exp-total-row td {
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+  border-top: 2px solid var(--border-default);
+  background: rgba(15, 17, 23, 0.5);
+}
+
+.exp-total-row .data-table__number { color: var(--danger); }

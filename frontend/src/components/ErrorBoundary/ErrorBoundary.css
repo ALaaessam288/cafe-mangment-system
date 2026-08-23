@@ -1,0 +1,91 @@
+/* Crash screen. Deliberately plain: it has to render correctly even when whatever broke is
+   something the rest of the app's styling depends on, so it leans on design tokens only for
+   colour and hardcodes its own layout. */
+
+.crash {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-app, #0b0d13);
+  color: var(--text-primary, #e8eaf0);
+  direction: rtl;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+}
+
+.crash__card {
+  width: 100%;
+  max-width: 520px;
+  text-align: center;
+  background: var(--bg-secondary, #161922);
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 40px 32px;
+}
+
+.crash__icon {
+  font-size: 44px;
+  line-height: 1;
+  color: var(--warning, #f59e0b);
+  margin-bottom: 18px;
+}
+
+.crash__title {
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.crash__body {
+  margin: 0 0 28px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-secondary, #9aa3b8);
+}
+
+/* Sized for a touch screen - this button is the whole point of the page. */
+.crash__button {
+  width: 100%;
+  min-height: 56px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #14110e;
+  background: var(--accent, #f59e0b);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.crash__button:hover {
+  background: var(--accent-hover, #fbbf24);
+}
+
+.crash__details {
+  margin-top: 24px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-muted, #6b7387);
+}
+
+.crash__details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.crash__trace {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg-primary, #0f1117);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+  border-radius: 8px;
+  direction: ltr;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}

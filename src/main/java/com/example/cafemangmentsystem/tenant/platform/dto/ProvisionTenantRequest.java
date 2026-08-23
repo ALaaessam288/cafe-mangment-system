@@ -14,6 +14,8 @@ public record ProvisionTenantRequest(
         @NotBlank @Size(min = 8, message = "password must be at least 8 characters") String ownerPassword,
         @NotBlank String ownerFullName,
         String timezone,
-        String currency
+        String currency,
+        String templateId,
+        Integer defaultTables
 ) {
 }

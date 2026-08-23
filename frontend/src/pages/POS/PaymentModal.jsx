@@ -30,13 +30,25 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
     setLoading(true);
     try {
       const paymentAmount = Math.min(balanceDue, amountNum);
+      const isFullPayment = paymentAmount >= balanceDue;
       const payload = { method, amount: paymentAmount };
       if (method === 'CASH') {
         payload.received = amountNum;
       }
-      await ordersApi.recordPayment(order.id, payload);
-      await ordersApi.close(order.id);
-      onSuccess();
+      let updatedOrder = await ordersApi.recordPayment(order.id, payload);
+
+      if (isFullPayment) {
+        // Only close once the order is actually fully paid - closing on a partial payment
+        // always threw 409 here, which used to get swallowed by the catch below and shown
+        // as a generic "فشل الدفع" even though the (partial) payment had already gone through,
+        // leaving the invoice stuck at its pre-payment status with no visible explanation.
+        updatedOrder = await ordersApi.close(order.id);
+        onSuccess(updatedOrder, true);
+      } else {
+        const remaining = balanceDue - paymentAmount;
+        toast.success(`تم تسجيل دفعة جزئية بمقدار ${formatCurrency(paymentAmount)}. الباقي: ${formatCurrency(remaining)}`, 'دفعة جزئية');
+        onSuccess(updatedOrder, false);
+      }
     } catch (err) {
       toast.error(err.message, 'فشل الدفع');
     } finally {
@@ -145,11 +157,34 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
         </div>
 
         {/* Footer */}
-        <div className="payment-modal__footer">
-          <button className="btn btn--ghost btn--md" onClick={onClose}>إلغاء</button>
-          <button className="btn btn--primary btn--lg" onClick={handlePay} disabled={loading}>
-            {loading ? <Spinner size="sm" color="white" /> : <><DollarSign size={16} /> تأكيد الدفع</>}
-          </button>
+        <div className="payment-modal__footer" style={{ flexWrap: 'wrap' }}>
+          {order.customerPhone && (
+            <button
+              className="btn btn--outline btn--md"
+              style={{ borderColor: '#25d366', color: '#25d366', width: '100%', marginBottom: '8px' }}
+              onClick={() => {
+                const text = `أهلاً بك! شكراً لزيارتك.
+فاتورة رقم: #${order.receiptNumber || order.id.toString().slice(-4)}
+الإجمالي: ${formatCurrency(order.total)}
+
+نتمنى رؤيتك مرة أخرى!`;
+                const url = `https://wa.me/${order.customerPhone}?text=${encodeURIComponent(text)}`;
+                if (window.api && window.api.openExternal) {
+                  window.api.openExternal(url);
+                } else {
+                  window.open(url, '_blank');
+                }
+              }}
+            >
+              <Smartphone size={16} /> إرسال الفاتورة عبر واتساب
+            </button>
+          )}
+          <div style={{ display: 'flex', width: '100%', gap: '8px', justifyContent: 'flex-end' }}>
+            <button className="btn btn--ghost btn--sm" onClick={onClose}>إلغاء</button>
+            <button className="btn btn--primary btn--md" onClick={handlePay} disabled={loading} style={{ flex: 1 }}>
+              {loading ? <Spinner size="sm" color="white" /> : <><DollarSign size={15} /> تأكيد الدفع</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>

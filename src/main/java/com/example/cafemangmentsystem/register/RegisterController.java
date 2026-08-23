@@ -37,26 +37,26 @@ public class RegisterController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public RegisterResponse create(@Valid @RequestBody RegisterRequest request) {
         return registerService.create(request);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public RegisterResponse update(@PathVariable Long id, @Valid @RequestBody RegisterRequest request) {
         return registerService.update(id, request);
     }
 
     @PutMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public RegisterResponse deactivate(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return registerService.deactivate(id, principal.getId());
     }
 
     @PutMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public RegisterResponse activate(@PathVariable Long id) {
         return registerService.activate(id);
     }

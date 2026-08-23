@@ -35,7 +35,7 @@ public class Shift extends TenantScopedEntity {
     @JoinColumn(name = "register_id", nullable = false)
     private Register register;
 
-    @Column(name = "opened_at", nullable = false)
+    @Column(name = "opened_at", nullable = false, updatable = false)
     private Instant openedAt;
 
     @Column(name = "closed_at")
@@ -52,4 +52,8 @@ public class Shift extends TenantScopedEntity {
 
     @Column(precision = 10, scale = 2)
     private BigDecimal variance;
+
+    @Column(name = "snacks_net", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal snacksNet = BigDecimal.ZERO;
 }

@@ -1,0 +1,75 @@
+.onboarding-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  direction: rtl;
+}
+
+.onboarding-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(11, 13, 19, 0.85); /* Dark semi-transparent background matching theme */
+  pointer-events: auto;
+  transition: clip-path 0.4s ease-out;
+}
+
+.onboarding-tooltip {
+  position: absolute;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(245, 158, 11, 0.2);
+  pointer-events: auto;
+  transition: all 0.4s ease-out;
+  animation: pulse-border 2s infinite;
+  z-index: 10000;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  70% { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 10px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+.onboarding-tooltip__content {
+  margin-bottom: var(--space-4);
+}
+
+.onboarding-tooltip__content p {
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.onboarding-tooltip__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.onboarding-tooltip__dots {
+  display: flex;
+  gap: 4px;
+}
+
+.onboarding-tooltip__dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-color);
+  transition: background 0.3s;
+}
+
+.onboarding-tooltip__dots .dot.active {
+  background: var(--accent);
+}
+
+.onboarding-tooltip__actions {
+  display: flex;
+  gap: var(--space-2);
+}

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { ShoppingBag, Bike, Search, UserCheck, MapPin, Phone, Sparkles, UserPlus } from 'lucide-react';
 import { tablesApi } from '../../api/tablesApi';
 import { ordersApi } from '../../api/ordersApi';
 import { menuApi }   from '../../api/menuApi';
@@ -10,31 +11,79 @@ import TableGrid     from './TableGrid';
 import MenuPanel     from './MenuPanel';
 import OrderPanel    from './OrderPanel';
 import PaymentModal  from './PaymentModal';
+import ModifierDialog from './ModifierDialog';
+import ShiftStrip    from './ShiftStrip';
+import { fallbackTopSellers } from './menuGroups';
+import { getQuickAccessProducts, recordProductUse } from './recentProducts';
 import './POSPage.css';
+import { printReceipt, buildReceiptHtml, buildKitchenTicketHtml } from '../../utils/printUtils';
+import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { printOptionsFor } from '../../utils/printerSettings';
+import { ROLES } from '../../utils/constants';
+import { DONE, serveDone } from '../../utils/labels';
+import { sounds } from '../../utils/soundEffects';
 
 /* ── Reducer ── */
 const initialState = {
   tables:        [],
   activeOrders:  [],
+  customers:     [],   // takeaway customers seen before, for recall on a new order
   categories:    [],
-  products:      [],
-  activeTable:   null,  // CafeTableResponse
-  activeOrder:   null,  // OrderResponse
-  activeShift:   null,  // ShiftResponse
-  selectedCategoryId: null,
-  isLoadingTables:  false,
-  isLoadingOrders:  false,
-  isLoadingMenu:    false,
-  isLoadingOrder:   false,
+  products:      [],   // whole menu, loaded once - powers instant search + category filtering
+  topProducts:   [],   // pre-filtered subset shown on the Top tab
+  activeTable:   null, // selected table (null when in takeaway mode)
+  activeOrder:   null, // loaded order for activeTable or active takeaway
+  activeShift:   null, // current open shift for this user, or null if register closed
+  isLoadingTables: false,
+  isLoadingOrders: false,
+  isLoadingMenu:   false,
+  isLoadingOrder:  false,
 };
+
+function num(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+/* Optimistic lines carry a string id (`tmp-…`) so they're easy to tell apart
+   from real server rows, which always have numeric ids. */
+export const isTempItem = (item) => typeof item?.id === 'string';
+
+function applyTempDelta(order, delta) {
+  return {
+    ...order,
+    subtotal:   num(order.subtotal) + delta,
+    total:      num(order.total) + delta,
+    balanceDue: num(order.balanceDue) + delta,
+  };
+}
 
 function reducer(state, action) {
   switch (action.type) {
+    /* ── Optimistic add: the line shows up the instant the cashier taps,
+          then gets replaced by the authoritative server order. ── */
+    case 'ADD_TEMP_ITEM': {
+      if (!state.activeOrder) return state;
+      const item = action.payload;
+      const order = applyTempDelta(state.activeOrder, num(item.lineTotal));
+      return { ...state, activeOrder: { ...order, items: [...(state.activeOrder.items ?? []), item] } };
+    }
+    case 'REMOVE_TEMP_ITEM': {
+      if (!state.activeOrder) return state;
+      const item = (state.activeOrder.items ?? []).find((i) => i.id === action.payload);
+      if (!item) return state;
+      const order = applyTempDelta(state.activeOrder, -num(item.lineTotal));
+      return {
+        ...state,
+        activeOrder: { ...order, items: state.activeOrder.items.filter((i) => i.id !== action.payload) },
+      };
+    }
     case 'SET_TABLES':   return { ...state, tables: action.payload };
     case 'SET_ORDERS':   return { ...state, activeOrders: action.payload };
+    case 'SET_CUSTOMERS': return { ...state, customers: action.payload };
     case 'SET_CATS':     return { ...state, categories: action.payload };
     case 'SET_PRODUCTS': return { ...state, products: action.payload };
-    case 'SET_CAT_ID':   return { ...state, selectedCategoryId: action.payload };
+    case 'SET_TOP':      return { ...state, topProducts: action.payload };
     case 'SELECT_TABLE': return { ...state, activeTable: action.payload, activeOrder: null };
     case 'SELECT_ORDER': return { ...state, activeOrder: action.payload, activeTable: null };
     case 'SET_ORDER':    return { ...state, activeOrder: action.payload };
@@ -56,11 +105,13 @@ export default function POSPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [openTableModal, setOpenTableModal] = useState(false);
   const [openTakeawayModal, setOpenTakeawayModal] = useState(false);
+  const [takeawayMode, setTakeawayMode] = useState('DIRECT'); // 'DIRECT' | 'DELIVERY'
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [kitchenTicket, setKitchenTicket] = useState(null);
-  const [clientReceipt, setClientReceipt] = useState(null);
-  
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [deliveryFee, setDeliveryFee] = useState('');
+  const [matchedCustomer, setMatchedCustomer] = useState(null);
+
   // Shift state
   const [registers, setRegisters] = useState([]);
   const [startShiftForm, setStartShiftForm] = useState({ openingFloat: '', registerId: '' });
@@ -74,6 +125,56 @@ export default function POSPage() {
   const [posOptionsProduct, setPosOptionsProduct] = useState(null);
   const [posOptionsList, setPosOptionsList] = useState([]);
   const [selectedOptionIds, setSelectedOptionIds] = useState([]);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [targetTableId, setTargetTableId] = useState('');
+
+  // Collapsible table panel - ~40 tables shouldn't own the screen once the
+  // cashier has picked one.
+  const [tablesCollapsed, setTablesCollapsed] = useState(false);
+
+  // productId -> ProductOptionResponse[] (avoids re-fetching modifiers)
+  const optionsCache = useRef(new Map());
+
+  // Quantity multiplier: type a digit, then tap a product to add that many.
+  const [multiplier, setMultiplier] = useState(1);
+
+  // Quantity / note captured in the add dialog
+  const [addQuantity, setAddQuantity] = useState(1);
+  const [addNote, setAddNote] = useState('');
+
+  // Last line this cashier added, so it can be undone in one action
+  const [lastAddedItemId, setLastAddedItemId] = useState(null);
+
+  // Bumped whenever the local "quick access" history changes
+  const [quickVersion, setQuickVersion] = useState(0);
+
+  // Bumped after every payment so the shift strip re-reads the report
+  const [shiftRefreshKey, setShiftRefreshKey] = useState(0);
+
+  const quickAccessProducts = useMemo(
+    () => getQuickAccessProducts(user?.id, state.products),
+    // quickVersion is the invalidation signal for the localStorage-backed list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id, state.products, quickVersion]
+  );
+
+  const isSyncing = (state.activeOrder?.items ?? []).some(isTempItem);
+
+  // Undo is available to whoever is running the till, cashiers included.
+  //
+  // This used to be gated on ADMIN/SUPERVISOR with a comment claiming the backend required it.
+  // It does not - OrderController.cancelItem is @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR',
+  // 'CASHIER')") and always has been. The effect was that the one person who actually mistypes an
+  // order was the only one who could not take it back, so every slip meant fetching a supervisor.
+  const canUndo =
+    !!lastAddedItemId &&
+    !!state.activeOrder &&
+    !['CLOSED', 'VOIDED'].includes(state.activeOrder.status) &&
+    (state.activeOrder.items ?? []).some((i) => i.id === lastAddedItemId && i.status !== 'CANCELLED');
+
+  const anyModalOpen =
+    showPayment || openTableModal || openTakeawayModal || showMoveModal ||
+    showPosOptionsModal || showCloseShift;
 
   /* ── Load tables ── */
   const loadTables = useCallback(async () => {
@@ -94,6 +195,41 @@ export default function POSPage() {
     try {
       const data = await ordersApi.findAll();
       dispatch({ type: 'SET_ORDERS', payload: data.filter((o) => o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED') });
+
+      // Build a comprehensive recall list of takeaway & delivery customers from order history and localStorage
+      const seen = new Map();
+      let storedList = [];
+      try {
+        const raw = localStorage.getItem('wanas_customers_book');
+        if (raw) storedList = JSON.parse(raw);
+      } catch (e) {
+        console.error(e);
+      }
+      storedList.forEach((c) => {
+        if (c.phone) seen.set(c.phone.trim(), c);
+        if (c.name && !seen.has(c.name.trim())) seen.set(c.name.trim(), c);
+      });
+
+      [...data]
+        .sort((a, b) => new Date(b.openedAt ?? 0) - new Date(a.openedAt ?? 0))
+        .forEach((o) => {
+          const phone = (o.customerPhone ?? '').trim();
+          const name = (o.customerName ?? '').trim();
+          const address = (o.customerAddress ?? '').trim();
+          if (phone) {
+            const prev = seen.get(phone) || {};
+            seen.set(phone, {
+              phone,
+              name: name || prev.name || '',
+              address: address || prev.address || '',
+              deliveryFee: o.deliveryFee || prev.deliveryFee || 0,
+              lastOrderAt: o.openedAt || prev.lastOrderAt,
+            });
+          } else if (name && !seen.has(name)) {
+            seen.set(name, { name, phone: '', address: '', lastOrderAt: o.openedAt });
+          }
+        });
+      dispatch({ type: 'SET_CUSTOMERS', payload: [...seen.values()].slice(0, 500) });
     } catch (err) {
       toast.error(err.message, 'فشل في تحميل الأوردرات');
     } finally {
@@ -101,12 +237,83 @@ export default function POSPage() {
     }
   }, [toast]);
 
-  /* ── Load menu ── */
-  const loadMenu = useCallback(async (catId) => {
+  // Customer storage in localStorage
+  function getStoredCustomers() {
+    try {
+      const raw = localStorage.getItem('wanas_customers_book');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveCustomerToBook(customer) {
+    if (!customer?.phone && !customer?.name) return;
+    try {
+      const list = getStoredCustomers();
+      const cleanPhone = (customer.phone || '').trim();
+      const cleanName = (customer.name || '').trim();
+      const existingIdx = list.findIndex(c => (cleanPhone && c.phone === cleanPhone) || (cleanName && c.name === cleanName));
+      const updated = {
+        name: cleanName,
+        phone: cleanPhone,
+        address: (customer.address || '').trim(),
+        deliveryFee: customer.deliveryFee || 0,
+        lastOrderAt: new Date().toISOString()
+      };
+      if (existingIdx >= 0) {
+        list[existingIdx] = { ...list[existingIdx], ...updated };
+      } else {
+        list.unshift(updated);
+      }
+      localStorage.setItem('wanas_customers_book', JSON.stringify(list.slice(0, 500)));
+    } catch (err) {
+      console.error('Failed to save customer to book', err);
+    }
+  }
+
+  function handlePhoneChange(val) {
+    setCustomerPhone(val);
+    const clean = val.trim();
+    if (clean.length >= 4) {
+      const stored = getStoredCustomers();
+      const fromState = state.customers || [];
+      const match = stored.find(c => c.phone && (c.phone === clean || c.phone.endsWith(clean) || clean.endsWith(c.phone)))
+        || fromState.find(c => c.phone && (c.phone === clean || c.phone.endsWith(clean) || clean.endsWith(c.phone)));
+      if (match) {
+        setMatchedCustomer(match);
+        if (match.name) setCustomerName(match.name);
+        if (match.address) setCustomerAddress(match.address);
+        if (match.deliveryFee && !deliveryFee) setDeliveryFee(String(match.deliveryFee));
+        return;
+      }
+    }
+    setMatchedCustomer(null);
+  }
+
+  /* ── Load menu ──
+     The whole menu is fetched once instead of one request per category tab.
+     Switching a category or typing in search is then pure client-side
+     filtering, which is what makes the cashier flow feel instant. */
+  const loadMenu = useCallback(async (categories) => {
     dispatch({ type: 'LOADING_MENU', payload: true });
     try {
-      const products = await menuApi.getProducts(catId);
-      dispatch({ type: 'SET_PRODUCTS', payload: products.filter((p) => p.active && p.available) });
+      const [all, top] = await Promise.all([
+        menuApi.getProducts(),
+        menuApi.getTopSellers().catch(() => []),
+      ]);
+
+      const sellable = all.filter((p) => p.active && p.available);
+      dispatch({ type: 'SET_PRODUCTS', payload: sellable });
+
+      const sellableIds = new Set(sellable.map((p) => p.id));
+      const topSellable = top.filter((p) => sellableIds.has(p.id));
+      dispatch({
+        type: 'SET_TOP',
+        // No sales history yet (fresh install): fall back to a spread of the
+        // real menu rather than an empty screen. Never hardcoded names.
+        payload: topSellable.length > 0 ? topSellable : fallbackTopSellers(sellable, categories),
+      });
     } catch (err) {
       toast.error(err.message, 'فشل في تحميل المنتجات');
     } finally {
@@ -148,10 +355,7 @@ export default function POSPage() {
         const cats = await menuApi.getCategories();
         const active = cats.filter((c) => c.active);
         dispatch({ type: 'SET_CATS', payload: active });
-        if (active.length > 0) {
-          dispatch({ type: 'SET_CAT_ID', payload: active[0].id });
-          await loadMenu(active[0].id);
-        }
+        await loadMenu(active);
       } catch (err) {
         toast.error(err.message, 'فشل في تحميل الأقسام');
       }
@@ -181,23 +385,18 @@ export default function POSPage() {
     if (!closeShiftForm.countedCash) return;
     try {
       await shiftsApi.close(state.activeShift.id, {
-        countedCash: parseFloat(closeShiftForm.countedCash)
+        countedCash: parseFloat(closeShiftForm.countedCash),
+        snacksNet: closeShiftForm.snacksNet ? parseFloat(closeShiftForm.snacksNet) : 0
       });
       toast.success('تم قفل الشيفت بنجاح!');
       setShowCloseShift(false);
-      setCloseShiftForm({ countedCash: '' });
+      setCloseShiftForm({ countedCash: '', snacksNet: '' });
       dispatch({ type: 'SET_SHIFT', payload: null });
       // Reset active orders/tables
       dispatch({ type: 'CLEAR_TABLE' });
     } catch (err) {
       toast.error(err.message, 'فشل في قفل الشيفت');
     }
-  }
-
-  /* ── Select category ── */
-  async function handleCategorySelect(catId) {
-    dispatch({ type: 'SET_CAT_ID', payload: catId });
-    await loadMenu(catId);
   }
 
   /* ── Load order for table ── */
@@ -250,24 +449,52 @@ export default function POSPage() {
     }
   }
 
-  /* ── Open Takeaway order ── */
+  /* ── Open Takeaway or Delivery order ── */
   async function handleOpenTakeawayOrder(e) {
-    e.preventDefault();
-    if (!customerName.trim() || !state.activeShift) return;
+    if (e) e.preventDefault();
+    if (!state.activeShift) {
+      toast.error('لا يوجد شيفت مفتوح حالياً للكاشير');
+      return;
+    }
     dispatch({ type: 'LOADING_ORDER', payload: true });
     try {
+      const isDirect = takeawayMode === 'DIRECT';
+      let effName = customerName.trim();
+      if (!effName) {
+        effName = isDirect ? 'تيك أواي' : (customerPhone.trim() ? `دليفري (${customerPhone.trim()})` : 'دليفري');
+      }
+      const effPhone = customerPhone.trim() || undefined;
+      const effAddress = !isDirect ? (customerAddress.trim() || undefined) : undefined;
+      const effDeliveryFee = !isDirect ? (parseFloat(deliveryFee) || 0) : undefined;
+
+      // Save customer to local directory book if phone is provided
+      if (effPhone && !isDirect) {
+        saveCustomerToBook({
+          name: effName,
+          phone: effPhone,
+          address: effAddress,
+          deliveryFee: effDeliveryFee
+        });
+      }
+
       const order = await ordersApi.open({
         type:         'TAKEAWAY',
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim() || undefined,
+        customerName: effName,
+        customerPhone: effPhone,
+        customerAddress: effAddress,
+        deliveryFee:  effDeliveryFee,
         shiftId:      state.activeShift.id,
         userId:       user.id
       });
+
       dispatch({ type: 'SELECT_ORDER', payload: order });
       setOpenTakeawayModal(false);
       setCustomerName('');
       setCustomerPhone('');
-      toast.success('تم فتح أوردر تيك أواي جديد!');
+      setCustomerAddress('');
+      setDeliveryFee('');
+      setMatchedCustomer(null);
+      toast.success(isDirect ? 'تم فتح أوردر تيك أواي!' : 'تم فتح أوردر دليفري بنجاح!');
       await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في فتح الأوردر');
@@ -277,99 +504,380 @@ export default function POSPage() {
   }
 
   /* ── Add item ── */
-  async function handleAddProduct(product) {
-    if (!state.activeOrder) {
-      if (state.activeTable) {
-        setOpenTableModal(true);
-      } else {
-        toast.warning('لازم تختار ترابيزة أو تفتح أوردر تيك أواي الأول.');
-      }
-      return;
+  /* Makes sure there's an order to add to, opening one for the selected table
+     if needed. Returns the order, or null when the cashier still has to pick
+     a table. */
+  async function ensureOrder() {
+    if (state.activeOrder) return state.activeOrder;
+    if (!state.activeTable) {
+      toast.warning('لازم تختار ترابيزة أو تفتح أوردر تيك أواي الأول.');
+      return null;
     }
-    if (state.activeOrder.status === 'CLOSED' || state.activeOrder.status === 'VOID') {
+    dispatch({ type: 'LOADING_ORDER', payload: true });
+    try {
+      const newOrder = await ordersApi.open({
+        tableId: state.activeTable.id,
+        type:    'DINE_IN',
+        shiftId: state.activeShift.id,
+        userId:  user.id,
+      });
+      dispatch({ type: 'SET_ORDER', payload: newOrder });
+      toast.success(`اتفتح أوردر لترابيزة ${state.activeTable.number}`);
+      // Not awaited: the cashier shouldn't wait on a table/order refresh.
+      loadTables();
+      loadOrders();
+      return newOrder;
+    } catch (err) {
+      toast.error(err.message, 'فشل في فتح الأوردر تلقائياً');
+      return null;
+    } finally {
+      dispatch({ type: 'LOADING_ORDER', payload: false });
+    }
+  }
+
+  /* The single write path for adding a line. Draws the line optimistically so
+     the bill updates on tap, then reconciles with the server response - which
+     remains the only source of truth for prices and totals. */
+  async function addToOrder(order, product, { quantity = 1, note = '', optionIds = [], options = [] } = {}) {
+    if (['CLOSED', 'VOIDED'].includes(order.status)) {
       toast.warning('الأوردر ده مقفول أصلاً.');
       return;
     }
+    sounds.playAddItem();
+
+    const optionDelta = options
+      .filter((o) => optionIds.includes(o.id))
+      .reduce((sum, o) => sum + (parseFloat(o.priceDelta ?? 0) || 0), 0);
+    const unitPrice = (parseFloat(product.price ?? 0) || 0) + optionDelta;
+
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    dispatch({
+      type: 'ADD_TEMP_ITEM',
+      payload: {
+        id: tempId,
+        productId: product.id,
+        productNameSnapshot: product.name,
+        categoryNameSnapshot: product.categoryNameAr,
+        unitPriceSnapshot: unitPrice,
+        stationSnapshot: product.stationCode,
+        revenueLineSnapshot: product.revenueLine,
+        quantity,
+        status: 'PENDING',
+        note: note || null,
+        cancelReason: null,
+        discountAmount: 0,
+        lineTotal: unitPrice * quantity,
+      },
+    });
+
     try {
-      const options = await menuApi.getOptions(product.id);
-      if (options && options.length > 0) {
+      const updated = await ordersApi.addItem(order.id, {
+        productId: product.id,
+        quantity,
+        note: note?.trim() ? note.trim() : undefined,
+        optionIds: optionIds.length > 0 ? optionIds : undefined,
+      });
+      dispatch({ type: 'SET_ORDER', payload: updated });
+
+      // Newest server row = the one to undo, and one more tally for this
+      // cashier's quick-access strip.
+      const newest = (updated.items ?? []).reduce((max, i) => (i.id > max ? i.id : max), 0);
+      setLastAddedItemId(newest || null);
+      recordProductUse(user?.id, product.id, quantity);
+      setQuickVersion((v) => v + 1);
+    } catch (err) {
+      dispatch({ type: 'REMOVE_TEMP_ITEM', payload: tempId });
+      toast.error(err.message, 'فشل في إضافة الصنف');
+    }
+  }
+
+  /* Reads a product's options, cached - the second tap on the same drink
+     costs no round-trip at all. */
+  async function getOptionsFor(productId) {
+    let options = optionsCache.current.get(productId);
+    if (!options) {
+      options = (await menuApi.getOptions(productId)) ?? [];
+      optionsCache.current.set(productId, options);
+    }
+    return options;
+  }
+
+  /* One tap on a product card. */
+  async function handleAddProduct(product) {
+    const quantity = multiplier;
+    setMultiplier(1);
+
+    const order = await ensureOrder();
+    if (!order) return;
+
+    try {
+      const options = await getOptionsFor(product.id);
+      if (options.length > 0) {
+        // Has real modifiers - ask, don't guess.
         setPosOptionsProduct(product);
         setPosOptionsList(options);
-        setSelectedOptionIds(options.filter(o => o.isDefault).map(o => o.id));
+        setSelectedOptionIds(options.filter((o) => o.isDefault).map((o) => o.id));
+        setAddQuantity(quantity);
+        setAddNote('');
         setShowPosOptionsModal(true);
       } else {
-        const updated = await ordersApi.addItem(state.activeOrder.id, {
-          productId: product.id,
-          quantity:  1,
-        });
-        dispatch({ type: 'SET_ORDER', payload: updated });
+        await addToOrder(order, product, { quantity });
       }
     } catch (err) {
       toast.error(err.message, 'فشل في إضافة الصنف');
     }
   }
 
+  /* Right-click a product: set an explicit quantity and/or a kitchen note,
+     even for products that have no options. */
+  async function handleProductDetails(product) {
+    const order = await ensureOrder();
+    if (!order) return;
+    try {
+      const options = await getOptionsFor(product.id);
+      setPosOptionsProduct(product);
+      setPosOptionsList(options);
+      setSelectedOptionIds(options.filter((o) => o.isDefault).map((o) => o.id));
+      setAddQuantity(multiplier);
+      setAddNote('');
+      setMultiplier(1);
+      setShowPosOptionsModal(true);
+    } catch (err) {
+      toast.error(err.message, 'فشل في تحميل اختيارات الصنف');
+    }
+  }
+
   async function handleAddProductWithOptions() {
     if (!state.activeOrder || !posOptionsProduct) return;
+    const product = posOptionsProduct;
+    const payload = {
+      quantity: addQuantity,
+      note: addNote,
+      optionIds: selectedOptionIds,
+      options: posOptionsList,
+    };
+
+    setShowPosOptionsModal(false);
+    setPosOptionsProduct(null);
+    setPosOptionsList([]);
+    setSelectedOptionIds([]);
+    setAddQuantity(1);
+    setAddNote('');
+
+    await addToOrder(state.activeOrder, product, payload);
+  }
+
+  /* ── 86 an item straight from the till ──
+     Uses the existing availability endpoint, which the backend limits to
+     admins/supervisors - so the button only shows for them. The item stays in
+     the database and can be switched back on from Products. */
+  async function handleMarkUnavailable(product) {
     try {
-      const updated = await ordersApi.addItem(state.activeOrder.id, {
-        productId: posOptionsProduct.id,
-        quantity:  1,
-        optionIds: selectedOptionIds
+      await menuApi.setAvailability(product.id, false);
+      dispatch({
+        type: 'SET_PRODUCTS',
+        payload: state.products.filter((p) => p.id !== product.id),
       });
-      dispatch({ type: 'SET_ORDER', payload: updated });
+      dispatch({
+        type: 'SET_TOP',
+        payload: state.topProducts.filter((p) => p.id !== product.id),
+      });
       setShowPosOptionsModal(false);
       setPosOptionsProduct(null);
-      setPosOptionsList([]);
-      setSelectedOptionIds([]);
+      toast.success(`«${product.name}» اتشال من شاشة الكاشير.`);
     } catch (err) {
-      toast.error(err.message, 'فشل في إضافة الصنف بالاختيارات');
+      toast.error(err.message, 'فشل في إخفاء الصنف');
     }
+  }
+
+  /* ── Undo the last line this cashier added ──
+     Almost always still NEW (it was added seconds ago), so this deletes it outright rather than
+     recording a cancellation. Falls back to the audited cancel path only if the order was sent to
+     the kitchen in between. */
+  async function handleUndoLastItem() {
+    if (!state.activeOrder || !lastAddedItemId) return;
+
+    const item = (state.activeOrder.items ?? []).find((i) => i.id === lastAddedItemId);
+    const alreadySent = item?.status === 'SENT';
+
+    try {
+      const updated = alreadySent
+        ? await ordersApi.cancelItem(state.activeOrder.id, lastAddedItemId, {
+            reason: 'تراجع عن آخر إضافة',
+          })
+        : await ordersApi.removeItem(state.activeOrder.id, lastAddedItemId);
+
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      setLastAddedItemId(null);
+      toast.success('تم التراجع عن آخر صنف.');
+      loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في التراجع');
+    }
+  }
+
+  /* ── Increase quantity of a line already on the bill ──
+     Reuses the existing addItem endpoint (same as tapping the product again),
+     so pricing/options/order logic stays exactly as the backend defines it. */
+  async function handleIncreaseItem(group) {
+    if (!state.activeOrder || !group) return;
+    const prodId = group.productId || (state.products.find((p) => p.name === group.productNameSnapshot)?.id);
+    const product = (prodId ? state.products.find((p) => p.id === prodId) : null) ?? {
+      id: prodId,
+      name: group.productNameSnapshot,
+      price: group.unitPriceSnapshot,
+      stationCode: group.stationSnapshot,
+      revenueLine: group.revenueLineSnapshot,
+    };
+    if (!product.id) {
+      toast.error('لم يتم التعرف على الصنف');
+      return;
+    }
+    await addToOrder(state.activeOrder, product, { quantity: 1, note: group.note ?? '' });
+  }
+
+  /* ── Move/Merge Table ── */
+  async function handleMoveTable(e) {
+    e.preventDefault();
+    if (!state.activeOrder || !targetTableId) return;
+    
+    const targetTable = state.tables.find(t => t.id === parseInt(targetTableId));
+    if (!targetTable) return;
+    
+    const isTargetOccupied = state.activeOrders.some(
+      o => o.tableId === targetTable.id && (o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED')
+    );
+    
+    if (isTargetOccupied) {
+      if (!window.confirm(`الطاولة ${targetTable.number} مشغولة حالياً، هل متأكد من دمج هذا الأوردر مع أوردر الطاولة ${targetTable.number}؟ (سيتم نقل كل الأصناف للطاولة الهدف)`)) {
+        return;
+      }
+    }
+    
+    try {
+      await ordersApi.transferTable(state.activeOrder.id, {
+        tableId: targetTable.id,
+        merge: isTargetOccupied
+      });
+      toast.success(isTargetOccupied ? 'تم دمج الأوردر بنجاح!' : 'تم نقل الأوردر بنجاح!');
+      setShowMoveModal(false);
+      setTargetTableId('');
+      dispatch({ type: 'CLEAR_TABLE' });
+      await loadTables();
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في عملية النقل/الدمج');
+    }
+  }
+
+  /* ── Station tickets ───────────────────────────────────────────────
+     One ticket per station, always. The item's own stationSnapshot (assigned
+     server-side per product) decides who prepares it - never a guess from the
+     category or revenue line. So an order containing both أكل and بوفيه
+     produces TWO separate slips: one for the kitchen/restaurant and one for
+     the bar/buffet, each routed to that station's own printer when the
+     terminal has been configured in Settings.
+
+     Printed through the Electron IPC path with an explicit 80mm page: the
+     browser's window.print() ignores CSS @page sizing and falls back to the OS
+     default page (A4), which is what used to crop tickets. */
+  async function printStationTickets(items, ticketType) {
+    // Merge identical lines so the cook reads "3 لاتيه", not three slips of one.
+    function groupItems(list) {
+      const grouped = [];
+      list.forEach((item) => {
+        const existing = grouped.find(
+          (g) =>
+            g.productNameSnapshot === item.productNameSnapshot &&
+            g.categoryNameSnapshot === item.categoryNameSnapshot &&
+            g.note === item.note
+        );
+        if (existing) existing.quantity += item.quantity;
+        else grouped.push({ ...item });
+      });
+      return grouped;
+    }
+
+    // Group by station, preserving the order stations were first seen in.
+    const byStation = new Map();
+    items.forEach((item) => {
+      const prod = state.products.find((p) => p.id === item.productId);
+      const rawStation = item.stationSnapshot || prod?.stationCode;
+      const rawRev = item.revenueLineSnapshot || prod?.revenueLine;
+      const station = (rawStation === 'BAR' || rawRev === 'BUFFET') ? 'BAR' : 'KITCHEN';
+      if (!byStation.has(station)) byStation.set(station, []);
+      byStation.get(station).push(item);
+    });
+
+    const LABELS = {
+      KITCHEN: 'المطبخ  /  المطعم',
+      BAR:     'البار  /  البوفيه',
+    };
+
+    const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    for (const [station, stationItems] of byStation) {
+      const html = buildKitchenTicketHtml({
+        orderNumber: state.activeOrder.orderNumber,
+        tableNumber: state.activeTable?.number,
+        type: state.activeOrder.type,
+        guestCount: state.activeOrder.guestCount,
+        items: groupItems(stationItems),
+        // ASCII digits - thermal heads have no glyphs for Arabic-Indic numerals
+        // and drop the whole run, which printed the time as blank.
+        time,
+        waiterName: user?.fullName,
+        ticketType,
+        label: LABELS[station],
+      });
+      // Each station's slip goes to that station's printer. Jobs are queued
+      // serially in the Electron main process, so two tickets never race.
+      printReceipt(html, printOptionsFor(station, { width: 80 }));
+      await new Promise((r) => setTimeout(r, 150));
+    }
+
+    return byStation.size;
+  }
+
+  /* Reprint the tickets for everything already sent - for when a slip jams,
+     smudges, or the kitchen loses it. Marked REPRINT so nobody cooks twice. */
+  async function handleReprintTickets() {
+    if (!state.activeOrder) return;
+    const sent = (state.activeOrder.items ?? []).filter((i) => i.status === 'SENT');
+    if (sent.length === 0) {
+      toast.warning('مفيش أصناف متبعتة للطباعة.');
+      return;
+    }
+    const count = await printStationTickets(sent, 'REPRINT');
+    toast.success(count > 1 ? 'تم إعادة طباعة بونين (مطبخ + بار).' : 'تم إعادة طباعة البون.');
   }
 
   /* ── Send to kitchen ── */
   async function handleSend() {
     if (!state.activeOrder) return;
+    // Never print a ticket while a line is still being written to the server.
+    if ((state.activeOrder.items ?? []).some(isTempItem)) {
+      toast.warning('استنى لحظة، لسه في صنف بيتسجل.');
+      return;
+    }
     dispatch({ type: 'LOADING_ORDER', payload: true });
     try {
       const itemsToSend = state.activeOrder.items?.filter(i => i.status === 'NEW' || i.status === 'PENDING') || [];
       if (itemsToSend.length > 0) {
-        
-        // Group items for kitchen ticket
-        const grouped = [];
-        itemsToSend.forEach(item => {
-          const existing = grouped.find(g => 
-            g.productNameSnapshot === item.productNameSnapshot &&
-            g.note === item.note
-          );
-          if (existing) {
-            existing.quantity += item.quantity;
-          } else {
-            grouped.push({ ...item });
-          }
-        });
-
-        setKitchenTicket({
-          orderNumber: state.activeOrder.orderNumber,
-          tableNumber: state.activeTable?.number,
-          type: state.activeOrder.type,
-          items: grouped,
-          time: new Date()
-        });
-        
-        document.body.classList.add('printing-kitchen');
-        setTimeout(() => {
-          window.print();
-          document.body.classList.remove('printing-kitchen');
-          setKitchenTicket(null);
-        }, 100);
+        const stations = await printStationTickets(
+          itemsToSend,
+          state.activeOrder.status === 'OPEN' ? 'NEW' : 'ADDITION'
+        );
+        if (stations > 1) toast.info('اتطبع بون للمطبخ وبون تاني للبار.');
       }
 
       const updated = await ordersApi.send(state.activeOrder.id);
+      sounds.playKitchen();
       dispatch({ type: 'SET_ORDER', payload: updated });
-      toast.success('الأوردر اتبعت للمطبخ!');
+      toast.success(DONE.SEND);
       await loadOrders();
     } catch (err) {
+      sounds.playError();
       toast.error(err.message, 'فشل في إرسال الأوردر');
     } finally {
       dispatch({ type: 'LOADING_ORDER', payload: false });
@@ -383,7 +891,7 @@ export default function POSPage() {
     try {
       const updated = await ordersApi.serve(state.activeOrder.id);
       dispatch({ type: 'SET_ORDER', payload: updated });
-      toast.success('تم خروج الأوردر للترابيزة!');
+      toast.success(serveDone(updated?.type ?? state.activeOrder?.type));
       await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في تحديث حالة الأوردر');
@@ -392,11 +900,33 @@ export default function POSPage() {
     }
   }
 
-  /* ── Cancel item ── */
+  /* ── Cancel Order ── */
+  async function handleCancelOrder() {
+    if (!state.activeOrder) return;
+    // Only allow if order not already closed or cancelled
+    if (['CLOSED', 'VOIDED'].includes(state.activeOrder.status)) return;
+    try {
+      const updated = await ordersApi.voidOrder(state.activeOrder.id, { reason: 'إلغاء الأوردر' });
+      sounds.playError();
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('الأوردر تم إلغاؤه.');
+      await loadOrders();
+      // clear active table/order
+      dispatch({ type: 'CLEAR_TABLE' });
+    } catch (err) {
+      sounds.playError();
+      toast.error(err.message, 'فشل في إلغاء الأوردر');
+    }
+  }
+
+  /* ── Cancel item ──
+     For lines the kitchen has already started. Audited: keeps a CANCELLED row with a reason and
+     prints a cancellation slip. */
   async function handleCancelItem(itemId, reason) {
     if (!state.activeOrder) return;
     try {
       const updated = await ordersApi.cancelItem(state.activeOrder.id, itemId, { reason });
+      sounds.playError();
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('الصنف اتلغى.');
       await loadOrders();
@@ -405,52 +935,209 @@ export default function POSPage() {
     }
   }
 
-  /* ── Instant Pay ── */
-  async function handleInstantPay() {
+  /* ── Remove an unsent item ──
+     The everyday correction: a mistap the kitchen never saw. Deletes the line outright, with no
+     confirmation, no reason, and no entry in the cancellations report - that report exists to
+     surface suspicious activity, and burying ordinary typos in it is what taught cashiers to be
+     nervous. Re-adding is a single tap on the same product, so there's nothing to lose. */
+  async function handleRemoveItem(itemId) {
     if (!state.activeOrder) return;
     try {
-      // Auto-send to kitchen first if there are new items
-      const hasNewItems = state.activeOrder.items?.some(i => i.status === 'NEW' || i.status === 'PENDING');
-      if (hasNewItems) {
-        await handleSend(); // this will also print kitchen ticket
-      }
-      
-      // Then open payment modal
-      setShowPayment(true);
+      const updated = await ordersApi.removeItem(state.activeOrder.id, itemId);
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      if (itemId === lastAddedItemId) setLastAddedItemId(null);
+      loadOrders();
     } catch (err) {
-      toast.error(err.message, 'حصلت مشكلة في الدفع الفوري');
+      toast.error(err.message, 'فشل في شيل الصنف');
     }
   }
 
-  /* ── After payment closed ── */
-  async function handlePaymentSuccess(paymentData) {
+  /* ── After payment recorded (fully paid + closed, or just a partial payment) ── */
+  async function handlePaymentSuccess(updatedOrder, fullyPaid) {
     setShowPayment(false);
-    toast.success('تم الدفع والأوردر اتقفل!');
+    setShiftRefreshKey((k) => k + 1);
+    sounds.playPaymentSuccess();
 
-    // If it's a takeaway or user wants receipt, print it
-    if (state.activeOrder) {
-      setClientReceipt({
-        ...state.activeOrder,
-        time: new Date(),
-        paymentAmount: paymentData?.amount || state.activeOrder.total
-      });
-      
-      document.body.classList.add('printing-client');
-      setTimeout(() => {
-        window.print();
-        document.body.classList.remove('printing-client');
-        setClientReceipt(null);
-      }, 100);
+    if (fullyPaid) {
+      toast.success(DONE.PAY);
+      const html = buildReceiptHtml({ order: updatedOrder || state.activeOrder });
+      printReceipt(html, printOptionsFor('RECEIPT', { width: 80 }));
+      dispatch({ type: 'CLEAR_TABLE' });
+    } else {
+      // Order stays open with a reduced balance - keep it active so the cashier can collect
+      // the rest, instead of clearing the table as if the sale were finished.
+      dispatch({ type: 'SET_ORDER', payload: updatedOrder });
     }
 
-    dispatch({ type: 'CLEAR_TABLE' });
     await loadTables();
     await loadOrders();
   }
 
+  /* ── Add Water ── */
+  async function handleAddWater() {
+    if (!state.activeOrder) return;
+    
+    try {
+      const allProds = await menuApi.getProducts();
+      const waterProd = allProds.find(p => {
+        const nameAr = (p.nameAr || '').toLowerCase();
+        const nameEn = (p.nameEn || '').toLowerCase();
+        const name = (p.name || '').toLowerCase();
+        return nameAr.includes('مياه') || nameEn.includes('water') || name.includes('مياه') || nameAr.includes('Ù…ÙŠØ§Ù‡');
+      });
+
+      if (!waterProd) {
+        toast.error('صنف المياه غير موجود بالمنيو');
+        return;
+      }
+      const updated = await ordersApi.addItem(state.activeOrder.id, {
+        productId: waterProd.id,
+        quantity: 1
+      });
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('تم إضافة مياه للفاتورة بنجاح!');
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في إضافة المياه');
+    }
+  }
+
+  /* ── Set Delivery Fee (takeaway only) ── */
+  async function handleSetDeliveryFee(amount) {
+    if (!state.activeOrder) return;
+    try {
+      const updated = await ordersApi.setDeliveryFee(state.activeOrder.id, amount);
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('تم تحديث رسوم التوصيل بنجاح');
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في تحديث رسوم التوصيل');
+    }
+  }
+
+  /* ── Discount Handlers ── */
+  async function handleApplyDiscount(data) {
+    if (!state.activeOrder) return;
+    try {
+      const updated = await ordersApi.applyDiscount(state.activeOrder.id, data);
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('تم تطبيق الخصم بنجاح');
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في تطبيق الخصم');
+    }
+  }
+
+  async function handleClearDiscount() {
+    if (!state.activeOrder) return;
+    try {
+      const updated = await ordersApi.clearDiscount(state.activeOrder.id);
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('تم إلغاء الخصم بنجاح');
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في إلغاء الخصم');
+    }
+  }
+
+  /* ── Service Fee Handlers ── */
+  async function handleApplyServiceFee(amount) {
+    if (!state.activeOrder) return;
+    try {
+      const updated = await ordersApi.setServiceFee(state.activeOrder.id, amount);
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('تم تطبيق رسوم الخدمة بنجاح');
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في تطبيق رسوم الخدمة');
+    }
+  }
+
+  async function handleClearServiceFee() {
+    if (!state.activeOrder) return;
+    try {
+      const updated = await ordersApi.clearServiceFee(state.activeOrder.id);
+      dispatch({ type: 'SET_ORDER', payload: updated });
+      toast.success('تم إلغاء رسوم الخدمة بنجاح');
+      await loadOrders();
+    } catch (err) {
+      toast.error(err.message, 'فشل في إلغاء رسوم الخدمة');
+    }
+  }
+
+  /* ── Keyboard shortcuts ──
+     Digits set a quantity multiplier for the next tap, F4 sends, F8 opens
+     payment, Ctrl+Z undoes the last line. All of them are ignored while a
+     dialog is open or the cashier is typing. */
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (anyModalOpen) return;
+      const el = e.target;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) {
+        return;
+      }
+
+      if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+        if (canUndo) { e.preventDefault(); handleUndoLastItem(); }
+        return;
+      }
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      if (/^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        setMultiplier(parseInt(e.key, 10));
+        return;
+      }
+      if (e.key === 'Escape') { setMultiplier(1); return; }
+      if (e.key === 'F4') {
+        e.preventDefault();
+        if (state.activeOrder) handleSend();
+        return;
+      }
+      if (e.key === 'F8') {
+        e.preventDefault();
+        if (state.activeOrder && num(state.activeOrder.balanceDue) > 0) setShowPayment(true);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  /* ── Keep table colours and takeaway orders live ──
+     Read-only refresh; it never touches the order the cashier is editing. */
+  useEffect(() => {
+    if (!state.activeShift) return undefined;
+
+    function refresh() {
+      if (document.hidden || anyModalOpen) return;
+      loadOrders();
+      loadTables();
+    }
+    const timer = setInterval(refresh, 20000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [state.activeShift, anyModalOpen, loadOrders, loadTables]);
+
   if (isLoadingShift) return <div className="page" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}><div className="spinner"></div></div>;
 
   if (!state.activeShift) {
+    // Only cashiers open shifts - keeps drawer/cash accountability tied to the person actually
+    // running the register, not whoever happens to be logged in. Backend enforces the same rule
+    // (ShiftController.open is @PreAuthorize("hasRole('CASHIER')")); this just avoids showing
+    // admins/supervisors a form that would 403 on submit.
+    if (role !== ROLES.CASHIER) {
+      return (
+        <div className="pos" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="pos__open-modal" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <h2 style={{ marginBottom: 'var(--space-3)' }}>مفيش شيفت مفتوح</h2>
+            <p style={{ color: 'var(--text-secondary)' }}>فتح الشيفت متاح للكاشير بس، عشان الدرج يفضل مسؤولية شخص واحد.</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="pos" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <div className="pos__open-modal" style={{ maxWidth: '400px' }}>
@@ -475,7 +1162,15 @@ export default function POSPage() {
   }
 
   return (
-    <div className="pos">
+    <div className="pos-shell">
+      {/* Live shift read-out: sales, split, and what the drawer should hold */}
+      <ShiftStrip
+        shift={state.activeShift}
+        refreshKey={shiftRefreshKey}
+        onCloseShift={() => setShowCloseShift(true)}
+      />
+
+      <div className="pos">
       {/* LEFT — Tables */}
       <TableGrid
         tables={state.tables}
@@ -483,6 +1178,8 @@ export default function POSPage() {
         activeTable={state.activeTable}
         activeOrder={state.activeOrder}
         loading={state.isLoadingTables}
+        collapsed={tablesCollapsed}
+        onToggleCollapse={() => setTablesCollapsed((v) => !v)}
         onTableClick={handleTableClick}
         onTakeawayClick={(order) => dispatch({ type: 'SELECT_ORDER', payload: order })}
         onNewTakeawayClick={() => setOpenTakeawayModal(true)}
@@ -493,10 +1190,12 @@ export default function POSPage() {
       <MenuPanel
         categories={state.categories}
         products={state.products}
-        selectedCategoryId={state.selectedCategoryId}
+        topProducts={state.topProducts}
+        quickAccessProducts={quickAccessProducts}
         loading={state.isLoadingMenu}
-        onCategorySelect={handleCategorySelect}
+        multiplier={multiplier}
         onProductClick={handleAddProduct}
+        onProductDetails={handleProductDetails}
       />
 
       {/* RIGHT — Order */}
@@ -504,12 +1203,29 @@ export default function POSPage() {
         table={state.activeTable}
         order={state.activeOrder}
         loading={state.isLoadingOrder}
-        role={role}
         onSend={handleSend}
         onServe={handleServe}
         onCancelItem={handleCancelItem}
+        onRemoveItem={handleRemoveItem}
+        onCancelOrder={handleCancelOrder}
         onPayClick={() => setShowPayment(true)}
+        onAddWater={handleAddWater}
+        onIncreaseItem={handleIncreaseItem}
+        syncing={isSyncing}
+        canUndo={canUndo}
+        onUndoLastItem={handleUndoLastItem}
+        onReprintTickets={handleReprintTickets}
+        onSetDeliveryFee={handleSetDeliveryFee}
+        onApplyDiscount={handleApplyDiscount}
+        onClearDiscount={handleClearDiscount}
+        onApplyServiceFee={handleApplyServiceFee}
+        onClearServiceFee={handleClearServiceFee}
+        onMoveTable={() => {
+          setTargetTableId('');
+          setShowMoveModal(true);
+        }}
       />
+      </div>
 
       {/* Open order modal */}
       {openTableModal && state.activeTable && (
@@ -524,37 +1240,191 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Open Takeaway Modal */}
+      {/* Open Takeaway / Delivery Modal */}
       {openTakeawayModal && (
         <div className="pos__open-modal-overlay" onClick={() => setOpenTakeawayModal(false)}>
-          <div className="pos__open-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginBottom: 'var(--space-4)', textAlign: 'center' }}>أوردر تيك أواي جديد</h3>
-            <form onSubmit={handleOpenTakeawayOrder} className="form-grid">
-              <div className="field" style={{ gridColumn: '1/-1' }}>
-                <label className="field__label">اسم العميل (مطلوب)</label>
-                <input
-                  type="text"
-                  required
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="field__input field__wrapper"
-                  placeholder="مثال: أحمد"
-                  autoFocus
-                />
+          <div className="pos__takeaway-modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--fw-bold)', color: 'var(--text-primary)', margin: 0 }}>
+                {takeawayMode === 'DIRECT' ? '🛍️ أوردر تيك أواي جديد' : '🛵 أوردر دليفري جديد'}
+              </h3>
+            </div>
+
+            {/* Mode Tabs */}
+            <div className="pos__takeaway-tabs">
+              <button
+                type="button"
+                className={`pos__takeaway-tab-btn ${takeawayMode === 'DIRECT' ? 'pos__takeaway-tab-btn--active' : ''}`}
+                onClick={() => {
+                  setTakeawayMode('DIRECT');
+                  setMatchedCustomer(null);
+                }}
+              >
+                <ShoppingBag size={14} />
+                تيك أواي عادي
+              </button>
+              <button
+                type="button"
+                className={`pos__takeaway-tab-btn ${takeawayMode === 'DELIVERY' ? 'pos__takeaway-tab-btn--active' : ''}`}
+                onClick={() => setTakeawayMode('DELIVERY')}
+              >
+                <Bike size={14} />
+                دليفري وتوصيل
+              </button>
+            </div>
+
+            <form onSubmit={handleOpenTakeawayOrder} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {takeawayMode === 'DIRECT' ? (
+                <>
+                  <div style={{ padding: '8px 10px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(245, 158, 11, 0.3)', fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    ⚡ <strong>تيك أواي مباشر:</strong> افتح الأوردر فوراً واستلم من الكاونتر بدون أي بيانات مطلوبة.
+                  </div>
+                  <div className="field">
+                    <label className="field__label">اسم أو رقم العميل (اختياري)</label>
+                    <input
+                      type="text"
+                      list="pos-customer-names"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="field__input field__wrapper"
+                      placeholder="مثال: أحمد صبري أو اتركه فارغاً"
+                      autoFocus
+                    />
+                    <datalist id="pos-customer-names">
+                      {state.customers.map((c) => (
+                        <option key={c.phone || c.name} value={c.name}>
+                          {c.phone || ''}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Delivery Mode */}
+                  <div className="field">
+                    <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Phone size={12} style={{ color: 'var(--accent)' }} />
+                      <span>رقم موبايل العميل (للبحث أو الحفظ) *</span>
+                    </label>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="tel"
+                        required
+                        value={customerPhone}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                        className="field__input field__wrapper"
+                        placeholder="اكتب رقم الموبايل (مثال: 010...)"
+                        autoFocus
+                        style={{ paddingInlineStart: '32px' }}
+                      />
+                      <Search size={14} style={{ position: 'absolute', insetInlineStart: '10px', color: 'var(--text-muted)' }} />
+                    </div>
+                  </div>
+
+                  {/* Customer Match Status */}
+                  {matchedCustomer ? (
+                    <div className="pos__customer-match-badge pos__customer-match-badge--found">
+                      <UserCheck size={14} />
+                      <span>عميل مسجل: <strong>{matchedCustomer.name || 'عميل'}</strong></span>
+                    </div>
+                  ) : customerPhone.trim().length >= 7 ? (
+                    <div className="pos__customer-match-badge pos__customer-match-badge--new">
+                      <UserPlus size={14} />
+                      <span>عميل جديد — سيتم حفظ بياناته تلقائياً للمرات القادمة</span>
+                    </div>
+                  ) : null}
+
+                  <div className="field">
+                    <label className="field__label">اسم العميل *</label>
+                    <input
+                      type="text"
+                      required
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="field__input field__wrapper"
+                      placeholder="اسم المستلم"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <MapPin size={12} style={{ color: 'var(--accent)' }} />
+                      <span>عنوان التوصيل بالتفصيل *</span>
+                    </label>
+                    <textarea
+                      required
+                      rows={2}
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      className="field__input field__wrapper"
+                      placeholder="المنطقة، اسم الشارع، رقم العمارة، الدور، الشقة، علامة مميزة..."
+                      style={{ resize: 'vertical', minHeight: '48px', paddingTop: '6px' }}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="field__label">رسوم التوصيل (ج.م)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={deliveryFee}
+                      onChange={(e) => setDeliveryFee(e.target.value)}
+                      className="field__input field__wrapper"
+                      placeholder="مثال: 15"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="pos__open-actions" style={{ marginTop: '6px' }}>
+                <button type="button" className="btn btn--secondary btn--md" onClick={() => setOpenTakeawayModal(false)}>
+                  إلغاء
+                </button>
+                <button type="submit" className="btn btn--primary btn--md" style={{ flex: 1 }}>
+                  {takeawayMode === 'DIRECT' ? (
+                    <><ShoppingBag size={14} /> فتح أوردر تيك أواي ⚡</>
+                  ) : (
+                    <><Bike size={14} /> فتح أوردر دليفري 🛵</>
+                  )}
+                </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Move/Merge Modal */}
+      {showMoveModal && state.activeOrder && state.activeTable && (
+        <div className="pos__open-modal-overlay" onClick={() => setShowMoveModal(false)}>
+          <div className="pos__open-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginBottom: 'var(--space-4)', textAlign: 'center' }}>نقل/دمج طاولة {state.activeTable.number}</h3>
+            <form onSubmit={handleMoveTable} className="form-grid">
               <div className="field" style={{ gridColumn: '1/-1' }}>
-                <label className="field__label">رقم الموبايل (اختياري)</label>
-                <input
-                  type="text"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="field__input field__wrapper"
-                  placeholder="مثال: 010..."
-                />
+                <label className="field__label">اختر الطاولة الهدف</label>
+                <select 
+                  className="field-select__control" 
+                  value={targetTableId} 
+                  onChange={(e) => setTargetTableId(e.target.value)} 
+                  required
+                >
+                  <option value="">-- اختار الترابيزة --</option>
+                  {state.tables.filter(t => t.id !== state.activeTable.id && t.active).map(t => {
+                    const isOccupied = state.activeOrders.some(
+                      o => o.tableId === t.id && (o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED')
+                    );
+                    return (
+                      <option key={t.id} value={t.id}>
+                        ترابيزة {t.number} {isOccupied ? '(مشغولة - دمج)' : '(فارغة - نقل)'}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
               <div className="pos__open-actions" style={{ gridColumn: '1/-1', marginTop: 'var(--space-2)' }}>
-                <button type="button" className="btn btn--secondary btn--md" onClick={() => setOpenTakeawayModal(false)}>إلغاء</button>
-                <button type="submit" className="btn btn--primary btn--md">فتح الأوردر</button>
+                <button type="button" className="btn btn--secondary btn--md" onClick={() => setShowMoveModal(false)}>إلغاء</button>
+                <button type="submit" className="btn btn--primary btn--md">تأكيد</button>
               </div>
             </form>
           </div>
@@ -570,73 +1440,34 @@ export default function POSPage() {
         />
       )}
 
-      {/* POS Option Selection Modal */}
+      {/* Product modifiers (sizes / extras) - only for products that actually have them */}
       {showPosOptionsModal && posOptionsProduct && (
-        <div className="pos__open-modal-overlay" onClick={() => { setShowPosOptionsModal(false); setPosOptionsProduct(null); }}>
-          <div className="pos__open-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
-            <h3 style={{ textAlign: 'center', marginBottom: 'var(--space-3)' }}>إضافات وأحجام لـ {posOptionsProduct.name}</h3>
-            
-            <div className="pos-options-selection-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '16px 0', maxHeight: '300px', overflowY: 'auto' }}>
-              {posOptionsList.map(option => {
-                const isSelected = selectedOptionIds.includes(option.id);
-                return (
-                  <label 
-                    key={option.id}
-                    className="pos-option-item"
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      background: 'var(--bg-surface-hover)',
-                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      userSelect: 'none'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <input 
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedOptionIds(prev => [...prev, option.id]);
-                          } else {
-                            setSelectedOptionIds(prev => prev.filter(id => id !== option.id));
-                          }
-                        }}
-                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                      />
-                      <span style={{ fontWeight: 500 }}>{option.nameAr}</span>
-                    </div>
-                    <span style={{ color: isSelected ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600 }}>
-                      {option.priceDelta > 0 ? `+${option.priceDelta} ج.م` : option.priceDelta < 0 ? `-${Math.abs(option.priceDelta)} ج.م` : '0.00 ج.م'}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="pos__open-actions" style={{ marginTop: 'var(--space-2)' }}>
-              <button 
-                type="button" 
-                className="btn btn--secondary btn--md" 
-                onClick={() => { setShowPosOptionsModal(false); setPosOptionsProduct(null); }}
-              >
-                إلغاء
-              </button>
-              <button 
-                type="button" 
-                className="btn btn--primary btn--md" 
-                onClick={handleAddProductWithOptions}
-              >
-                إضافة للأوردر
-              </button>
-            </div>
-          </div>
-        </div>
+        <ModifierDialog
+          product={posOptionsProduct}
+          options={posOptionsList}
+          selectedIds={selectedOptionIds}
+          onToggle={(optionId) =>
+            setSelectedOptionIds((prev) =>
+              prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId]
+            )
+          }
+          quantity={addQuantity}
+          onQuantityChange={setAddQuantity}
+          note={addNote}
+          onNoteChange={setAddNote}
+          onMarkUnavailable={
+            role === ROLES.ADMIN || role === ROLES.SUPERVISOR
+              ? () => handleMarkUnavailable(posOptionsProduct)
+              : undefined
+          }
+          onCancel={() => {
+            setShowPosOptionsModal(false);
+            setPosOptionsProduct(null);
+            setAddQuantity(1);
+            setAddNote('');
+          }}
+          onConfirm={handleAddProductWithOptions}
+        />
       )}
 
       {/* Close Shift Modal */}
@@ -654,8 +1485,20 @@ export default function POSPage() {
                   required
                   className="field__input field__wrapper"
                   value={closeShiftForm.countedCash}
-                  onChange={e => setCloseShiftForm({ countedCash: e.target.value })}
+                  onChange={e => setCloseShiftForm(prev => ({ ...prev, countedCash: e.target.value }))}
                   autoFocus
+                />
+              </div>
+              <div className="field" style={{ gridColumn: '1/-1' }}>
+                <label className="field__label">🍿 صافي السناكس اليومي (اختياري)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="أدخل مبلغ صافي السناكس"
+                  className="field__input field__wrapper"
+                  value={closeShiftForm.snacksNet}
+                  onChange={e => setCloseShiftForm(prev => ({ ...prev, snacksNet: e.target.value }))}
                 />
               </div>
               <div className="pos__open-actions" style={{ gridColumn: '1/-1' }}>
@@ -667,82 +1510,6 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Kitchen Ticket (Hidden normally, visible ONLY in print when kitchenTicket exists) */}
-      {kitchenTicket && (
-        <div className="kitchen-ticket-print-only" dir="rtl">
-          <h2 style={{ textAlign: 'center', marginBottom: '10px' }}>بون مطبخ</h2>
-          <p><strong>رقم الأوردر:</strong> #{kitchenTicket.orderNumber}</p>
-          <p><strong>النوع:</strong> {kitchenTicket.type === 'TAKEAWAY' ? 'تيك أواي' : `ترابيزة ${kitchenTicket.tableNumber}`}</p>
-          <p><strong>الوقت:</strong> {kitchenTicket.time.toLocaleTimeString('ar-EG')}</p>
-          <hr style={{ margin: '10px 0', border: '1px dashed black' }} />
-          <table style={{ width: '100%', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid black' }}>
-                <th style={{ padding: '4px 0' }}>الصنف</th>
-                <th style={{ padding: '4px 0', textAlign: 'center' }}>الكمية</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kitchenTicket.items.map(item => (
-                <tr key={item.id} style={{ borderBottom: '1px dashed #ccc' }}>
-                  <td style={{ padding: '8px 0' }}>
-                    {item.productNameSnapshot}
-                    {item.note && <div style={{ fontSize: '12px', fontWeight: 'normal' }}>ملاحظة: {item.note}</div>}
-                  </td>
-                  <td style={{ padding: '8px 0', textAlign: 'center', fontSize: '18px' }}>{item.quantity}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <hr style={{ margin: '10px 0', border: '1px dashed black' }} />
-        </div>
-      )}
-
-      {/* Client Receipt (Visible ONLY in print when clientReceipt exists) */}
-      {clientReceipt && (
-        <div className="client-receipt-print-only" dir="rtl">
-          <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-            <h2 style={{ margin: 0 }}>كافيه وناس</h2>
-            <p style={{ margin: 0, fontSize: '12px' }}>فاتورة ضريبية</p>
-          </div>
-          
-          <p><strong>رقم الأوردر:</strong> #{clientReceipt.orderNumber}</p>
-          <p><strong>النوع:</strong> {clientReceipt.type === 'TAKEAWAY' ? 'تيك أواي' : `ترابيزة ${clientReceipt.tableId}`}</p>
-          {clientReceipt.customerName && <p><strong>العميل:</strong> {clientReceipt.customerName}</p>}
-          <p><strong>الوقت:</strong> {clientReceipt.time.toLocaleTimeString('ar-EG')}</p>
-          <hr style={{ margin: '10px 0', border: '1px dashed black' }} />
-          
-          <table style={{ width: '100%', textAlign: 'right', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid black' }}>
-                <th style={{ padding: '4px 0' }}>الصنف</th>
-                <th style={{ padding: '4px 0', textAlign: 'center' }}>الكمية</th>
-                <th style={{ padding: '4px 0', textAlign: 'left' }}>الإجمالي</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientReceipt.items?.filter(i => i.status !== 'CANCELLED').map(item => (
-                <tr key={item.id}>
-                  <td style={{ padding: '4px 0' }}>{item.productNameSnapshot}</td>
-                  <td style={{ padding: '4px 0', textAlign: 'center' }}>{item.quantity}</td>
-                  <td style={{ padding: '4px 0', textAlign: 'left' }}>{(item.lineTotal).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          
-          <hr style={{ margin: '10px 0', border: '1px dashed black' }} />
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 'bold' }}>
-            <span>الإجمالي:</span>
-            <span>{parseFloat(clientReceipt.total).toFixed(2)} ج.م</span>
-          </div>
-          
-          <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px' }}>
-            <p>شكراً لزيارتكم!</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,9 +1,15 @@
 import axios from 'axios';
 import { storage } from '../utils/storage';
+import { toFriendlyMessage } from '../utils/errorMessages';
+
+/* ── API base ──
+   Single source of truth. The refresh call below used to repeat the full URL literally, so the
+   host lived in two places and any change had to be made twice. */
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 /* ── Singleton Axios instance ── */
 const client = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
@@ -46,10 +52,11 @@ client.interceptors.response.use(
       return Promise.reject(normalizeError(error));
     }
 
-    /* Don't retry login / refresh endpoints */
+    /* Don't retry login / refresh / platform endpoints */
     if (
       originalRequest.url?.includes('/auth/login') ||
-      originalRequest.url?.includes('/auth/refresh')
+      originalRequest.url?.includes('/auth/refresh') ||
+      originalRequest.url?.includes('/platform/tenants')
     ) {
       return Promise.reject(normalizeError(error));
     }
@@ -60,6 +67,10 @@ client.interceptors.response.use(
         failedQueue.push({ resolve, reject });
       })
         .then((token) => {
+          /* Mark queued requests as retried too. Without this only the request that *triggered*
+             the refresh carried _retry, so if a queued request came back 401 a second time it
+             re-entered this whole branch and could bounce between refresh and retry. */
+          originalRequest._retry = true;
           originalRequest.headers.Authorization = `Bearer ${token}`;
           return client(originalRequest);
         })
@@ -76,7 +87,7 @@ client.interceptors.response.use(
     }
 
     try {
-      const { data } = await axios.post('/api/auth/refresh', { refreshToken });
+      const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
       storage.setAccessToken(data.token);
       storage.setRefreshToken(data.refreshToken);
 
@@ -101,7 +112,10 @@ function triggerLogout() {
   window.dispatchEvent(new CustomEvent('auth:logout'));
 }
 
-/* ── Normalize errors to a consistent shape ── */
+/* ── Normalize errors to a consistent shape ──
+   Every API failure in the app funnels through here, which makes it the one place worth
+   translating. `message` comes out in Egyptian Arabic and phrased as a next step, so no caller has
+   to know that the backend speaks English; `rawMessage` keeps the original for logs and support. */
 function normalizeError(error) {
   if (error.response) {
     const { status, data } = error.response;
@@ -117,13 +131,15 @@ function normalizeError(error) {
       message = data.errors.map(err => err.defaultMessage || err.code).join('، ');
     }
 
-    const normalized = new Error(message);
+    const normalized = new Error(toFriendlyMessage(message, status));
+    normalized.rawMessage = message;
     normalized.status = status;
     normalized.data = data;
     return normalized;
   }
   if (error.request) {
-    const normalized = new Error('Network error — could not reach the server.');
+    const normalized = new Error(toFriendlyMessage('', 0));
+    normalized.rawMessage = 'Network error — could not reach the server.';
     normalized.status = 0;
     return normalized;
   }

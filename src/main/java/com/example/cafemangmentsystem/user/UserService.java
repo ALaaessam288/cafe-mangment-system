@@ -6,6 +6,7 @@ import com.example.cafemangmentsystem.user.dto.UpdateUserRequest;
 import com.example.cafemangmentsystem.user.dto.UserResponse;
 import com.example.cafemangmentsystem.user.entity.User;
 import com.example.cafemangmentsystem.user.repository.UserRepository;
+import com.example.cafemangmentsystem.tenant.QuotaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,6 +24,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final QuotaService quotaService;
 
     /**
      * Uses REQUIRES_NEW so this runs in a brand-new Hibernate session.
@@ -38,6 +40,8 @@ public class UserService {
         if (userRepository.findByUsername(request.username()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already taken: " + request.username());
         }
+        
+        quotaService.checkUserQuota(userRepository.count());
 
         User user = User.builder()
                 .username(request.username())

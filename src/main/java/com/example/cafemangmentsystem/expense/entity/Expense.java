@@ -42,6 +42,9 @@ public class Expense extends TenantScopedEntity {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
+
     @Column(name = "expense_date", nullable = false)
     private LocalDate expenseDate;
 

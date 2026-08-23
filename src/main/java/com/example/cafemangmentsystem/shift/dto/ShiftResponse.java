@@ -16,7 +16,8 @@ public record ShiftResponse(
         BigDecimal openingFloat,
         BigDecimal expectedCash,
         BigDecimal countedCash,
-        BigDecimal variance
+        BigDecimal variance,
+        BigDecimal snacksNet
 ) {
     public static ShiftResponse from(Shift shift) {
         return new ShiftResponse(
@@ -30,6 +31,7 @@ public record ShiftResponse(
                 shift.getOpeningFloat(),
                 shift.getExpectedCash(),
                 shift.getCountedCash(),
-                shift.getVariance());
+                shift.getVariance(),
+                shift.getSnacksNet() != null ? shift.getSnacksNet() : BigDecimal.ZERO);
     }
 }

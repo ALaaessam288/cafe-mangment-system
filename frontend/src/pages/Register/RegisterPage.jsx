@@ -158,7 +158,7 @@ export default function RegisterPage() {
                 <Input
                   name="name"
                   label="اسم المكان"
-                  placeholder="مثال: ونس"
+                  placeholder="مثال: كافيه الرواد"
                   value={form.name}
                   onChange={handleChange}
                   onBlur={handleSlugify}
@@ -168,12 +168,11 @@ export default function RegisterPage() {
                 <Input
                   name="slug"
                   label="كود مساحة العمل (Slug)"
-                  placeholder="مثال: wanas"
+                  placeholder="مثال: cafehk"
                   value={form.slug}
                   onChange={handleChange}
                   hint="بيُستخدم وقت الدخول. حروف إنجليزية سمول وأرقام وشرط بس."
                   required
-                  pattern="[a-z0-9-]+"
                 />
               </div>
 

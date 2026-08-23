@@ -64,7 +64,11 @@ Write-Info "Compiling and packaging Spring Boot backend JAR..."
 Push-Location $ProjectRoot
 # Use mvnw.cmd on Windows
 $mvnw = if ($IsWindows -or $env:OS -eq "Windows_NT") { ".\mvnw.cmd" } else { "./mvnw" }
-& $mvnw clean package -DskipTests
+# The machine's global ~/.m2/settings.xml pins localRepository to D:\siron-repo for offline
+# builds, but that mirror predates spring-boot-starter-parent 4.1.0. The default
+# ~/.m2/repository cache already has it, so point Maven there instead of touching settings.xml.
+$UserRepo = Join-Path $env:USERPROFILE ".m2\repository"
+& $mvnw clean package -DskipTests "-Dmaven.repo.local=$UserRepo"
 if ($LASTEXITCODE -ne 0) {
     Write-ErrorMsg "Spring Boot packaging failed."
     Pop-Location
@@ -86,6 +90,42 @@ Pop-Location
 
 # 7. Package Electron App
 if ($Package) {
+    # electron-builder wipes dist\win-unpacked before it repacks. Windows refuses to
+    # delete an .exe that is still mapped by a running process, which surfaces as
+    # "remove ...\CafePOS.exe: Access is denied" - a file lock, not a build error.
+    # So: stop anything holding it, then clear the folder ourselves.
+    Write-Info "Closing any running Caffio / CafePOS / Electron instances and freeing port 8080..."
+    foreach ($procName in @('Caffio', 'CafePOS', 'electron')) {
+        Get-Process -Name $procName -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Info "  stopping $($_.ProcessName) (PID $($_.Id))"
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+    # Free port 8080
+    Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-Info "  stopping process holding port 8080 (PID $($_.OwningProcess))"
+        Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+    # Also catch a packaged build launched from this project's own output folder.
+    Get-Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith("$ProjectRoot\dist", [StringComparison]::OrdinalIgnoreCase) } |
+        ForEach-Object {
+            Write-Info "  stopping $($_.ProcessName) (PID $($_.Id))"
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+        }
+    Start-Sleep -Milliseconds 800
+
+    $Unpacked = "$ProjectRoot\dist\win-unpacked"
+    if (Test-Path $Unpacked) {
+        Write-Info "Removing previous unpacked build..."
+        Remove-Item -Recurse -Force $Unpacked -ErrorAction SilentlyContinue
+        if (Test-Path $Unpacked) {
+            Write-ErrorMsg "Could not delete $Unpacked - a file in it is still locked."
+            Write-ErrorMsg "Close CafePOS (check the system tray) and any Explorer window open on that folder, then run again."
+            exit 1
+        }
+    }
+
     Write-Info "Packaging Electron App with electron-builder..."
     Push-Location $ProjectRoot
     npx electron-builder build --win --publish never

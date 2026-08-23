@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: caffio-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: caffio_saas
+      POSTGRES_USER: caffio_admin
+      POSTGRES_PASSWORD: caffio_secret_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caffio_admin -d caffio_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: caffio-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/caffio_saas
+      DATABASE_DRIVER: org.postgresql.Driver
+      DATABASE_USERNAME: caffio_admin
+      DATABASE_PASSWORD: caffio_secret_password
+      JPA_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      JPA_DDL_AUTO: validate
+      FLYWAY_ENABLED: "true"
+      SHOW_SQL: "false"
+      JWT_SECRET: "caffio_production_super_secret_jwt_signing_key_2026_at_least_64_bytes_long"
+      APP_PLATFORM_PROVISIONING_KEY: "caffio_platform_provisioning_master_key_2026"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,https://app.yourdomain.com"
+
+volumes:
+  postgres_data:

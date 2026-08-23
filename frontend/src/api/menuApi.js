@@ -12,6 +12,7 @@ export const menuApi = {
   getProducts:     (categoryId) =>
     client.get('/products', { params: categoryId ? { categoryId } : undefined })
       .then((r) => r.data.map(p => ({...p, name: p.nameAr || p.nameEn}))),
+  getTopSellers:   () => client.get('/products/top-sellers').then((r) => r.data.map(p => ({...p, name: p.nameAr || p.nameEn}))),
   getProductById:  (id)      => client.get(`/products/${id}`).then((r) => { const p = r.data; return {...p, name: p.nameAr || p.nameEn}; }),
   createProduct:   (payload) => client.post('/products', { ...payload, nameAr: payload.name }).then((r) => r.data),
   updateProduct:   (id, payload) => client.put(`/products/${id}`, { ...payload, nameAr: payload.name }).then((r) => r.data),

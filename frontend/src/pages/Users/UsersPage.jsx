@@ -8,6 +8,7 @@ import Badge from '../../components/Badge/Badge';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
+import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import { ROLES } from '../../utils/constants';
 
 export default function UsersPage() {
@@ -15,6 +16,8 @@ export default function UsersPage() {
   const { role, user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const canManageUsers = role === ROLES.ADMIN || role === ROLES.SUPERVISOR;
 
   // Modals
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -70,10 +73,10 @@ export default function UsersPage() {
           username: form.username.trim(),
           role: form.role,
         });
-        toast.success('User updated successfully');
+        toast.success('تم تحديث بيانات المستخدم بنجاح');
       } else {
         if (!form.password) {
-          toast.warning('Password is required for new users');
+          toast.warning('كلمة المرور مطلوبة للمستخدم الجديد');
           setIsSaving(false);
           return;
         }
@@ -84,12 +87,12 @@ export default function UsersPage() {
           role: form.role,
           pin: form.pin || null,
         });
-        toast.success('User created successfully');
+        toast.success('تم إنشاء المستخدم بنجاح');
       }
       setIsEditModalOpen(false);
       await loadUsers();
     } catch (err) {
-      toast.error(err.message, 'Failed to save user');
+      toast.error(err.message, 'فشل حفظ بيانات المستخدم');
     } finally {
       setIsSaving(false);
     }
@@ -98,16 +101,16 @@ export default function UsersPage() {
   async function handleChangePassword(e) {
     e.preventDefault();
     if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
-      toast.warning('Password must be at least 6 characters');
+      toast.warning('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
     setIsSaving(true);
     try {
       await usersApi.changePassword(editingUser.id, { newPassword: passwordForm.newPassword });
-      toast.success('Password changed successfully');
+      toast.success('تم تغيير كلمة المرور بنجاح');
       setIsPasswordModalOpen(false);
     } catch (err) {
-      toast.error(err.message, 'Failed to change password');
+      toast.error(err.message, 'فشل تغيير كلمة المرور');
     } finally {
       setIsSaving(false);
     }
@@ -115,7 +118,7 @@ export default function UsersPage() {
 
   async function handleToggleActive(user) {
     if (user.id === currentUser.id) {
-      toast.warning('You cannot deactivate your own account.');
+      toast.warning('لا يمكنك تعطيل حسابك الشخصي الحالي.');
       return;
     }
     try {
@@ -124,10 +127,10 @@ export default function UsersPage() {
       } else {
         await usersApi.activate(user.id);
       }
-      toast.success(`User ${user.username} ${user.active ? 'deactivated' : 'activated'}`);
+      toast.success(`تم ${user.active ? 'تعطيل' : 'تفعيل'} حساب ${user.username}`);
       await loadUsers();
     } catch (err) {
-      toast.error(err.message, 'Failed to update user status');
+      toast.error(err.message, 'فشل تغيير حالة المستخدم');
     }
   }
 
@@ -139,15 +142,16 @@ export default function UsersPage() {
 
   return (
     <div className="page">
+      {!canManageUsers && <ObserverBanner />}
       <div className="page__header">
         <div>
-          <h1 className="page__title">المستخدمين</h1>
-          <p className="page__subtitle">إدارة حسابات الموظفين والصلاحيات</p>
+          <h1 className="page__title">إدارة المستخدمين 👤</h1>
+          <p className="page__subtitle">إدارة حسابات الموظفين، تحديد الصلاحيات وتغيير كلمات المرور</p>
         </div>
         <div className="page__actions">
-          {role === ROLES.ADMIN && (
-            <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenEdit()}>
-              إضافة مستخدم
+          {canManageUsers && (
+            <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenEdit()} variant="primary">
+              إضافة مستخدم جديد
             </Button>
           )}
         </div>
@@ -157,7 +161,7 @@ export default function UsersPage() {
         {loading ? (
           <div className="data-table-empty"><Spinner /></div>
         ) : users.length === 0 ? (
-          <div className="data-table-empty">مفيش مستخدمين.</div>
+          <div className="data-table-empty">لا يوجد مستخدمين حالياً.</div>
         ) : (
           <table className="data-table">
             <thead>
@@ -166,14 +170,14 @@ export default function UsersPage() {
                 <th>اسم المستخدم</th>
                 <th>الصلاحية</th>
                 <th>الحالة</th>
-                {role === ROLES.ADMIN && <th style={{ textAlign: 'left' }}>تحكم</th>}
+                {canManageUsers && <th style={{ textAlign: 'left' }}>تحكم</th>}
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td style={{ fontWeight: 500 }}>
-                    {u.fullName} {u.id === currentUser.id && <span style={{color:'var(--text-muted)', fontSize:'12px'}}>(أنت)</span>}
+                  <td style={{ fontWeight: 600 }}>
+                    {u.fullName} {u.id === currentUser.id && <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>(حسابك الحالي)</span>}
                   </td>
                   <td className="data-table__mono">{u.username}</td>
                   <td>
@@ -184,10 +188,10 @@ export default function UsersPage() {
                       {u.active ? 'نشط' : 'غير نشط'}
                     </Badge>
                   </td>
-                  {role === ROLES.ADMIN && (
+                  {canManageUsers && (
                     <td>
                       <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير الباسورد">
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
                           <KeyRound size={15} />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)} title="تعديل المستخدم">
@@ -213,89 +217,113 @@ export default function UsersPage() {
       </div>
 
       {/* Edit / Create User Modal */}
-      {role === ROLES.ADMIN && (
+      {canManageUsers && (
         <Modal
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
-          title={editingUser ? 'تعديل مستخدم' : 'إضافة مستخدم'}
+          title={editingUser ? 'تعديل بيانات المستخدم' : 'إضافة مستخدم جديد'}
+          icon={editingUser ? '✏️' : '👤'}
+          subtitle={editingUser ? `تعديل صلاحيات وحساب: ${editingUser.fullName || editingUser.username}` : 'إنشاء حساب جديد للموظف وتحديد الصلاحية وكلمة المرور'}
+          size="md"
         >
-          <form onSubmit={handleSaveUser} className="form-grid">
-            <Input
-              label="الاسم بالكامل"
-              value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              required
-              autoFocus
-            />
-            <Input
-              label="اسم المستخدم"
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              required
-            />
+          <form onSubmit={handleSaveUser} className="modal-form">
+            <div className="modal-field-group">
+              <label className="modal-field-label">الاسم بالكامل <span className="required">*</span></label>
+              <input
+                className="modal-field-input"
+                value={form.fullName}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                placeholder="مثال: أحمد محمد"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="modal-field-group">
+              <label className="modal-field-label">اسم المستخدم (Login Username) <span className="required">*</span></label>
+              <input
+                className="modal-field-input"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                placeholder="مثال: ahmed_pos"
+                required
+              />
+            </div>
             
-            <div className="field-select">
-              <label className="field-select__label">الصلاحية</label>
+            <div className="modal-field-group">
+              <label className="modal-field-label">نوع الصلاحية <span className="required">*</span></label>
               <select
-                className="field-select__control"
+                className="modal-field-select"
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
                 required
               >
-                <option value="CASHIER">كاشير</option>
-                <option value="SUPERVISOR">مشرف</option>
-                <option value="ADMIN">مدير</option>
+                <option value="CASHIER">كاشير (نقطة البيع والتحضير فقط)</option>
+                <option value="SUPERVISOR">مدير العمليات / مشرف (العمليات وإدارة المنيو والجرد)</option>
+                <option value="ADMIN">مالك المنشأة / أدمن (كامل الصلاحيات والتقارير)</option>
               </select>
             </div>
 
             {!editingUser && (
-              <>
-                <Input
-                  label="رمز PIN للطباعة والعمليات السريعة (اختياري)"
-                  type="password"
-                  value={form.pin}
-                  onChange={(e) => setForm({ ...form, pin: e.target.value })}
-                  hint="من 4 لـ 8 أرقام"
-                />
-                <Input
-                  label="الباسورد"
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  required
-                  hint="على الأقل 6 حروف أو أرقام"
-                />
-              </>
+              <div className="modal-form-grid">
+                <div className="modal-field-group">
+                  <label className="modal-field-label">كلمة المرور (Password) <span className="required">*</span></label>
+                  <input
+                    className="modal-field-input"
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="على الأقل 6 خانات"
+                    required
+                  />
+                </div>
+                <div className="modal-field-group">
+                  <label className="modal-field-label">رمز PIN السريع (اختياري)</label>
+                  <input
+                    className="modal-field-input"
+                    type="password"
+                    value={form.pin}
+                    onChange={(e) => setForm({ ...form, pin: e.target.value })}
+                    placeholder="من 4 إلى 8 أرقام"
+                  />
+                </div>
+              </div>
             )}
 
-            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+            <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <Button variant="secondary" onClick={() => setIsEditModalOpen(false)} type="button">إلغاء</Button>
-              <Button type="submit" loading={isSaving}>حفظ المستخدم</Button>
+              <Button type="submit" loading={isSaving} variant="primary">حفظ البيانات</Button>
             </div>
           </form>
         </Modal>
       )}
 
       {/* Change Password Modal */}
-      {role === ROLES.ADMIN && (
+      {canManageUsers && (
         <Modal
           isOpen={isPasswordModalOpen}
           onClose={() => setIsPasswordModalOpen(false)}
-          title={`تغيير الباسورد لـ ${editingUser?.username}`}
+          title="تغيير كلمة المرور"
+          icon="🔑"
+          subtitle={`تعيين كلمة مرور جديدة للمستخدم: ${editingUser?.fullName || editingUser?.username}`}
+          size="sm"
         >
-          <form onSubmit={handleChangePassword} className="form-grid">
-            <Input
-              label="الباسورد الجديد"
-              type="password"
-              value={passwordForm.newPassword}
-              onChange={(e) => setPasswordForm({ newPassword: e.target.value })}
-              required
-              autoFocus
-              hint="على الأقل 6 حروف أو أرقام"
-            />
-            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+          <form onSubmit={handleChangePassword} className="modal-form">
+            <div className="modal-field-group">
+              <label className="modal-field-label">كلمة المرور الجديدة <span className="required">*</span></label>
+              <input
+                className="modal-field-input"
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm({ newPassword: e.target.value })}
+                placeholder="أدخل 6 خانات على الأقل"
+                required
+                autoFocus
+              />
+            </div>
+            <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <Button variant="secondary" onClick={() => setIsPasswordModalOpen(false)} type="button">إلغاء</Button>
-              <Button type="submit" loading={isSaving}>تحديث الباسورد</Button>
+              <Button type="submit" loading={isSaving} variant="primary">تحديث كلمة المرور</Button>
             </div>
           </form>
         </Modal>

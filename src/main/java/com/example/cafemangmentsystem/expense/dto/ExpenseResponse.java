@@ -18,7 +18,8 @@ public record ExpenseResponse(
         Long shiftId,
         Long recordedByUserId,
         Long employeeId,
-        String employeeName
+        String employeeName,
+        String notes
 ) {
     public static ExpenseResponse from(Expense expense) {
         return new ExpenseResponse(
@@ -32,7 +33,8 @@ public record ExpenseResponse(
                 expense.getShift() == null ? null : expense.getShift().getId(),
                 expense.getRecordedBy().getId(),
                 expense.getEmployee() == null ? null : expense.getEmployee().getId(),
-                expense.getEmployee() == null ? null : expense.getEmployee().getName()
+                expense.getEmployee() == null ? null : expense.getEmployee().getName(),
+                expense.getNotes()
         );
     }
 }

@@ -35,14 +35,14 @@ public class PrinterController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public PrinterResponse create(@Valid @RequestBody PrinterRequest request) {
         return printerService.create(request);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public PrinterResponse update(@PathVariable Long id, @Valid @RequestBody PrinterRequest request) {
         return printerService.update(id, request);
     }

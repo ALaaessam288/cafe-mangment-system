@@ -4,6 +4,7 @@ import com.example.cafemangmentsystem.order.entity.OrderType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 public record OpenOrderRequest(
@@ -12,6 +13,8 @@ public record OpenOrderRequest(
         @Positive Integer guestCount,
         String customerName,
         String customerPhone,
+        String customerAddress,
+        BigDecimal deliveryFee,
         Instant pickupAt
 ) {
 }

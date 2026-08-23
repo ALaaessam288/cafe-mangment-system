@@ -1,0 +1,275 @@
+.discount-modal-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  font-family: inherit;
+  direction: rtl;
+}
+
+/* Header Tab Switcher - Micro Pill Tabs */
+.discount-modal__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.discount-modal__tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.discount-modal__tab-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.discount-modal__tab-btn--active-discount {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(220, 38, 38, 0.32) 100%);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.discount-modal__tab-btn--active-service {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(5, 150, 105, 0.32) 100%);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+
+.discount-modal__badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 10px;
+}
+
+.discount-modal__badge--danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.discount-modal__badge--success {
+  background: #10b981;
+  color: #ffffff;
+}
+
+/* Mode Switcher Bar */
+.discount-modal__mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.35);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.discount-modal__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.discount-modal__mode-toggle {
+  display: flex;
+  background: rgba(15, 23, 42, 0.8);
+  padding: 2px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.discount-modal__mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.discount-modal__mode-btn--active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+/* Presets Grid - Micro Chips */
+.discount-modal__presets-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.discount-modal__preset-chip {
+  padding: 4px 2px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(30, 41, 59, 0.5);
+  color: #cbd5e1;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+
+.discount-modal__preset-chip:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.discount-modal__preset-chip--selected {
+  background: #2563eb !important;
+  border-color: #60a5fa !important;
+  color: #ffffff !important;
+}
+
+/* Custom Input */
+.discount-modal__input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.discount-modal__input {
+  width: 100%;
+  padding: 5px 10px 5px 36px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  outline: none;
+}
+
+.discount-modal__input:focus {
+  border-color: #3b82f6;
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.discount-modal__input-suffix {
+  position: absolute;
+  left: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Reasons Flex */
+.discount-modal__reasons-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.discount-modal__reason-chip {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(30, 41, 59, 0.4);
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.discount-modal__reason-chip--selected {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: rgba(14, 165, 233, 0.5);
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+/* Live Financial Card */
+.discount-modal__summary-card {
+  background: rgba(15, 23, 42, 0.85);
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discount-modal__summary-title {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.discount-modal__summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.discount-modal__summary-row--discount {
+  color: #f87171;
+  font-weight: 700;
+}
+
+.discount-modal__summary-row--service {
+  color: #34d399;
+  font-weight: 700;
+}
+
+.discount-modal__summary-divider {
+  height: 1px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  margin: 1px 0;
+}
+
+.discount-modal__summary-row--total {
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.discount-modal__total-amount {
+  font-size: 13.5px;
+  color: #38bdf8;
+  font-weight: 900;
+}
+
+/* Footer Actions */
+.discount-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}

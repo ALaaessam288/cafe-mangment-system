@@ -10,27 +10,43 @@ export default function SplashScreen() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const timer1 = setTimeout(() => setPhase('hold'), 800);
-    const timer2 = setTimeout(() => setPhase('out'), 2000);
-    const timer3 = setTimeout(() => {
-      if (isInitialized) {
-        if (isAuthenticated && role) {
-          navigate(ROLE_DEFAULT_ROUTE[role] ?? ROUTES.POS, { replace: true });
-        } else {
-          navigate(ROUTES.LOGIN, { replace: true });
-        }
-      }
-    }, 2600);
+    const timer1 = setTimeout(() => setPhase('hold'), 600);
+    const timer2 = setTimeout(() => setPhase('out'), 1400);
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      clearTimeout(timer3);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const checkOnboarding = async () => {
+      if (isAuthenticated && role) {
+        navigate(ROLE_DEFAULT_ROUTE[role] ?? ROUTES.POS, { replace: true });
+      } else {
+        try {
+          const { authApi } = await import('../../api/authApi');
+          const tenants = await authApi.getTenants();
+          if (!tenants || tenants.length === 0) {
+            navigate(ROUTES.WELCOME, { replace: true });
+          } else {
+            navigate(ROUTES.LOGIN, { replace: true });
+          }
+        } catch (err) {
+          navigate(ROUTES.LOGIN, { replace: true });
+        }
+      }
+    };
+
+    const timer = setTimeout(checkOnboarding, 1500);
+
+    return () => clearTimeout(timer);
   }, [isAuthenticated, isInitialized, navigate, role]);
 
   return (
-    <div className={`splash splash--${phase}`} aria-label="جاري تحميل سيستم كافيه ونس">
+    <div className={`splash splash--${phase}`} aria-label="جاري تحميل سيستم كافيو">
       <div className="splash__content">
         {/* Logo mark */}
         <div className="splash__logo">
@@ -48,8 +64,8 @@ export default function SplashScreen() {
 
         {/* Brand */}
         <div className="splash__brand">
-          <h1 className="splash__name">كافيه ونس</h1>
-          <p className="splash__tagline">سيستم الكاشير</p>
+          <h1 className="splash__name">كافيو</h1>
+          <p className="splash__tagline">نظام إدارة الكافيهات والمطاعم</p>
         </div>
 
         {/* Loader dots */}

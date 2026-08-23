@@ -41,6 +41,10 @@ public class OrderItem extends TenantScopedEntity {
     @Column(name = "product_name_snapshot", nullable = false)
     private String productNameSnapshot;
 
+    /** Category name at time of ordering, so kitchen/bar tickets can print "Category - Product". */
+    @Column(name = "category_name_snapshot")
+    private String categoryNameSnapshot;
+
     @Column(name = "unit_price_snapshot", nullable = false, precision = 10, scale = 2)
     private BigDecimal unitPriceSnapshot;
 

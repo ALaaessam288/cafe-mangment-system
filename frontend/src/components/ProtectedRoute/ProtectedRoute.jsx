@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ROUTES } from '../../utils/constants';
+import { ROUTES, ROLE_DEFAULT_ROUTE } from '../../utils/constants';
 import Spinner from '../Spinner/Spinner';
 
 /**
@@ -24,7 +24,8 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to={ROUTES.POS} replace />;
+    const fallback = ROLE_DEFAULT_ROUTE[role] || ROUTES.DASHBOARD;
+    return <Navigate to={fallback} replace />;
   }
 
   return children;
