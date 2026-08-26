@@ -608,6 +608,20 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_ORDER', payload: updated });
 
+      // Reflect the reservation the server just took (see OrderService.reserveStock) on this
+      // screen immediately, rather than waiting for the next 20s background menu refresh.
+      // Other cashiers' screens pick it up from that poll instead.
+      if (product.trackInventory) {
+        dispatch({
+          type: 'SET_PRODUCTS',
+          payload: state.products.map((p) =>
+            p.id === product.id
+              ? { ...p, availableQuantity: Math.max(0, (p.availableQuantity ?? 0) - quantity) }
+              : p
+          ),
+        });
+      }
+
       // Newest server row = the one to undo, and one more tally for this
       // cashier's quick-access strip.
       const newest = (updated.items ?? []).reduce((max, i) => (i.id > max ? i.id : max), 0);
@@ -636,8 +650,10 @@ export default function POSPage() {
     const quantity = multiplier;
     setMultiplier(1);
 
-    // If the product is out of stock, show the quick refill modal
-    if (product.stockQuantity !== undefined && product.stockQuantity !== null && product.stockQuantity <= 0) {
+    // If nothing's actually left to sell right now (accounting for what other open orders
+    // already hold), show the quick refill modal instead of letting the request round-trip
+    // just to come back with the same "insufficient stock" rejection.
+    if (product.availableQuantity !== undefined && product.availableQuantity !== null && product.availableQuantity <= 0) {
       setRefillProduct(product);
       setRefillQty('10');
       return;
@@ -1174,8 +1190,10 @@ export default function POSPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  /* ── Keep table colours and takeaway orders live ──
-     Read-only refresh; it never touches the order the cashier is editing. */
+  /* ── Keep table colours, takeaway orders, and product availability live ──
+     Read-only refresh; it never touches the order the cashier is editing. The menu leg is what
+     lets one cashier's reservation (see addToOrder) show up as reduced availability on every
+     other open register within 20s, without needing a push channel. */
   useEffect(() => {
     if (!state.activeShift) return undefined;
 
@@ -1183,6 +1201,7 @@ export default function POSPage() {
       if (document.hidden || anyModalOpen) return;
       loadOrders();
       loadTables();
+      loadMenu(state.categories);
     }
     const timer = setInterval(refresh, 20000);
     window.addEventListener('focus', refresh);
@@ -1190,7 +1209,7 @@ export default function POSPage() {
       clearInterval(timer);
       window.removeEventListener('focus', refresh);
     };
-  }, [state.activeShift, anyModalOpen, loadOrders, loadTables]);
+  }, [state.activeShift, anyModalOpen, loadOrders, loadTables, loadMenu, state.categories]);
 
   if (isLoadingShift) return <div className="page" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}><div className="spinner"></div></div>;
 

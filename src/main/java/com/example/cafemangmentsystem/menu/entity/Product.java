@@ -59,6 +59,18 @@ public class Product extends SoftDeletableEntity {
     @Builder.Default
     private int stockQuantity = 0;
 
+    /**
+     * Quantity held by NEW (not yet sent) order items across all open orders - a soft
+     * reservation. Prevents two cashiers from overselling the last units of a product between
+     * the moment it's added to a cart and the moment it's actually sent to the kitchen, since
+     * stock_quantity itself is only decremented at send() time (see OrderService). Always <=
+     * stock_quantity in practice; availableQuantity (exposed to the frontend) is stockQuantity
+     * minus this.
+     */
+    @Column(name = "reserved_quantity", nullable = false)
+    @Builder.Default
+    private int reservedQuantity = 0;
+
     @Column(name = "track_inventory", nullable = false)
     @Builder.Default
     private boolean trackInventory = false;

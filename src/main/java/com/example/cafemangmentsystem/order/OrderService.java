@@ -199,6 +199,8 @@ public class OrderService {
 
         int quantity = request.quantity() == null ? 1 : request.quantity();
 
+        reserveStock(product, quantity);
+
         User addedBy = userRepository.findById(userId).orElseThrow();
 
         BigDecimal unitPrice = product.getPrice();
@@ -257,11 +259,12 @@ public class OrderService {
             orderItemRepository.save(item);
         }
 
-        // Stock is NOT touched here - it is deducted exactly once, in send(), via consumeStock().
-        // (Previously this also deducted at add time, which double-counted every item that made
-        // it to the kitchen: once here, again in consumeStock(). It also ignored trackInventory,
-        // and removeUnsentItem()/cancelItem() only ever gave back one of the two deductions, so
-        // tracked stock drifted down permanently on every removed or cancelled item.)
+        // stock_quantity itself is NOT touched here - it is deducted exactly once, in send(),
+        // via consumeStock(). (Previously this also deducted at add time, which double-counted
+        // every item that made it to the kitchen: once here, again in consumeStock(). It also
+        // ignored trackInventory, and removeUnsentItem()/cancelItem() only ever gave back one of
+        // the two deductions, so tracked stock drifted down permanently on every removed or
+        // cancelled item.) reserveStock() above only adjusts the soft reserved_quantity counter.
 
         recalcTotals(order);
 
@@ -290,11 +293,14 @@ public class OrderService {
         item.setCancelledBy(cancelledBy);
         item.setCancelReason(request.reason());
 
-        // Stock is only consumed once an item is SENT (see send()/consumeStock()), so it is only
-        // released here if it was actually sent. A NEW item never touched stock in the first
-        // place - releasing it too would incorrectly inflate stock on cancellation.
+        // stock_quantity is only consumed once an item is SENT (see send()/consumeStock()), so
+        // it is only released here if it was actually sent - releasing it for a NEW item would
+        // incorrectly inflate real stock. A NEW item instead only ever held a soft reservation
+        // (see reserveStock() in addItem), which gets released here regardless of wasSent.
         if (wasSent) {
             releaseStock(item);
+        } else if (item.getProduct() != null) {
+            releaseReservation(item.getProduct(), item.getQuantity());
         }
 
         recalcTotals(order);
@@ -336,7 +342,12 @@ public class OrderService {
             discountRepository.deleteAll(itemDiscounts);
         }
 
-        // No stock to give back: stock is deducted at send() time, and this item never got there.
+        // No real stock to give back (stock_quantity is deducted at send() time, and this item
+        // never got there) - but it did hold a soft reservation since it was added, so that goes
+        // back to the available pool.
+        if (item.getProduct() != null) {
+            releaseReservation(item.getProduct(), item.getQuantity());
+        }
         orderItemRepository.delete(item);
         orderItemRepository.flush();
 
@@ -368,13 +379,50 @@ public class OrderService {
         return toResponse(order);
     }
 
-    /** Deducts an item's quantity from stock when it is sent to the kitchen. */
+    /**
+     * Holds a quantity against a product the moment it's added to a cart, before it's ever sent
+     * to the kitchen - a soft reservation on top of stock_quantity (which isn't touched until
+     * send()/consumeStock()). Without this, two cashiers could each add the last few units of the
+     * same tracked product to two different orders and both would appear to succeed, since
+     * nothing checked availability until send time. Every caller of reserveStock() must have a
+     * matching releaseReservation() or consumeStock() call for the same quantity once the item
+     * leaves NEW status (removed, cancelled, voided, or sent) - see removeUnsentItem(),
+     * cancelItem(), releaseStockForOrder(), and consumeStock() below.
+     */
+    private void reserveStock(Product product, int quantity) {
+        if (!product.isTrackInventory()) {
+            return;
+        }
+        int available = product.getStockQuantity() - product.getReservedQuantity();
+        if (quantity > available) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "الكمية المتاحة من «" + product.getNameAr() + "» غير كافية (متاح: " + Math.max(0, available) + ")");
+        }
+        product.setReservedQuantity(product.getReservedQuantity() + quantity);
+        productRepository.save(product);
+    }
+
+    /** Releases a quantity previously held by {@link #reserveStock} without ever having been sent. */
+    private void releaseReservation(Product product, int quantity) {
+        if (!product.isTrackInventory()) {
+            return;
+        }
+        product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - quantity));
+        productRepository.save(product);
+    }
+
+    /**
+     * Converts a NEW item's reservation into a real deduction when it's sent to the kitchen: the
+     * quantity comes off both reserved_quantity (the hold is no longer just a hold) and
+     * stock_quantity (it's actually been consumed).
+     */
     private void consumeStock(OrderItem item) {
         Product product = item.getProduct();
         if (product == null || !product.isTrackInventory()) {
             return;
         }
         product.setStockQuantity(product.getStockQuantity() - item.getQuantity());
+        product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - item.getQuantity()));
         if (product.getStockQuantity() <= 0) {
             product.setAvailable(false);
             log.warn("Product {} stock dropped to 0 or below. Marked as unavailable.", product.getNameAr());
@@ -403,11 +451,19 @@ public class OrderService {
         productRepository.save(product);
     }
 
-    /** Returns stock for every item on an order that had already been sent to the kitchen. */
+    /**
+     * Returns stock/reservations for every item still holding either: SENT items give back real
+     * stock_quantity, NEW items (never sent, e.g. a void with an unsent line still on it) give
+     * back their soft reservation.
+     */
     private void releaseStockForOrder(Order order) {
-        orderItemRepository.findAllByOrderId(order.getId()).stream()
-                .filter(i -> i.getStatus() == OrderItemStatus.SENT)
-                .forEach(this::releaseStock);
+        orderItemRepository.findAllByOrderId(order.getId()).forEach(i -> {
+            if (i.getStatus() == OrderItemStatus.SENT) {
+                releaseStock(i);
+            } else if (i.getStatus() == OrderItemStatus.NEW && i.getProduct() != null) {
+                releaseReservation(i.getProduct(), i.getQuantity());
+            }
+        });
     }
 
     /**
@@ -734,6 +790,18 @@ public class OrderService {
         if (newQuantity < 1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Quantity must be at least 1 - cancel the item instead of setting it to zero");
+        }
+
+        // The item's reservation was sized for the old quantity; resize it for the new one before
+        // changing the item itself, so a bump past what's actually available fails loudly instead
+        // of silently over-reserving.
+        int delta = newQuantity - item.getQuantity();
+        if (item.getProduct() != null && delta != 0) {
+            if (delta > 0) {
+                reserveStock(item.getProduct(), delta);
+            } else {
+                releaseReservation(item.getProduct(), -delta);
+            }
         }
 
         item.setQuantity(newQuantity);

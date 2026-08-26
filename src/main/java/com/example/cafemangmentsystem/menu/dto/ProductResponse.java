@@ -20,6 +20,8 @@ public record ProductResponse(
         boolean active,
         String prepNote,
         Integer stockQuantity,
+        Integer reservedQuantity,
+        Integer availableQuantity,
         Boolean trackInventory,
         Integer minStockThreshold
 ) {
@@ -38,6 +40,11 @@ public record ProductResponse(
                 product.isActive(),
                 product.getPrepNote(),
                 product.getStockQuantity(),
+                product.getReservedQuantity(),
+                // What's actually left to sell right now, accounting for items already sitting
+                // in someone's cart. Only meaningful for tracked products; untracked ones never
+                // touch stock_quantity/reserved_quantity at all so this just mirrors stockQuantity.
+                Math.max(0, product.getStockQuantity() - product.getReservedQuantity()),
                 product.isTrackInventory(),
                 product.getMinStockThreshold());
     }
