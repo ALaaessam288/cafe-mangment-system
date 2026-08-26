@@ -9,6 +9,7 @@ public record EmployeeDto(
         String name,
         String jobTitle,
         BigDecimal baseSalary,
+        String salaryPeriod,
         boolean active,
         Instant createdAt
 ) {
@@ -18,6 +19,7 @@ public record EmployeeDto(
                 e.getName(),
                 e.getJobTitle(),
                 e.getBaseSalary(),
+                e.getSalaryPeriod(),
                 e.isActive(),
                 e.getCreatedAt()
         );

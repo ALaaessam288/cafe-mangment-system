@@ -32,6 +32,7 @@ public class EmployeeService {
                 .name(request.name())
                 .jobTitle(request.jobTitle())
                 .baseSalary(request.baseSalary())
+                .salaryPeriod(request.salaryPeriod() != null ? request.salaryPeriod() : "WEEKLY")
                 .active(request.active() != null ? request.active() : true)
                 .build();
         return EmployeeDto.from(employeeRepository.save(employee));
@@ -45,6 +46,9 @@ public class EmployeeService {
         employee.setName(request.name());
         employee.setJobTitle(request.jobTitle());
         employee.setBaseSalary(request.baseSalary());
+        if (request.salaryPeriod() != null) {
+            employee.setSalaryPeriod(request.salaryPeriod());
+        }
         if (request.active() != null) {
             employee.setActive(request.active());
         }

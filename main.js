@@ -113,10 +113,10 @@ function probePort(port) {
 function killPortOwner(port) {
   if (process.platform === 'win32') {
     try {
-      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`, { stdio: 'ignore' });
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`, { stdio: 'ignore', windowsHide: true });
     } catch (_) {
       try {
-        execSync(`cmd /c "for /f \\"tokens=5\\" %a in ('netstat -aon ^| findstr :${port}') do taskkill /f /pid %a"`, { stdio: 'ignore' });
+        execSync(`cmd /c "for /f \\"tokens=5\\" %a in ('netstat -aon ^| findstr :${port}') do taskkill /f /pid %a"`, { stdio: 'ignore', windowsHide: true });
       } catch (__) {}
     }
   } else {
@@ -155,7 +155,7 @@ function cleanupBackend() {
     springProcess = null;
     try {
       if (process.platform === 'win32') {
-        execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+        execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore', windowsHide: true });
       } else {
         process.kill(pid, 'SIGKILL');
       }
@@ -259,12 +259,14 @@ async function createWindow() {
   // ── Launch Spring Boot ──
   const spawnOptions = {
     detached: false,
+    windowsHide: true,
     stdio: ['ignore', logFd, logFd]
   };
 
   // If using plain 'java' command, execute via shell to ensure path expansion works on Windows
   if (javaExe === 'java') {
     spawnOptions.shell = true;
+    spawnOptions.windowsHide = true;
   }
 
   // ── Ensure Port 8080 is free before starting ──

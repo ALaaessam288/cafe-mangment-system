@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Wallet, Receipt, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Printer, CheckCircle } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { expensesApi } from '../../api/expensesApi';
+import { menuApi } from '../../api/menuApi';
+import { auditApi } from '../../api/auditApi';
 import { formatCurrency } from '../../utils/formatters';
 import { printExpenseVoucher } from '../../utils/printUtils';
 import { useToast } from '../../context/ToastContext';
@@ -11,6 +13,7 @@ import DailyReportModal from '../../components/DailyReportModal/DailyReportModal
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
+import Spinner from '../../components/Spinner/Spinner';
 
 function todayISO() {
   return new Date().toISOString().split('T')[0];
@@ -53,6 +56,13 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   const [settleNotes, setSettleNotes] = useState('');
   const [isSubmittingSettle, setIsSubmittingSettle] = useState(false);
 
+  // Quick Stock Modal State
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [stockItems, setStockItems] = useState([]); // combined raw materials & products
+  const [loadingStock, setLoadingStock] = useState(false);
+  const [adjustAmountMap, setAdjustAmountMap] = useState({}); // { itemId: amount }
+  const [refillType, setRefillType] = useState('ALL'); // ALL | MATERIALS | PRODUCTS
+
   const load = useCallback(async () => {
     if (!shift?.id) return;
     try {
@@ -73,6 +83,85 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
     const timer = setInterval(() => { if (!document.hidden) load(); }, 45000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const loadInventoryItems = useCallback(async () => {
+    setLoadingStock(true);
+    try {
+      const [materials, products] = await Promise.all([
+        auditApi.getAuditItems().catch(() => []),
+        menuApi.getProducts().catch(() => [])
+      ]);
+
+      const matsFormatted = (materials || []).map(m => ({
+        id: `mat-${m.id}`,
+        dbId: m.id,
+        name: m.name,
+        unit: m.unit,
+        stockQuantity: m.stockQuantity,
+        minThreshold: m.minThreshold,
+        type: 'MATERIAL'
+      }));
+
+      const prodsFormatted = (products || [])
+        .filter(p => p.trackInventory)
+        .map(p => ({
+          id: `prod-${p.id}`,
+          dbId: p.id,
+          name: p.name,
+          unit: 'قطعة',
+          stockQuantity: p.stockQuantity,
+          minThreshold: p.minStockThreshold || 5,
+          type: 'PRODUCT'
+        }));
+
+      setStockItems([...matsFormatted, ...prodsFormatted]);
+    } catch (err) {
+      toast.error(err.message, 'فشل تحميل بيانات المخزون');
+    } finally {
+      setLoadingStock(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (showStockModal) {
+      loadInventoryItems();
+      setAdjustAmountMap({});
+    }
+  }, [showStockModal, loadInventoryItems]);
+
+  async function handleAdjustStock(item, amountStr) {
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount) || amount <= 0) {
+      toast.warning('الرجاء إدخال كمية صحيحة أكبر من الصفر');
+      return;
+    }
+
+    try {
+      if (item.type === 'MATERIAL') {
+        const updated = await auditApi.saveAuditItem({
+          id: item.dbId,
+          name: item.name,
+          unit: item.unit,
+          stockQuantity: (item.stockQuantity || 0) + amount,
+          minThreshold: item.minThreshold,
+          requiresAudit: true,
+          active: true
+        });
+        toast.success(`تمت إضافة ${amount} ${item.unit} لخامة «${item.name}» بنجاح 🎉`);
+      } else {
+        await menuApi.addStock(item.dbId, Math.round(amount));
+        toast.success(`تمت إضافة ${Math.round(amount)} قطعة لمنتج «${item.name}» بنجاح 🎉`);
+      }
+
+      setStockItems(prev => prev.map(i => i.id === item.id ? { ...i, stockQuantity: (i.stockQuantity || 0) + amount } : i));
+      setAdjustAmountMap(prev => ({ ...prev, [item.id]: '' }));
+
+      // Dispatch event to reload menu in POS page
+      window.dispatchEvent(new Event('reload-pos-menu'));
+    } catch (err) {
+      toast.error(err.message, 'فشل تحديث المخزون');
+    }
+  }
 
   // Find pending advances waiting for settlement
   const pendingAdvances = useMemo(() => {
@@ -244,6 +333,17 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           title="إضافة مصروف عاجل أو سحب عُهدة وطباعة البون"
         >
           <Plus size={13} /> مصروف سريع 💸
+        </button>
+
+        {/* Quick Stock Refill Button */}
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm pos-quick-stock-btn"
+          onClick={() => setShowStockModal(true)}
+          title="تغذية وجرد سريع للمخزون والخامات"
+          style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.35)' }}
+        >
+          <Plus size={13} /> تغذية المخزون 📦
         </button>
 
         {/* Only ADMIN and SUPERVISOR can view/print full Daily Report */}
@@ -452,6 +552,120 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           onClose={() => setShowReportModal(false)}
           shiftId={shift.id}
         />
+      )}
+
+      {/* Quick Stock Refill Modal */}
+      {showStockModal && (
+        <Modal
+          isOpen={showStockModal}
+          onClose={() => setShowStockModal(false)}
+          title="تغذية المخزون وجرد سريع 📦"
+          icon="📦"
+          subtitle="تغذية خامات ومشروبات الكافيه بشكل عاجل لملء شريط التقدم"
+          size="md"
+        >
+          <div className="pos-quick-stock-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Filter Tabs */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+              <button
+                type="button"
+                className={`btn btn--sm ${refillType === 'ALL' ? 'btn--primary' : 'btn--secondary'}`}
+                onClick={() => setRefillType('ALL')}
+              >
+                الكل
+              </button>
+              <button
+                type="button"
+                className={`btn btn--sm ${refillType === 'MATERIALS' ? 'btn--primary' : 'btn--secondary'}`}
+                onClick={() => setRefillType('MATERIALS')}
+              >
+                الخامات (القهوة، اللبن...)
+              </button>
+              <button
+                type="button"
+                className={`btn btn--sm ${refillType === 'PRODUCTS' ? 'btn--primary' : 'btn--secondary'}`}
+                onClick={() => setRefillType('PRODUCTS')}
+              >
+                المنتجات الجاهزة (المعلبات، الحلويات...)
+              </button>
+            </div>
+
+            {/* List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
+              {loadingStock ? (
+                <div style={{ textAlign: 'center', padding: '24px' }}><Spinner /></div>
+              ) : stockItems.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>لا توجد خامات أو منتجات لتتتبع المخزون حالياً.</div>
+              ) : (
+                stockItems
+                  .filter(item => {
+                    if (refillType === 'MATERIALS') return item.type === 'MATERIAL';
+                    if (refillType === 'PRODUCTS') return item.type === 'PRODUCT';
+                    return true;
+                  })
+                  .map(item => {
+                    const isLow = item.stockQuantity <= item.minThreshold;
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px',
+                          background: 'var(--bg-card)',
+                          borderRadius: '8px',
+                          border: isLow ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-color)',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '13px' }}>
+                            {item.name}
+                            {isLow && <span style={{ color: '#ef4444', marginInlineStart: '6px', fontSize: '10px', fontWeight: 'bold' }}>⚠️ منخفض!</span>}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            المخزون الحالي: <strong style={{ color: isLow ? '#ef4444' : '#10b981' }}>{item.stockQuantity} {item.unit}</strong> (الحد الأدنى: {item.minThreshold})
+                          </span>
+                        </div>
+
+                        {/* Quick Refill Input */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input
+                            type="number"
+                            placeholder="الكمية المضافة"
+                            value={adjustAmountMap[item.id] || ''}
+                            onChange={(e) => setAdjustAmountMap(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            style={{
+                              width: '80px',
+                              height: '32px',
+                              padding: '0 8px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-input)',
+                              color: 'var(--text-primary)',
+                              fontSize: '13px'
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            style={{ height: '32px', padding: '0 10px', backgroundColor: '#10b981', borderColor: '#10b981' }}
+                            onClick={() => handleAdjustStock(item, adjustAmountMap[item.id])}
+                          >
+                            + إضافة
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <Button variant="secondary" onClick={() => setShowStockModal(false)}>إغلاق</Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </>
   );

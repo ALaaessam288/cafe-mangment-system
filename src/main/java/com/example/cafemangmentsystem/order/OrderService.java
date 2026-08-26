@@ -256,6 +256,11 @@ public class OrderService {
 
             orderItemRepository.save(item);
         }
+
+        // Deduct stock from product
+        product.setStockQuantity(Math.max(0, product.getStockQuantity() - quantity));
+        productRepository.save(product);
+
         recalcTotals(order);
 
         return toResponse(order);
@@ -283,10 +288,11 @@ public class OrderService {
         item.setCancelledBy(cancelledBy);
         item.setCancelReason(request.reason());
 
-        // Stock is only deducted when an item is SENT to the kitchen, so it is only owed back
-        // when a SENT item is cancelled.
-        if (wasSent) {
-            releaseStock(item);
+        // Restore stock for cancelled items (stock is deducted at add time)
+        if (item.getProduct() != null) {
+            Product p = item.getProduct();
+            p.setStockQuantity(p.getStockQuantity() + item.getQuantity());
+            productRepository.save(p);
         }
 
         recalcTotals(order);

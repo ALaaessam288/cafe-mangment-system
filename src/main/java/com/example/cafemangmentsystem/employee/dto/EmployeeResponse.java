@@ -11,6 +11,7 @@ public record EmployeeResponse(
         String position,
         String phone,
         BigDecimal dailyWage,
+        String salaryPeriod,
         LocalDate hireDate,
         boolean active
 ) {
@@ -21,6 +22,7 @@ public record EmployeeResponse(
                 employee.getPosition(),
                 employee.getPhone(),
                 employee.getDailyWage(),
+                employee.getSalaryPeriod(),
                 employee.getHireDate(),
                 employee.isActive());
     }

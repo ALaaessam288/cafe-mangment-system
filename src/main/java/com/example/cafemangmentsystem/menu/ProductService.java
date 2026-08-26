@@ -38,6 +38,8 @@ public class ProductService {
                 .nameEn(request.nameEn())
                 .price(request.price())
                 .prepNote(request.prepNote())
+                .trackInventory(request.trackInventory() != null && request.trackInventory())
+                .minStockThreshold(request.minStockThreshold())
                 .build();
 
         return ProductResponse.from(productRepository.save(product));
@@ -71,6 +73,8 @@ public class ProductService {
         product.setNameEn(request.nameEn());
         product.setPrice(request.price());
         product.setPrepNote(request.prepNote());
+        product.setTrackInventory(request.trackInventory() != null && request.trackInventory());
+        product.setMinStockThreshold(request.minStockThreshold());
         return ProductResponse.from(product);
     }
 
@@ -90,6 +94,15 @@ public class ProductService {
         Product product = getOrThrow(id);
         product.activate();
         return ProductResponse.from(product);
+    }
+
+    public ProductResponse addStock(Long id, int quantity) {
+        Product product = getOrThrow(id);
+        product.setStockQuantity(product.getStockQuantity() + quantity);
+        if (product.getStockQuantity() > 0) {
+            product.setAvailable(true);
+        }
+        return ProductResponse.from(productRepository.save(product));
     }
 
     Product getOrThrow(Long id) {

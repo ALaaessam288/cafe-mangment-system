@@ -39,11 +39,36 @@ public class ShiftAuditService {
     private final ProductRepository productRepository;
     private final ShiftRepository shiftRepository;
 
-    @Transactional(readOnly = true)
     public List<ShiftAuditItemDto> getAuditItems() {
-        return shiftAuditItemRepository.findAllByActiveTrue().stream()
-                .map(ShiftAuditItemDto::from)
-                .toList();
+        List<ShiftAuditItem> list = shiftAuditItemRepository.findAllByActiveTrue();
+        if (list.isEmpty()) {
+            ShiftAuditItem coffee = ShiftAuditItem.builder()
+                    .name("بن قهوة (جرام)")
+                    .unit("جرام")
+                    .stockQuantity(1000.0)
+                    .minThreshold(200.0)
+                    .requiresAudit(true)
+                    .active(true)
+                    .build();
+            ShiftAuditItem milk = ShiftAuditItem.builder()
+                    .name("حليب / لبن (لتر)")
+                    .unit("لتر")
+                    .stockQuantity(10.0)
+                    .minThreshold(2.0)
+                    .requiresAudit(true)
+                    .active(true)
+                    .build();
+            ShiftAuditItem cups = ShiftAuditItem.builder()
+                    .name("أكواب ورقية (قطعة)")
+                    .unit("قطعة")
+                    .stockQuantity(200.0)
+                    .minThreshold(20.0)
+                    .requiresAudit(true)
+                    .active(true)
+                    .build();
+            list = shiftAuditItemRepository.saveAll(List.of(coffee, milk, cups));
+        }
+        return list.stream().map(ShiftAuditItemDto::from).toList();
     }
 
     public ShiftAuditItemDto saveAuditItem(ShiftAuditItemDto dto) {

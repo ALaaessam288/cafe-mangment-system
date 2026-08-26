@@ -8,5 +8,6 @@ public record EmployeeRequest(
         @NotBlank String name,
         String jobTitle,
         @NotNull BigDecimal baseSalary,
+        String salaryPeriod,
         Boolean active
 ) {}

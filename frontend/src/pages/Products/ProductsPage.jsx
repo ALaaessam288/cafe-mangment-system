@@ -58,6 +58,12 @@ export default function ProductsPage() {
   const [newOptionForm, setNewOptionForm] = useState({ nameAr: '', priceDelta: '0', isDefault: false });
   const [isSavingOption, setIsSavingOption] = useState(false);
 
+  // Recipes State
+  const [auditItems, setAuditItems] = useState([]);
+  const [productRecipes, setProductRecipes] = useState([]);
+  const [newRecipeForm, setNewRecipeForm] = useState({ auditItemId: '', deductionQuantity: '' });
+  const [recipesLoading, setRecipesLoading] = useState(false);
+
   const loadProductOptions = useCallback(async (productId) => {
     setOptionsLoading(true);
     try {
@@ -119,13 +125,48 @@ export default function ProductsPage() {
     }
   }
 
+  function handleAddRecipeItem(e) {
+    e.preventDefault();
+    if (!newRecipeForm.auditItemId || !newRecipeForm.deductionQuantity) return;
+
+    const qty = parseFloat(newRecipeForm.deductionQuantity);
+    if (isNaN(qty) || qty <= 0) {
+      toast.warning('الرجاء إدخال كمية صحيحة');
+      return;
+    }
+
+    const auditItem = auditItems.find(i => String(i.id) === String(newRecipeForm.auditItemId));
+    if (!auditItem) return;
+
+    // Check if already exists
+    if (productRecipes.some(r => String(r.auditItemId) === String(auditItem.id))) {
+      toast.warning('المكون مضاف بالفعل، يمكنك تعديله أو حذفه أولاً');
+      return;
+    }
+
+    const newRecipe = {
+      auditItemId: auditItem.id,
+      auditItemName: auditItem.name,
+      auditItemUnit: auditItem.unit,
+      deductionQuantity: qty
+    };
+
+    setProductRecipes(prev => [...prev, newRecipe]);
+    setNewRecipeForm({ auditItemId: '', deductionQuantity: '' });
+  }
+
+  function handleDeleteRecipeItem(auditItemId) {
+    setProductRecipes(prev => prev.filter(r => String(r.auditItemId) !== String(auditItemId)));
+  }
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      let [prods, cats, stns] = await Promise.all([
+      let [prods, cats, stns, items] = await Promise.all([
         menuApi.getProducts(),
         menuApi.getCategories(),
-        stationsApi.findAll()
+        stationsApi.findAll(),
+        auditApi.getAuditItems().catch(() => [])
       ]);
 
       // Auto-create default stations if none exist
@@ -142,6 +183,7 @@ export default function ProductsPage() {
       setProducts(prods);
       setCategories(cats);
       setStations(stns);
+      setAuditItems(items || []);
     } catch (err) {
       toast.error(err.message, 'Failed to load products');
     } finally {
@@ -189,7 +231,7 @@ export default function ProductsPage() {
     return sorted;
   }, [products, search, filterCatId, filterStationId, filterAvailable, filterActive, sortBy]);
 
-  function handleOpenModal(product = null) {
+  async function handleOpenModal(product = null) {
     if (product) {
       setEditingProduct(product);
       setForm({
@@ -201,6 +243,18 @@ export default function ProductsPage() {
         available: product.available,
       });
       loadProductOptions(product.id);
+      
+      // Load Recipes
+      setRecipesLoading(true);
+      try {
+        const recipes = await auditApi.getProductRecipes(product.id);
+        setProductRecipes(recipes || []);
+      } catch (err) {
+        console.error('Failed to load recipes', err);
+        setProductRecipes([]);
+      } finally {
+        setRecipesLoading(false);
+      }
     } else {
       setEditingProduct(null);
       setForm({
@@ -212,8 +266,10 @@ export default function ProductsPage() {
         available: true,
       });
       setProductOptions([]);
+      setProductRecipes([]);
     }
     setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false });
+    setNewRecipeForm({ auditItemId: '', deductionQuantity: '' });
     setIsModalOpen(true);
   }
 
@@ -232,11 +288,14 @@ export default function ProductsPage() {
     };
 
     try {
+      let productId;
       if (editingProduct) {
         await menuApi.updateProduct(editingProduct.id, payload);
+        productId = editingProduct.id;
         toast.success('تم تعديل المنتج بنجاح');
       } else {
         const createdProduct = await menuApi.createProduct(payload);
+        productId = createdProduct.id;
         if (productOptions.length > 0) {
           for (const opt of productOptions) {
             await menuApi.createOption(createdProduct.id, {
@@ -248,10 +307,19 @@ export default function ProductsPage() {
         }
         toast.success('تم إنشاء المنتج بنجاح مع اختياراته');
       }
+
+      // Save Recipes
+      const recipeDtos = productRecipes.map(r => ({
+        productId: productId,
+        auditItemId: r.auditItemId,
+        deductionQuantity: parseFloat(r.deductionQuantity)
+      }));
+      await auditApi.saveProductRecipes(productId, recipeDtos);
+
       setIsModalOpen(false);
       await loadData();
     } catch (err) {
-      toast.error(err.message, 'فشل حفظ المنتج');
+      toast.error(err.message, 'فشل حفظ المنتج أو المكونات');
     } finally {
       setIsSaving(false);
     }
@@ -613,6 +681,80 @@ export default function ProductsPage() {
                                 size="sm"
                                 type="button"
                                 onClick={() => handleDeleteOption(opt.id)}
+                                style={{ color: 'var(--danger)', padding: '4px' }}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* Recipes / Ingredients Section */}
+            <div style={{ gridColumn: '1/-1', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
+              <h3 style={{ fontSize: 'var(--text-md)', marginBottom: '12px', fontWeight: 600 }}>مكونات ومقادير الصنف للجرد التلقائي (الخامات المستهلكة عند البيع)</h3>
+
+              {/* Add new recipe item inline */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '12px', alignItems: 'flex-end', background: 'var(--bg-surface-hover)', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                <div className="field-select" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label className="field-select__label">الخامة / المكون</label>
+                  <select
+                    className="field-select__control"
+                    value={newRecipeForm.auditItemId}
+                    onChange={(e) => setNewRecipeForm({ ...newRecipeForm, auditItemId: e.target.value })}
+                  >
+                    <option value="" disabled>-- اختر الخامة --</option>
+                    {auditItems.map(item => (
+                      <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  label="الكمية المستهلكة"
+                  placeholder="مثال: 15"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={newRecipeForm.deductionQuantity}
+                  onChange={(e) => setNewRecipeForm({ ...newRecipeForm, deductionQuantity: e.target.value })}
+                />
+                <Button type="button" onClick={handleAddRecipeItem} style={{ height: '40px', padding: '0 16px' }}>+ إضافة</Button>
+              </div>
+
+              {/* Table of existing recipe components */}
+              <div className="data-table-wrap" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {recipesLoading ? (
+                  <div className="data-table-empty"><Spinner /></div>
+                ) : productRecipes.length === 0 ? (
+                  <div className="data-table-empty" style={{ padding: '16px 0' }}>مفيش خامات أو مكونات مربوطة بالصنف ده. (البيع لن يخصم من الخامات تلقائياً)</div>
+                ) : (
+                  <table className="data-table" style={{ fontSize: 'var(--text-sm)' }}>
+                    <thead>
+                      <tr>
+                        <th>الخامة</th>
+                        <th>الكمية المستهلكة لكل أوردر</th>
+                        <th>الوحدة</th>
+                        <th style={{ textAlign: 'left' }}>إزالة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productRecipes.map((recipe) => (
+                        <tr key={recipe.auditItemId}>
+                          <td style={{ fontWeight: 500 }}>{recipe.auditItemName || auditItems.find(i => String(i.id) === String(recipe.auditItemId))?.name || 'خامة'}</td>
+                          <td>{recipe.deductionQuantity}</td>
+                          <td>{recipe.auditItemUnit || auditItems.find(i => String(i.id) === String(recipe.auditItemId))?.unit || ''}</td>
+                          <td>
+                            <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                onClick={() => handleDeleteRecipeItem(recipe.auditItemId)}
                                 style={{ color: 'var(--danger)', padding: '4px' }}
                               >
                                 <Trash2 size={14} />

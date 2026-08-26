@@ -131,6 +131,11 @@ export default function POSPage() {
   const [showOpeningAudit, setShowOpeningAudit] = useState(false);
   const [showClosingAudit, setShowClosingAudit] = useState(false);
 
+  // Quick Refill Modal states inside POS
+  const [refillProduct, setRefillProduct] = useState(null);
+  const [refillQty, setRefillQty] = useState('');
+  const [isSavingRefill, setIsSavingRefill] = useState(false);
+
   // Collapsible table panel - ~40 tables shouldn't own the screen once the
   // cashier has picked one.
   const [tablesCollapsed, setTablesCollapsed] = useState(false);
@@ -368,6 +373,21 @@ export default function POSPage() {
     }
     boot();
   }, [loadTables, loadOrders, loadMenu, toast]);
+
+  useEffect(() => {
+    const handleReload = async () => {
+      try {
+        const cats = await menuApi.getCategories();
+        const active = cats.filter((c) => c.active);
+        dispatch({ type: 'SET_CATS', payload: active });
+        await loadMenu(active);
+      } catch (e) {
+        console.error('Failed to reload menu', e);
+      }
+    };
+    window.addEventListener('reload-pos-menu', handleReload);
+    return () => window.removeEventListener('reload-pos-menu', handleReload);
+  }, [loadMenu]);
 
   /* ── Open Shift ── */
   async function handleOpenShift(e) {
@@ -616,6 +636,13 @@ export default function POSPage() {
     const quantity = multiplier;
     setMultiplier(1);
 
+    // If the product is out of stock, show the quick refill modal
+    if (product.stockQuantity !== undefined && product.stockQuantity !== null && product.stockQuantity <= 0) {
+      setRefillProduct(product);
+      setRefillQty('10');
+      return;
+    }
+
     const order = await ensureOrder();
     if (!order) return;
 
@@ -634,6 +661,38 @@ export default function POSPage() {
       }
     } catch (err) {
       toast.error(err.message, 'فشل في إضافة الصنف');
+    }
+  }
+
+  /* Quick refill stock for an out-of-stock product, then auto-add it to the order. */
+  async function handleRefillAndAdd() {
+    if (!refillProduct) return;
+    const qty = parseInt(refillQty);
+    if (isNaN(qty) || qty <= 0) {
+      toast.warning('الرجاء إدخال كمية صحيحة أكبر من الصفر');
+      return;
+    }
+    setIsSavingRefill(true);
+    try {
+      await menuApi.addStock(refillProduct.id, qty);
+      toast.success(`تم تغذية مخزون «${refillProduct.name}» بـ ${qty} قطعة بنجاح 🎉`);
+
+      // Reload menu to get updated stock values
+      window.dispatchEvent(new Event('reload-pos-menu'));
+
+      // Auto-add the product to the current order
+      const order = await ensureOrder();
+      if (order) {
+        const updatedProduct = { ...refillProduct, stockQuantity: qty };
+        await addToOrder(order, updatedProduct, { quantity: 1 });
+      }
+
+      setRefillProduct(null);
+      setRefillQty('');
+    } catch (err) {
+      toast.error(err.message, 'فشل في تغذية المخزون');
+    } finally {
+      setIsSavingRefill(false);
     }
   }
 
@@ -1212,6 +1271,7 @@ export default function POSPage() {
         table={state.activeTable}
         order={state.activeOrder}
         loading={state.isLoadingOrder}
+        products={state.products}
         onSend={handleSend}
         onServe={handleServe}
         onCancelItem={handleCancelItem}
@@ -1536,6 +1596,79 @@ export default function POSPage() {
           shiftId={state.activeShift?.id || 1}
           mode="CLOSING"
         />
+      )}
+
+      {/* Quick Refill Stock Modal - shown when cashier taps an out-of-stock product */}
+      {refillProduct && (
+        <div className="pos__open-modal-overlay" onClick={() => setRefillProduct(null)}>
+          <div className="pos__open-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <h3 style={{ margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '22px' }}>📦</span> الصنف نفذ من المخزون!
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 16px' }}>
+              «<strong>{refillProduct.name}</strong>» المخزون الحالي: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>0</span>.
+              <br />أدخل الكمية اللي وصلت عشان تتغذّي المخزون وتتضاف للأوردر تلقائي.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>كمية التغذية (عدد القطع الجديدة)</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="input"
+                  value={refillQty}
+                  onChange={(e) => setRefillQty(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  autoFocus
+                  style={{ width: '100%', height: '40px', fontSize: '16px', fontWeight: 'bold', textAlign: 'center' }}
+                />
+              </div>
+
+              {/* Quick Presets */}
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                {[5, 10, 15, 20, 30, 50].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      background: parseInt(refillQty) === amt ? '#10b981' : 'var(--bg-surface)',
+                      color: parseInt(refillQty) === amt ? '#fff' : 'var(--text-primary)',
+                      cursor: 'pointer',
+                      fontWeight: '700',
+                    }}
+                    onClick={() => setRefillQty(String(amt))}
+                  >
+                    {amt}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pos__open-actions" style={{ marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--md"
+                  onClick={() => setRefillProduct(null)}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--md"
+                  disabled={isSavingRefill}
+                  onClick={handleRefillAndAdd}
+                  style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                >
+                  {isSavingRefill ? 'جاري التغذية...' : `تغذية ${refillQty || 0} قطعة وإضافة للأوردر 📦`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

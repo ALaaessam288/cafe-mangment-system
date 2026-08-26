@@ -74,4 +74,10 @@ public class ProductController {
     public ProductResponse activate(@PathVariable Long id) {
         return productService.activate(id);
     }
+
+    @PutMapping("/{id}/stock")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR', 'CASHIER')")
+    public ProductResponse addStock(@PathVariable Long id, @RequestParam int quantity) {
+        return productService.addStock(id, quantity);
+    }
 }

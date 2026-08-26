@@ -668,20 +668,11 @@ export function buildShiftSummaryHtml({ report, cafeName }) {
     ${expenses.length > 0 || totalExpenses > 0 ? `
       <div class="sec-title">💸 المصاريف والمسحوبات (${expenses.length})</div>
       ${expenseRows}
-      <div class="row" style="font-weight:800; border-top:1px dashed #000; padding-top:2px; margin-top:2px;">
-        <span>إجمالي المصاريف</span>
-        <span class="num">- ${money(totalExpenses)} ج.م</span>
-      </div>
-    ` : ''}
-
-    ${totalNewDebts > 0 || totalCollectedDebts > 0 ? `
-      <div class="sec-title">📉 المديونيات والحسابات الآجلة</div>
-      ${totalNewDebts > 0 ? row('مديونيات جديدة مسجلة اليوم', `${money(totalNewDebts)} ج.م`) : ''}
-      ${totalCollectedDebts > 0 ? row('مديونيات تم تحصيلها اليوم', `+ ${money(totalCollectedDebts)} ج.م`, 'style="color:#16a34a; font-weight:800;"') : ''}
+      ${row('إجمالي المصاريف', `- ${money(totalExpenses)} ج.م`, 'style="font-weight:800; color:#dc2626;"')}
     ` : ''}
 
     ${employeeMovements.length > 0 || totalEmployeeAdvances > 0 ? `
-      <div class="sec-title">👥 حركة الموظفين (${employeeMovements.length})</div>
+      <div class="sec-title">👥 حركة سُلف وحسابات الموظفين</div>
       ${empRows}
       ${totalEmployeeAdvances > 0 ? row('إجمالي سُلف الموظفين', `- ${money(totalEmployeeAdvances)} ج.م`) : ''}
     ` : ''}

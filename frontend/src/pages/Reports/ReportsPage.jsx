@@ -19,6 +19,7 @@ import Modal from '../../components/Modal/Modal';
 import { ROLES } from '../../utils/constants';
 import { printReceipt, buildShiftSummaryHtml, buildPeriodicFinancialReportHtml } from '../../utils/printUtils';
 import { printOptionsFor } from '../../utils/printerSettings';
+import DailyReportModal from '../../components/DailyReportModal/DailyReportModal';
 import './ReportsPage.css';
 
 // Helper to format Date as YYYY-MM-DD
@@ -68,6 +69,7 @@ export default function ReportsPage() {
   const [shiftReport, setShiftReport] = useState(null);
   const [loadingShiftDetails, setLoadingShiftDetails] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [dailyModalShiftId, setDailyModalShiftId] = useState(null);
   const [editingSnacksNet, setEditingSnacksNet] = useState('');
   const [savingSnacksNet, setSavingSnacksNet] = useState(false);
 
@@ -170,45 +172,116 @@ export default function ReportsPage() {
     printReceipt(html, printOptionsFor('REPORT', { width: 80 }));
   };
 
-  // Export Report to CSV
-  const handleExportCSV = () => {
+  // Export Report to High Quality Styled Excel (.xls)
+  const handleExportExcel = () => {
     if (!financialData) return;
     sounds.playTap();
 
-    const rows = [
-      ['تقرير المبيعات والأرباح الشامل', user?.tenantName || 'كافيو'],
-      ['الفترة', periodLabel],
-      ['تاريخ الإصدار', new Date().toLocaleString('ar-EG')],
-      [],
-      ['الملخص المالي العام', 'القيمة (ج.م)'],
-      ['إيرادات المشروبات (الكافيه)', financialData.totalCafeRevenue],
-      ['إيرادات المأكولات (المطعم)', financialData.totalRestaurantRevenue],
-      ['صافي السناكس والحلويات', financialData.totalSnacksNet || 0],
-      ['إجمالي الإيرادات الكلية', (financialData.totalCafeRevenue + financialData.totalRestaurantRevenue + (financialData.totalSnacksNet || 0))],
-      ['مصاريف الكافيه', -financialData.totalCafeExpenses],
-      ['مصاريف المطعم', -financialData.totalRestaurantExpenses],
-      ['المصاريف العامة', -financialData.totalGeneralExpenses],
-      ['الرواتب والأجور', -financialData.totalWages],
-      ['صافي الربح المحقق', financialData.netProfit],
-      [],
-      ['تفاصيل مبيعات المنتجات'],
-      ['اسم المنتج', 'الكمية المباعة', 'إجمالي الإيراد (ج.م)'],
-      ...(financialData.productSales || []).map(p => [p.name, p.quantity, p.totalRevenue]),
-      [],
-      ['طرق الدفع والتحصيل'],
-      ['طريقة الدفع', 'عدد العمليات', 'المبلغ المحصل (ج.م)'],
-      ...(financialData.paymentMethods || []).map(pm => [pm.method, pm.count, pm.totalAmount])
-    ];
+    const tenantName = user?.tenantName || 'كافيو POS';
+    const dateStr = new Date().toLocaleString('ar-EG');
+    const totalRev = (financialData.totalCafeRevenue || 0) + (financialData.totalRestaurantRevenue || 0) + (financialData.totalSnacksNet || 0);
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + rows.map(e => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const excelHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>تقرير المبيعات المالي</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayRightToLeft/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Arial, Tahoma, sans-serif; direction: rtl; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-family: 'Segoe UI', Tahoma, sans-serif; }
+          th { background-color: #1e293b; color: #f59e0b; padding: 12px; border: 1px solid #334155; font-size: 13px; text-align: center; font-weight: bold; }
+          td { padding: 10px 14px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center; }
+          .header-banner { background-color: #0f172a; color: #f59e0b; font-size: 18px; font-weight: bold; padding: 16px; text-align: center; border: 2px solid #1e293b; }
+          .section-hdr { background-color: #0284c7; color: #ffffff; font-size: 14px; font-weight: bold; padding: 10px; text-align: right; }
+          .kpi-row { background-color: #f8fafc; font-weight: bold; }
+          .highlight-green { background-color: #10b981; color: #ffffff; font-weight: bold; font-size: 14px; }
+          .number-cell { font-family: 'Courier New', monospace; font-weight: bold; direction: ltr; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr><td colspan="4" class="header-banner">📊 ${tenantName} — تقرير مبيعات وأرباح الكافيه والمطعم التفصيلي</td></tr>
+          <tr>
+            <td colspan="2"><b>فترة التقرير:</b> ${periodLabel}</td>
+            <td colspan="2"><b>تاريخ وتوقيت الإصدار:</b> ${dateStr}</td>
+          </tr>
+        </table>
+        
+        <!-- Financial Summary Table -->
+        <table>
+          <thead>
+            <tr><th colspan="2" class="section-hdr">💵 1. الملخص المالي العام والأرباح</th></tr>
+            <tr><th>البنـــــد المالي</th><th>المبلغ المحصل / الإيراد (ج.م)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style="text-align:right;">إيرادات الكافيه (المشروبات)</td><td class="number-cell">${(financialData.totalCafeRevenue || 0).toFixed(2)}</td></tr>
+            <tr><td style="text-align:right;">إيرادات المطعم (المأكولات)</td><td class="number-cell">${(financialData.totalRestaurantRevenue || 0).toFixed(2)}</td></tr>
+            <tr><td style="text-align:right;">صافي مبيعات السناكس والحلويات</td><td class="number-cell">${(financialData.totalSnacksNet || 0).toFixed(2)}</td></tr>
+            <tr class="kpi-row"><td style="text-align:right;"><b>إجمالي الإيرادات الكلية للمنشأة</b></td><td class="number-cell"><b>${totalRev.toFixed(2)}</b></td></tr>
+            <tr><td style="text-align:right;">إجمالي المصروفات والنثريات (-)</td><td class="number-cell" style="color:#ef4444;">-${((financialData.totalCafeExpenses || 0) + (financialData.totalRestaurantExpenses || 0) + (financialData.totalGeneralExpenses || 0)).toFixed(2)}</td></tr>
+            <tr><td style="text-align:right;">الرواتب والسلف المسحوبة (-)</td><td class="number-cell" style="color:#ef4444;">-${(financialData.totalWages || 0).toFixed(2)}</td></tr>
+            <tr class="highlight-green"><td style="text-align:right;"><b>💰 صافي الربح المحقق للفترة</b></td><td class="number-cell"><b>${(financialData.netProfit || 0).toFixed(2)} ج.م</b></td></tr>
+          </tbody>
+        </table>
+
+        <!-- Product Sales Breakdown Table -->
+        <table>
+          <thead>
+            <tr><th colspan="3" class="section-hdr">📦 2. كشف مبيعات الأقسام والمنتجات التفصيلي</th></tr>
+            <tr><th>اسم الصنـف / المنتج</th><th>الكمية المباعة</th><th>إجمالي الإيراد (ج.م)</th></tr>
+          </thead>
+          <tbody>
+            ${(financialData.productSales || []).map(p => `
+              <tr>
+                <td style="text-align:right; font-weight:600;">${p.name}</td>
+                <td>${p.quantity}</td>
+                <td class="number-cell">${(p.totalRevenue || 0).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <!-- Payment Methods Table -->
+        <table>
+          <thead>
+            <tr><th colspan="3" class="section-hdr">💳 3. تفاصيل التحصيل حسب طرق الدفع</th></tr>
+            <tr><th>طريقة التحصيل والتعامل</th><th>عدد العمليات المنفذة</th><th>إجمالي المبلغ المحصل (ج.م)</th></tr>
+          </thead>
+          <tbody>
+            ${(financialData.paymentMethods || []).map(pm => `
+              <tr>
+                <td>${pm.method === 'CASH' ? '💵 نقدي (كاش)' : pm.method === 'INSTAPAY' ? '📱 إنستاباي / فيزا' : '👛 محفظة إلكترونية'}</td>
+                <td>${pm.count}</td>
+                <td class="number-cell">${(pm.totalAmount || 0).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `تقرير_مبيعات_${startDate}_${endDate}.csv`);
+    link.href = URL.createObjectURL(blob);
+    link.download = `تقرير_مبيعات_${tenantName.replace(/\s+/g, '_')}_${startDate || 'اليوم'}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('تم تصدير كشف الإكسيل (CSV) بنجاح');
+    toast.success('تم تصدير كشف الإكسيل المنسق (.xls) بنجاح 📊');
   };
 
   const handleSaveSnacksNet = async () => {
@@ -316,10 +389,10 @@ export default function ReportsPage() {
               <Button 
                 variant="secondary" 
                 rightIcon={<Download size={15} />} 
-                onClick={handleExportCSV}
-                title="تصدير ملف إكسيل"
+                onClick={handleExportExcel}
+                title="تصدير كشف إكسيل منسق"
               >
-                تصدير إكسيل (CSV)
+                تصدير إكسيل منسق (.xls)
               </Button>
             </>
           )}
@@ -740,9 +813,33 @@ export default function ReportsPage() {
                         </Badge>
                       </td>
                       <td>
-                        <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
-                          <Button variant="secondary" size="sm" onClick={() => handleViewShiftDetails(shift)}>
-                            عرض التفاصيل
+                        <div className="data-table__actions" style={{ justifyContent: 'flex-end', gap: '6px' }}>
+                          <Button 
+                            variant="primary" 
+                            size="sm" 
+                            rightIcon={<FileText size={14} />} 
+                            onClick={() => setDailyModalShiftId(shift.id)}
+                            title="عرض التقرير الشامل والمكتمل للشيفت"
+                          >
+                            تقرير اليومية 📊
+                          </Button>
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            rightIcon={<Printer size={14} />} 
+                            onClick={async () => {
+                              try {
+                                toast.info('جاري تجهيز بون الشيفت للطباعة الحرارية...');
+                                const rep = await shiftsApi.getReport(shift.id);
+                                const html = buildShiftSummaryHtml({ report: rep, cafeName: user?.tenantName });
+                                printReceipt(html, printOptionsFor('REPORT', { width: 80 }));
+                              } catch (e) {
+                                toast.error(e.message, 'فشل طباعة بون الشيفت');
+                              }
+                            }}
+                            title="طباعة بون التقرير الحراري (80mm)"
+                          >
+                            طباعة 🖨️
                           </Button>
                           {isSupervisor && (
                             <Button
@@ -973,6 +1070,14 @@ export default function ReportsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Full Ultimate Shift Report Modal for Admin */}
+      <DailyReportModal
+        isOpen={!!dailyModalShiftId}
+        onClose={() => setDailyModalShiftId(null)}
+        shiftId={dailyModalShiftId}
+        cafeName={user?.tenantName}
+      />
 
     </div>
   );

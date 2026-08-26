@@ -147,7 +147,7 @@ export default function EmployeesPage() {
   // Employee Modal Handlers
   function openCreateEmployeeModal() {
     setEmployeeModalMode('CREATE');
-    setEmployeeForm({ id: null, name: '', jobTitle: '', baseSalary: 0, active: true });
+    setEmployeeForm({ id: null, name: '', jobTitle: '', baseSalary: 0, salaryPeriod: 'WEEKLY', active: true });
     setJobTitleCustom(false);
     setIsEmployeeModalOpen(true);
   }
@@ -691,7 +691,7 @@ export default function EmployeesPage() {
                   <tr>
                     <th>الاسم الكامل</th>
                     <th>المسمى الوظيفي</th>
-                    <th>الراتب الأسبوعي الأساسي</th>
+                    <th>الراتب الأساسي والدورية</th>
                     <th>تاريخ التعيين/الإضافة</th>
                     <th>الحالة</th>
                     <th style={{ textAlign: 'left' }}>العمليات والحركات</th>
@@ -702,7 +702,12 @@ export default function EmployeesPage() {
                     <tr key={emp.id} className={!emp.active ? 'inactive-row' : ''}>
                       <td style={{ fontWeight: 'var(--fw-medium)' }}>{emp.name}</td>
                       <td>{emp.jobTitle || '—'}</td>
-                      <td className="fw-bold text-accent">{formatCurrency(emp.baseSalary)}</td>
+                      <td className="fw-bold text-accent">
+                        {formatCurrency(emp.baseSalary)}
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginInlineStart: '6px' }}>
+                          / {emp.salaryPeriod === 'DAILY' ? 'يومي' : emp.salaryPeriod === 'MONTHLY' ? 'شهري' : 'أسبوعي'}
+                        </span>
+                      </td>
                       <td>{formatDateTime(emp.createdAt)}</td>
                       <td>
                         <Badge variant={emp.active ? 'success' : 'neutral'}>
@@ -797,8 +802,27 @@ export default function EmployeesPage() {
               autoFocus
             />
           )}
+          <div className="form-group">
+            <label className="form-label">دورية احتساب الراتب</label>
+            <select
+              className="input"
+              value={employeeForm.salaryPeriod || 'WEEKLY'}
+              onChange={(e) => setEmployeeForm({ ...employeeForm, salaryPeriod: e.target.value })}
+            >
+              <option value="DAILY">يومي (اليومية)</option>
+              <option value="WEEKLY">أسبوعي</option>
+              <option value="MONTHLY">شهري</option>
+            </select>
+          </div>
+
           <Input
-            label="الراتب الأسبوعي الأساسي (ج.م)"
+            label={
+              employeeForm.salaryPeriod === 'DAILY' 
+                ? 'قيمة الراتب اليومي / اليومية (ج.م)' 
+                : employeeForm.salaryPeriod === 'MONTHLY' 
+                  ? 'قيمة الراتب الشهري الأساسي (ج.م)' 
+                  : 'قيمة الراتب الأسبوعي الأساسي (ج.م)'
+            }
             name="baseSalary"
             type="number"
             min="0"

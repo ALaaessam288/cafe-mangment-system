@@ -103,4 +103,16 @@ public class Employee extends TenantScopedEntity {
         this.dailyWage = dailyWage;
         this.baseSalary = dailyWage;
     }
+
+    @Column(name = "salary_period")
+    @Builder.Default
+    private String salaryPeriod = "WEEKLY";
+
+    public String getSalaryPeriod() {
+        return salaryPeriod != null ? salaryPeriod : "WEEKLY";
+    }
+
+    public void setSalaryPeriod(String salaryPeriod) {
+        this.salaryPeriod = salaryPeriod;
+    }
 }

@@ -35,6 +35,56 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
           onError={(e) => { e.target.style.display = 'none'; }} 
         />
       </span>
+
+      {/* Stock Progress Bar Indicator */}
+      {(product.trackInventory || (product.stockQuantity !== undefined && product.stockQuantity !== null)) && (
+        <div 
+          className="menu-product__stock-track"
+          title={`المخزون المتبقي: ${product.stockQuantity ?? 0}`}
+          style={{
+            width: '100%',
+            height: '4px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '2px',
+            marginTop: '4px',
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+        >
+          <div 
+            className="menu-product__stock-fill"
+            style={{
+              height: '100%',
+              width: `${Math.min(100, Math.max(0, ((product.stockQuantity || 0) / (product.minStockThreshold ? product.minStockThreshold * 3 : 20)) * 100))}%`,
+              background: (product.stockQuantity || 0) <= 3 
+                ? 'linear-gradient(90deg, #ef4444, #dc2626)' 
+                : (product.stockQuantity || 0) <= 10 
+                  ? 'linear-gradient(90deg, #f59e0b, #d97706)' 
+                  : 'linear-gradient(90deg, #10b981, #059669)',
+              transition: 'width 0.3s ease',
+              borderRadius: '2px'
+            }}
+          />
+        </div>
+      )}
+      {(product.trackInventory || product.stockQuantity !== undefined) && (product.stockQuantity || 0) <= 10 && (
+        <span 
+          style={{
+            position: 'absolute',
+            top: '4px',
+            left: '4px',
+            fontSize: '9px',
+            fontWeight: 'bold',
+            padding: '1px 5px',
+            borderRadius: '4px',
+            background: (product.stockQuantity || 0) <= 3 ? '#ef4444' : '#f59e0b',
+            color: '#ffffff',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+          }}
+        >
+          {(product.stockQuantity || 0) <= 0 ? 'نفذ' : `باقي ${product.stockQuantity}`}
+        </span>
+      )}
     </button>
   );
 }

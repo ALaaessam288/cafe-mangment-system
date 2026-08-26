@@ -18,6 +18,7 @@ export default function OrderPanel({
   table,
   order,
   loading,
+  products,
   onSend,
   onServe,
   onCancelItem,
@@ -233,6 +234,45 @@ export default function OrderPanel({
                       {group.cancelReason && (
                         <div className="order-item__cancel-reason">✕ {group.cancelReason}</div>
                       )}
+                      {(() => {
+                        const product = products?.find(p => p.id === group.productId);
+                        if (!product) return null;
+                        const isLow = (product.stockQuantity || 0) <= 3;
+                        const isMed = (product.stockQuantity || 0) <= 10;
+                        const threshold = product.minStockThreshold ? product.minStockThreshold * 3 : 20;
+                        const percent = Math.min(100, Math.max(0, ((product.stockQuantity || 0) / threshold) * 100));
+                        return (product.trackInventory || (product.stockQuantity !== undefined && product.stockQuantity !== null)) && (
+                          <div style={{ marginTop: '6px', width: '100%' }}>
+                            <div 
+                              style={{
+                                width: '100%',
+                                height: '3px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                borderRadius: '1.5px',
+                                overflow: 'hidden'
+                              }}
+                              title={`المخزون المتبقي: ${product.stockQuantity ?? 0}`}
+                            >
+                              <div 
+                                style={{
+                                  height: '100%',
+                                  width: `${percent}%`,
+                                  background: isLow 
+                                    ? '#ef4444' 
+                                    : isMed 
+                                      ? '#f59e0b' 
+                                      : '#10b981',
+                                  transition: 'width 0.3s ease'
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              <span>المخزون المتبقي: {product.stockQuantity ?? 0}</span>
+                              {isLow && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️ مخزون حرج!</span>}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="order-item__right">
                       <div className="order-item__price">{formatCurrency(group.displayTotal)}</div>

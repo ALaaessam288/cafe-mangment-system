@@ -128,7 +128,20 @@ public class EmployeePayrollService {
                 }
             }
 
-            BigDecimal baseWeekly = emp.getBaseSalary() != null ? emp.getBaseSalary() : BigDecimal.ZERO;
+            long days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
+            if (days <= 0) days = 1;
+            BigDecimal baseWeekly = BigDecimal.ZERO;
+            BigDecimal rate = emp.getBaseSalary() != null ? emp.getBaseSalary() : BigDecimal.ZERO;
+            String period = emp.getSalaryPeriod() != null ? emp.getSalaryPeriod() : "WEEKLY";
+
+            if ("DAILY".equals(period)) {
+                baseWeekly = rate.multiply(BigDecimal.valueOf(days));
+            } else if ("WEEKLY".equals(period)) {
+                baseWeekly = rate.multiply(BigDecimal.valueOf(days)).divide(BigDecimal.valueOf(7), 2, java.math.RoundingMode.HALF_UP);
+            } else if ("MONTHLY".equals(period)) {
+                baseWeekly = rate.multiply(BigDecimal.valueOf(days)).divide(BigDecimal.valueOf(30), 2, java.math.RoundingMode.HALF_UP);
+            }
+
             BigDecimal netPayable = baseWeekly.add(unpaidBonuses).subtract(deductions).subtract(advances);
             if (netPayable.compareTo(BigDecimal.ZERO) < 0) {
                 netPayable = BigDecimal.ZERO;
