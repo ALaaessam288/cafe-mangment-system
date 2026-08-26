@@ -60,6 +60,31 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.err.println("[SEEDER] Failed to add shifts.snacks_net column: " + e.getMessage());
         }
 
+        // Ensure expenses table columns exist for Petty Cash Advance & Settlement
+        String[] expenseCols = {
+            "status TEXT DEFAULT 'COMPLETED'",
+            "advance_amount NUMERIC(10,2)",
+            "actual_amount NUMERIC(10,2)",
+            "returned_amount NUMERIC(10,2)",
+            "is_advance INTEGER DEFAULT 0",
+            "settled_at INTEGER",
+            "settled_by INTEGER"
+        };
+        for (String colDef : expenseCols) {
+            String colName = colDef.split(" ")[0];
+            try {
+                boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('expenses') WHERE name = '" + colName + "'",
+                    Boolean.class));
+                if (!exists) {
+                    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN " + colDef);
+                    System.out.println("[SEEDER] Added missing expenses." + colName + " column.");
+                }
+            } catch (Exception e) {
+                System.err.println("[SEEDER] Failed to add expenses." + colName + ": " + e.getMessage());
+            }
+        }
+
         // Ensure tenants table columns exist for SaaS Subscriptions
         String[] tenantCols = {
             "subscription_plan TEXT DEFAULT 'PRO'",

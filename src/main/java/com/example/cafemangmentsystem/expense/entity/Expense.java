@@ -20,6 +20,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
@@ -39,8 +40,33 @@ public class Expense extends TenantScopedEntity {
     @Column(name = "revenue_line", nullable = false)
     private RevenueLine revenueLine;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private ExpenseStatus status = ExpenseStatus.COMPLETED;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
+
+    @Column(name = "advance_amount", precision = 10, scale = 2)
+    private BigDecimal advanceAmount;
+
+    @Column(name = "actual_amount", precision = 10, scale = 2)
+    private BigDecimal actualAmount;
+
+    @Column(name = "returned_amount", precision = 10, scale = 2)
+    private BigDecimal returnedAmount;
+
+    @Column(name = "is_advance", nullable = false)
+    @Builder.Default
+    private boolean isAdvance = false;
+
+    @Column(name = "settled_at")
+    private Instant settledAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "settled_by")
+    private User settledBy;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
@@ -56,11 +82,6 @@ public class Expense extends TenantScopedEntity {
     @Builder.Default
     private boolean paidFromDrawer = false;
 
-    /**
-     * Not in the documented Expense schema. Needed to actually implement the doc's own rule that
-     * a drawer-paid expense must be deducted from that shift's expected cash - without knowing
-     * which shift, that deduction is impossible.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shift_id")
     private Shift shift;

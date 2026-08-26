@@ -15,7 +15,20 @@ public record ExpenseRequest(
         @NotNull LocalDate expenseDate,
         boolean recurring,
         boolean paidFromDrawer,
+        boolean isAdvance,
         Long employeeId,
         String notes
 ) {
+    public ExpenseRequest(
+            ExpenseType type,
+            RevenueLine revenueLine,
+            BigDecimal amount,
+            LocalDate expenseDate,
+            boolean recurring,
+            boolean paidFromDrawer,
+            Long employeeId,
+            String notes
+    ) {
+        this(type, revenueLine, amount, expenseDate, recurring, paidFromDrawer, false, employeeId, notes);
+    }
 }

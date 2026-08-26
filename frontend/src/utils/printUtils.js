@@ -897,4 +897,127 @@ export function buildPeriodicFinancialReportHtml({ financialData, startDate, end
 </html>`;
 }
 
+/**
+ * Builds standard 80mm thermal receipt HTML for an Expense / Petty Cash Advance Voucher
+ */
+export function buildExpenseVoucherHtml({ expense, cafeName }) {
+  const user = storage.getUser() || {};
+  const currentCafeName = cafeName || user.tenantName || 'Caffio Cafe';
+  
+  const voucherId = expense.id ? `EXP-${String(expense.id).padStart(5, '0')}` : 'EXP-DRAFT';
+  const isAdvance = expense.isAdvance || expense.status === 'PENDING_SETTLEMENT';
+  const isSettlement = expense.status === 'COMPLETED' && expense.advanceAmount != null && expense.actualAmount != null;
+  
+  let title = 'سند صرف مصروفات';
+  if (isAdvance) {
+    title = 'إيصال سحب عُهدة مؤقتة';
+  } else if (isSettlement) {
+    title = 'إيصال تسوية عُهدة مالية';
+  }
+
+  const typeLabels = {
+    MATERIALS: 'خامات ومستلزمات',
+    RENT: 'إيجارات وشواغر',
+    SALARIES: 'رواتب وأجور موظفين',
+    MAINTENANCE: 'صيانة وإصلاحات',
+    INSTALLMENTS: 'أقساط والتزامات',
+    DEBTS: 'مديونيات وموردين',
+    GENERAL: 'مصاريف تشغيل عامة'
+  };
+
+  const typeName = typeLabels[expense.type] || expense.type || 'مصروف عام';
+  const recUser = expense.recordedByUserName || user.fullName || 'الكاشير';
+  const notesText = expense.notes || 'لا توجد ملاحظات إضافية';
+  const drawerPaid = expense.paidFromDrawer !== false ? 'نعم (من الخزينة النقدية)' : 'لا (دفع خارجي)';
+
+  let amountSectionHtml = '';
+  if (isAdvance) {
+    amountSectionHtml = `
+      <div class="row" style="font-weight:900; font-size:14px; margin-top:6px; border-top:1px dashed #000; padding-top:4px;">
+        <span>المبلغ المسحوب من الخزينة:</span>
+        <span class="num">${money(expense.advanceAmount || expense.amount)} ج.م</span>
+      </div>
+      <div style="font-size:10px; color:#dc2626; font-weight:bold; margin-top:2px; text-align:center;">
+        ⚠️ عُهدة مؤقتة تحت التسوية (ينبغي إرفاق فواتير الشراء والباقي)
+      </div>
+    `;
+  } else if (isSettlement) {
+    amountSectionHtml = `
+      <div class="row">
+        <span>مبلغ العُهدة المسحوب سابقاً:</span>
+        <span class="num">${money(expense.advanceAmount)} ج.م</span>
+      </div>
+      <div class="row" style="font-weight:700;">
+        <span>المبلغ الفعلي (حسب الفواتير):</span>
+        <span class="num">${money(expense.actualAmount)} ج.م</span>
+      </div>
+      <div class="row" style="font-weight:900; font-size:13px; color:#16a34a; border-top:1px dashed #000; padding-top:4px; margin-top:2px;">
+        <span>المبلغ المرتجع للدرج (الباقي):</span>
+        <span class="num">${money(expense.returnedAmount)} ج.م</span>
+      </div>
+    `;
+  } else {
+    amountSectionHtml = `
+      <div class="row" style="font-weight:900; font-size:14px; margin-top:6px; border-top:1px dashed #000; padding-top:4px;">
+        <span>إجمالي المبلغ المنصرف:</span>
+        <span class="num">${money(expense.amount)} ج.م</span>
+      </div>
+    `;
+  }
+
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+  <head>
+    <meta charset="utf-8" />
+    <title>إيصال مصروفات - ${voucherId}</title>
+    ${thermalPrintCss}
+  </head>
+  <body>
+    <div class="title">${esc(currentCafeName)}</div>
+    <div class="subtitle" style="font-size:13px; font-weight:bold; margin-bottom:6px; text-decoration:underline;">${title}</div>
+    <div class="meta" style="font-size:10px; border-bottom:1px solid #000; padding-bottom:4px; margin-bottom:6px;">
+      <b>رقم الإيصال:</b> ${voucherId}<br>
+      <b>تاريخ الإخراج:</b> ${stamp(expense.expenseDate || new Date())}<br>
+      <b>مُسجّل الإيصال:</b> ${esc(recUser)}<br>
+      ${expense.shiftId ? `<b>رقم الشيفت:</b> #${expense.shiftId}<br>` : ''}
+      ${expense.employeeName ? `<b>الموظف المستلم:</b> ${esc(expense.employeeName)}<br>` : ''}
+    </div>
+
+    <div class="row">
+      <span>نوع البند المصروف:</span>
+      <span><b>${esc(typeName)}</b></span>
+    </div>
+    <div class="row">
+      <span>خصم من الخزينة النقدية:</span>
+      <span>${drawerPaid}</span>
+    </div>
+    <div class="row" style="margin-top:2px;">
+      <span>بيان وتفاصيل المصروف:</span>
+    </div>
+    <div style="font-size:11px; background:#f9fafb; padding:4px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px; word-break:break-word;">
+      ${esc(notesText)}
+    </div>
+
+    ${amountSectionHtml}
+
+    <div class="footer" style="margin-top:16px; font-size:10px;">
+      <div style="display:flex; justify-content:space-between; margin-top:12px; font-weight:bold;">
+        <span>توقيع الكاشير / المسؤول:<br>.......................</span>
+        <span>توقيع الموظف المستلم:<br>.......................</span>
+      </div>
+      <span style="font-size:8px; color:#777; margin-top:10px; display:inline-block;">تم إصدار هذا الإيصال تلقائياً عبر نظام Caffio POS</span>
+    </div>
+  </body>
+</html>`;
+}
+
+/**
+ * Print Expense Voucher using thermal printer bridge or browser print
+ */
+export function printExpenseVoucher(expense, cafeName) {
+  const html = buildExpenseVoucherHtml({ expense, cafeName });
+  printReceipt(html, { width: 80 });
+}
+
+
 

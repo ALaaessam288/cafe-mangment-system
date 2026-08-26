@@ -141,3 +141,108 @@
 }
 
 .exp-total-row .data-table__number { color: var(--danger); }
+
+/* Mode Tabs for Expense Modal */
+.expense-mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--space-4);
+  background: rgba(15, 17, 23, 0.6);
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+}
+
+.expense-mode-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.expense-mode-tab--active {
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-default);
+}
+
+/* Pending Advance Row Highlighting */
+.row-pending-advance {
+  background: rgba(245, 158, 11, 0.06) !important;
+}
+
+.row-pending-advance:hover {
+  background: rgba(245, 158, 11, 0.12) !important;
+}
+
+/* Settlement Modal Custom Boxes */
+.settle-summary-box {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.settle-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.settle-summary-row b {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  color: #f59e0b;
+}
+
+.settle-calc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: rgba(22, 25, 34, 0.8);
+  border: 1px solid rgba(22, 163, 74, 0.4);
+  border-radius: var(--radius-xl);
+  margin-top: 4px;
+}
+
+.settle-calc-card--negative {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.settle-calc-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.settle-calc-item strong {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.settle-calc-item--highlight {
+  border-top: 1px dashed var(--border-default);
+  padding-top: 6px;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+}
+
+.settle-calc-item--highlight strong {
+  font-size: var(--text-base);
+}
+
