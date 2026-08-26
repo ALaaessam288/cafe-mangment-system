@@ -944,6 +944,9 @@ export default function POSPage() {
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success(DONE.SEND);
       await loadOrders();
+      // Stock is deducted server-side on send(); refetch so the on-screen counts (and
+      // auto-unavailable flips at zero) reflect it immediately instead of only after F5.
+      await loadMenu(state.categories);
     } catch (err) {
       sounds.playError();
       toast.error(err.message, 'فشل في إرسال الأوردر');

@@ -257,9 +257,11 @@ public class OrderService {
             orderItemRepository.save(item);
         }
 
-        // Deduct stock from product
-        product.setStockQuantity(Math.max(0, product.getStockQuantity() - quantity));
-        productRepository.save(product);
+        // Stock is NOT touched here - it is deducted exactly once, in send(), via consumeStock().
+        // (Previously this also deducted at add time, which double-counted every item that made
+        // it to the kitchen: once here, again in consumeStock(). It also ignored trackInventory,
+        // and removeUnsentItem()/cancelItem() only ever gave back one of the two deductions, so
+        // tracked stock drifted down permanently on every removed or cancelled item.)
 
         recalcTotals(order);
 
@@ -288,11 +290,11 @@ public class OrderService {
         item.setCancelledBy(cancelledBy);
         item.setCancelReason(request.reason());
 
-        // Restore stock for cancelled items (stock is deducted at add time)
-        if (item.getProduct() != null) {
-            Product p = item.getProduct();
-            p.setStockQuantity(p.getStockQuantity() + item.getQuantity());
-            productRepository.save(p);
+        // Stock is only consumed once an item is SENT (see send()/consumeStock()), so it is only
+        // released here if it was actually sent. A NEW item never touched stock in the first
+        // place - releasing it too would incorrectly inflate stock on cancellation.
+        if (wasSent) {
+            releaseStock(item);
         }
 
         recalcTotals(order);
