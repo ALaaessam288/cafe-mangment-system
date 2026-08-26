@@ -195,12 +195,16 @@ async function createWindow() {
     show: false, // shown as soon as the splash is up, below
     title: 'Caffio - نظام إدارة الكافيهات والمطاعم',
     icon: path.join(__dirname, 'resources', 'icon.ico'),
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'electron', 'preload.js'),
     },
   });
+  mainWindow.setMenuBarVisibility(false);
+  const { Menu } = require('electron');
+  Menu.setApplicationMenu(null);
 
   // ── Open external links in system browser ──
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
