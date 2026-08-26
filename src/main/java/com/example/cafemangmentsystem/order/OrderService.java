@@ -79,6 +79,7 @@ public class OrderService {
     private final DiscountRepository discountRepository;
     private final TenantRepository tenantRepository;
     private final ProductOptionRepository productOptionRepository;
+    private final com.example.cafemangmentsystem.inventory.ShiftAuditService shiftAuditService;
 
     public OrderResponse open(Long userId, OpenOrderRequest request) {
         Shift shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
@@ -351,6 +352,8 @@ public class OrderService {
         for (OrderItem item : itemsToSend) {
             consumeStock(item);
         }
+
+        shiftAuditService.deductRecipeInventoryOnOrder(order);
 
         printJobService.createKitchenTickets(order, itemsToSend, isFirstSend);
 

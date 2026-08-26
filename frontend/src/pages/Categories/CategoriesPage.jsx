@@ -10,6 +10,7 @@ import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
+import './CategoriesPage.css';
 
 export default function CategoriesPage() {
   const toast = useToast();
@@ -91,7 +92,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page cats-page">
       <ObserverBanner />
       <div className="page__header">
         <div>

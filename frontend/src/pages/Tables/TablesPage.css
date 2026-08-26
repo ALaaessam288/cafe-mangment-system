@@ -1,0 +1,88 @@
+/* ═══════════════════════════════════════
+   TABLES — Seating space manager
+   Signature: zone-coloured rows — colour
+   maps to physical space (indoor/outdoor/
+   upstairs) so the table reads like a
+   floor plan at a glance.
+═══════════════════════════════════════ */
+
+.tables-page .page__title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.tables-page .page__title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, #06b6d4, #0284c7);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.tables-page .data-table-wrap {
+  animation: fadeInUp 0.25s ease forwards;
+}
+
+/* Table number — prominent mono numeral */
+.tables-page .data-table .data-table__number {
+  font-size: var(--text-md);
+  font-weight: var(--fw-black);
+  letter-spacing: -0.5px;
+}
+
+/* SIGNATURE: zone-coloured row accents */
+
+/* INDOOR — cool cyan/blue */
+.tables-page .data-table tbody tr[data-zone="INDOOR"] {
+  --zone-color: #06b6d4;
+  --zone-dim:   rgba(6, 182, 212, 0.08);
+}
+
+/* OUTDOOR — fresh green */
+.tables-page .data-table tbody tr[data-zone="OUTDOOR"] {
+  --zone-color: #10b981;
+  --zone-dim:   rgba(16, 185, 129, 0.08);
+}
+
+/* UPSTAIRS — warm violet */
+.tables-page .data-table tbody tr[data-zone="UPSTAIRS"] {
+  --zone-color: #a78bfa;
+  --zone-dim:   rgba(167, 139, 250, 0.08);
+}
+
+/* Zone dot indicator before the zone cell text */
+.tables-page .data-table tbody tr[data-zone] td:nth-child(3) {
+  color: var(--zone-color, var(--text-secondary));
+  font-weight: var(--fw-semibold);
+  position: relative;
+  padding-inline-end: var(--space-2);
+}
+
+.tables-page .data-table tbody tr[data-zone] td:nth-child(3)::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--zone-color, transparent);
+  margin-inline-end: 7px;
+  vertical-align: middle;
+  opacity: 0.85;
+}
+
+/* Row hover — tinted by zone colour */
+.tables-page .data-table tbody tr[data-zone]:hover td {
+  background: var(--zone-dim, rgba(255,255,255,0.03));
+}
+
+/* Inactive rows — desaturated */
+.tables-page .data-table tbody tr[data-zone]:has(.badge--neutral) {
+  opacity: 0.55;
+}
+
+.tables-page .data-table tbody tr[data-zone]:has(.badge--neutral):hover {
+  opacity: 0.8;
+}

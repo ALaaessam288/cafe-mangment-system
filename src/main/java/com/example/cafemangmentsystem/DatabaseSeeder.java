@@ -109,6 +109,25 @@ public class DatabaseSeeder implements CommandLineRunner {
             }
         }
 
+        // Seed default Shift Audit Raw Materials if empty
+        try {
+            int auditItemCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM shift_audit_items", Integer.class);
+            if (auditItemCount == 0) {
+                Long firstTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants LIMIT 1", Long.class);
+                if (firstTenantId != null) {
+                    jdbcTemplate.execute("INSERT INTO shift_audit_items (tenant_id, name, unit, stock_quantity, min_threshold, requires_audit, active, created_at, updated_at) " +
+                            "VALUES (" + firstTenantId + ", 'قهوة / بن (جرام)', 'جرام', 1000.0, 100.0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+                    jdbcTemplate.execute("INSERT INTO shift_audit_items (tenant_id, name, unit, stock_quantity, min_threshold, requires_audit, active, created_at, updated_at) " +
+                            "VALUES (" + firstTenantId + ", 'حليب / لبن (لتر)', 'لتر', 10.0, 2.0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+                    jdbcTemplate.execute("INSERT INTO shift_audit_items (tenant_id, name, unit, stock_quantity, min_threshold, requires_audit, active, created_at, updated_at) " +
+                            "VALUES (" + firstTenantId + ", 'أكواب سفري (قطعة)', 'قطعة', 200.0, 20.0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+                    System.out.println("[SEEDER] Seeded default Shift Audit Items (Coffee, Milk, Cups).");
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("[SEEDER] Default audit item seeding skipped: " + e.getMessage());
+        }
+
         // Run database corrections first (BAR products/order items should map to BUFFET revenue line)
         try {
             jdbcTemplate.execute(

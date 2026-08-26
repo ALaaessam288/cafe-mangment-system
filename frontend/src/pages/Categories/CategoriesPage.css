@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════
+   CATEGORIES — Menu taxonomy manager
+   Signature: display-order as editorial
+   position-number — barely visible,
+   warms to amber on hover.
+═══════════════════════════════════════ */
+
+/* Page header accent */
+.cats-page .page__title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cats-page .page__title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: var(--gradient-gold);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+/* Table — tighter row height, refined spacing */
+.cats-page .data-table-wrap {
+  animation: fadeInUp 0.25s ease forwards;
+}
+
+.cats-page .data-table thead th:nth-child(2) {
+  text-align: center;
+}
+
+/* Category name cell */
+.cats-page .data-table tbody td:first-child {
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-md);
+}
+
+/* SIGNATURE: display-order as editorial position number */
+.cats-page .data-table tbody td:nth-child(2) {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: var(--fw-black);
+  color: var(--border-default);
+  letter-spacing: -1.5px;
+  text-align: center;
+  width: 68px;
+  transition: color var(--transition-normal);
+}
+
+.cats-page .data-table tbody tr:hover td:nth-child(2) {
+  color: var(--accent-dim);
+  text-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Row hover — amber flush */
+.cats-page .data-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.cats-page .data-table tbody tr:hover td {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+/* Active badge row gets a right-side glow strip (RTL visual start) */
+.cats-page .data-table tbody tr:has(.badge--success) td:first-child {
+  border-inline-start: 2px solid rgba(16, 185, 129, 0.25);
+}
+
+.cats-page .data-table tbody tr:has(.badge--neutral) td:first-child {
+  border-inline-start: 2px solid rgba(100, 116, 139, 0.2);
+}
+
+/* Empty state */
+.cats-page .data-table-empty {
+  padding: var(--space-12);
+  flex-direction: column;
+  gap: 8px;
+}

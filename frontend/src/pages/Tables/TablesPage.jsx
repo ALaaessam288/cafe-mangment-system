@@ -10,6 +10,7 @@ import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import { ROLES } from '../../utils/constants';
+import './TablesPage.css';
 
 const TABLE_ZONES = {
   INDOOR: 'داخلي (صالة)',
@@ -100,7 +101,7 @@ export default function TablesPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page tables-page">
       <ObserverBanner />
       <div className="page__header">
         <div>
@@ -134,7 +135,7 @@ export default function TablesPage() {
             </thead>
             <tbody>
               {tables.map((table) => (
-                <tr key={table.id}>
+                <tr key={table.id} data-zone={table.zone}> 
                   <td className="data-table__number">ترابيزة {table.number}</td>
                   <td>{table.seats ? `${table.seats} أشخاص` : '—'}</td>
                   <td>{TABLE_ZONES[table.zone] || table.zone || '—'}</td>

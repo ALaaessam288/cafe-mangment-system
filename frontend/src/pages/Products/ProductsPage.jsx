@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Plus, Edit2, Search, Sliders, Trash2, ArrowUpDown } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { stationsApi } from '../../api/stationsApi';
+import { auditApi } from '../../api/auditApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';

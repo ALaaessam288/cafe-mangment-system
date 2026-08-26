@@ -364,3 +364,52 @@ CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_tenant ON shifts(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_tenant ON expenses(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_debts_tenant ON debts(tenant_id);
+
+CREATE TABLE IF NOT EXISTS shift_audit_items (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    unit VARCHAR(50) NOT NULL,
+    stock_quantity NUMERIC(12, 2) NOT NULL DEFAULT 0.0,
+    min_threshold NUMERIC(12, 2) DEFAULT 0.0,
+    requires_audit BOOLEAN NOT NULL DEFAULT TRUE,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS product_recipes (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    audit_item_id BIGINT NOT NULL REFERENCES shift_audit_items(id) ON DELETE CASCADE,
+    deduction_quantity NUMERIC(12, 2) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS shift_audit_records (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    version BIGINT NOT NULL DEFAULT 0,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    shift_id BIGINT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+    audit_item_id BIGINT NOT NULL REFERENCES shift_audit_items(id) ON DELETE CASCADE,
+    opening_count NUMERIC(12, 2) NOT NULL,
+    sold_deduction_count NUMERIC(12, 2) NOT NULL DEFAULT 0.0,
+    expected_closing_count NUMERIC(12, 2),
+    actual_closing_count NUMERIC(12, 2),
+    variance_count NUMERIC(12, 2),
+    waste_percentage NUMERIC(12, 2),
+    audited_at TIMESTAMP WITH TIME ZONE
+);
+

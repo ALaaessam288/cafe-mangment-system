@@ -13,6 +13,7 @@ import OrderPanel    from './OrderPanel';
 import PaymentModal  from './PaymentModal';
 import ModifierDialog from './ModifierDialog';
 import ShiftStrip    from './ShiftStrip';
+import ShiftAuditModal from '../../components/ShiftAuditModal/ShiftAuditModal';
 import { fallbackTopSellers } from './menuGroups';
 import { getQuickAccessProducts, recordProductUse } from './recentProducts';
 import './POSPage.css';
@@ -127,6 +128,8 @@ export default function POSPage() {
   const [selectedOptionIds, setSelectedOptionIds] = useState([]);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [targetTableId, setTargetTableId] = useState('');
+  const [showOpeningAudit, setShowOpeningAudit] = useState(false);
+  const [showClosingAudit, setShowClosingAudit] = useState(false);
 
   // Collapsible table panel - ~40 tables shouldn't own the screen once the
   // cashier has picked one.
@@ -374,6 +377,7 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_SHIFT', payload: shift });
       toast.success('تم فتح الشيفت بنجاح!');
+      setShowOpeningAudit(true);
     } catch (err) {
       toast.error(err.message, 'فشل في فتح الشيفت');
     }
@@ -384,7 +388,8 @@ export default function POSPage() {
     e.preventDefault();
     if (!closeShiftForm.countedCash) return;
     try {
-      await shiftsApi.close(state.activeShift.id, {
+      const closedShiftId = state.activeShift?.id;
+      await shiftsApi.close(closedShiftId, {
         countedCash: parseFloat(closeShiftForm.countedCash),
         snacksNet: closeShiftForm.snacksNet ? parseFloat(closeShiftForm.snacksNet) : 0
       });
@@ -392,6 +397,7 @@ export default function POSPage() {
       setShowCloseShift(false);
       setCloseShiftForm({ countedCash: '', snacksNet: '' });
       dispatch({ type: 'SET_SHIFT', payload: null });
+      setShowClosingAudit(true);
       // Reset active orders/tables
       dispatch({ type: 'CLEAR_TABLE' });
     } catch (err) {
@@ -1508,6 +1514,25 @@ export default function POSPage() {
             </form>
           </div>
         </div>
+      )}
+      {/* Opening Shift Inventory Audit Modal */}
+      {showOpeningAudit && state.activeShift && (
+        <ShiftAuditModal
+          isOpen={showOpeningAudit}
+          onClose={() => setShowOpeningAudit(false)}
+          shiftId={state.activeShift.id}
+          mode="OPENING"
+        />
+      )}
+
+      {/* Closing Shift Inventory Audit & Waste Analysis Modal */}
+      {showClosingAudit && (
+        <ShiftAuditModal
+          isOpen={showClosingAudit}
+          onClose={() => setShowClosingAudit(false)}
+          shiftId={state.activeShift?.id || 1}
+          mode="CLOSING"
+        />
       )}
 
     </div>

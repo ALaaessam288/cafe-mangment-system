@@ -1,0 +1,149 @@
+/* ═══════════════════════════════════════
+   INVENTORY — Stock levels & reconciliation
+   Signature: stock-quantity number
+   dominates its cell with a colour-coded
+   ambient glow — urgency is visible
+   before you read the badge.
+═══════════════════════════════════════ */
+
+.inventory-page .page__title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.inventory-page .page__title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, #10b981, #059669);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.inventory-page .data-table-wrap {
+  animation: fadeInUp 0.25s ease forwards;
+}
+
+/* ── Filter / Search bar ── */
+.inventory-filters {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+}
+
+.inventory-search {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inventory-search__icon {
+  position: absolute;
+  inset-inline-end: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.inventory-search__input {
+  width: 100%;
+  height: 36px;
+  padding: 0 40px 0 var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.inventory-search__input::placeholder {
+  color: var(--text-muted);
+}
+
+.inventory-search__input:focus {
+  outline: none;
+  border-color: var(--success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+
+/* ── Current-quantity info block in adjustment modal ── */
+.inventory-qty-info {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inventory-qty-info__label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.inventory-qty-info__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-black);
+  letter-spacing: -1px;
+  color: var(--text-primary);
+}
+
+/* SIGNATURE: stock quantity cell — large mono with colour glow */
+.inventory-page .data-table tbody td:nth-child(3) {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-black);
+  letter-spacing: -1.5px;
+  width: 120px;
+  text-align: center;
+  transition: color var(--transition-fast), text-shadow var(--transition-fast);
+}
+
+/* Danger — out of stock */
+.inventory-page .data-table tbody tr[data-stock="danger"] td:nth-child(3) {
+  color: var(--danger);
+  text-shadow: 0 0 18px rgba(239, 68, 68, 0.4);
+}
+
+/* Warning — low stock */
+.inventory-page .data-table tbody tr[data-stock="warning"] td:nth-child(3) {
+  color: var(--warning);
+  text-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+}
+
+/* Good — sufficient stock */
+.inventory-page .data-table tbody tr[data-stock="good"] td:nth-child(3) {
+  color: var(--success);
+  text-shadow: 0 0 18px rgba(16, 185, 129, 0.3);
+}
+
+/* Row tint on hover */
+.inventory-page .data-table tbody tr[data-stock="danger"]:hover td {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.inventory-page .data-table tbody tr[data-stock="warning"]:hover td {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.inventory-page .data-table tbody tr[data-stock="good"]:hover td {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+/* Category cell — secondary colour */
+.inventory-page .data-table tbody td:nth-child(2) {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}

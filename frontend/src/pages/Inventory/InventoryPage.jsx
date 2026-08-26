@@ -11,6 +11,7 @@ import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
+import './InventoryPage.css';
 
 export default function InventoryPage() {
   const toast = useToast();
@@ -87,7 +88,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page inventory-page">
       <ObserverBanner />
       <div className="page__header">
         <div>
@@ -96,15 +97,15 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="filters-bar" style={{ display: 'flex', gap: '12px', marginBottom: '16px', background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
-        <div className="search-box" style={{ flex: 1, position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input 
-            type="text" 
-            placeholder="ابحث عن منتج..." 
+      <div className="inventory-filters">
+        <div className="inventory-search">
+          <Search size={16} className="inventory-search__icon" />
+          <input
+            type="text"
+            className="inventory-search__input"
+            placeholder="ابحث عن منتج..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '10px 36px 10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
           />
         </div>
       </div>
@@ -127,7 +128,7 @@ export default function InventoryPage() {
             </thead>
             <tbody>
               {filteredProducts.map((prod) => (
-                <tr key={prod.id}>
+                <tr key={prod.id} data-stock={prod.stockQuantity <= 0 ? 'danger' : prod.stockQuantity <= 10 ? 'warning' : 'good'}>
                   <td style={{ fontWeight: 500 }}>{prod.name}</td>
                   <td>{prod.categoryName}</td>
                   <td className="data-table__number" style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
@@ -166,11 +167,9 @@ export default function InventoryPage() {
           size="sm"
         >
           <form onSubmit={handleSaveAdjustment} className="form-grid">
-            <div style={{ gridColumn: '1 / -1', background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>الكمية المسجلة حالياً بالبرنامج:</span>
-                <strong style={{ fontSize: '16px' }}>{selectedProduct.stockQuantity}</strong>
-              </div>
+            <div className="inventory-qty-info" style={{ gridColumn: '1 / -1' }}>
+              <span className="inventory-qty-info__label">الكمية المسجلة حالياً بالبرنامج:</span>
+              <strong className="inventory-qty-info__value">{selectedProduct.stockQuantity}</strong>
             </div>
 
             <Input
