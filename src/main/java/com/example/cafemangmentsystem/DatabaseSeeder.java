@@ -128,6 +128,21 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.out.println("[SEEDER] Default audit item seeding skipped: " + e.getMessage());
         }
 
+        // Seed default Cash Register if empty
+        try {
+            int regCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM registers", Integer.class);
+            if (regCount == 0) {
+                Long firstTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants LIMIT 1", Long.class);
+                if (firstTenantId != null) {
+                    jdbcTemplate.execute("INSERT INTO registers (tenant_id, name, active, created_at, updated_at) " +
+                            "VALUES (" + firstTenantId + ", 'الكاشير الرئيسي (الدرج 1)', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+                    System.out.println("[SEEDER] Seeded default Cash Register.");
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("[SEEDER] Default register seeding skipped: " + e.getMessage());
+        }
+
         // Run database corrections first (BAR products/order items should map to BUFFET revenue line)
         try {
             jdbcTemplate.execute(

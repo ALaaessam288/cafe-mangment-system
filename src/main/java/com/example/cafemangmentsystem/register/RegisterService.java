@@ -27,9 +27,15 @@ public class RegisterService {
         return RegisterResponse.from(registerRepository.save(register));
     }
 
-    @Transactional(readOnly = true)
     public List<RegisterResponse> findAll() {
-        return registerRepository.findAll().stream()
+        List<Register> list = registerRepository.findAll();
+        if (list.isEmpty()) {
+            Register defaultRegister = Register.builder()
+                    .name("الكاشير الرئيسي (الدرج 1)")
+                    .build();
+            list = List.of(registerRepository.save(defaultRegister));
+        }
+        return list.stream()
                 .map(RegisterResponse::from)
                 .toList();
     }

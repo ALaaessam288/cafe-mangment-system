@@ -345,9 +345,12 @@ export default function POSPage() {
             }
           }
 
-          const activeReg = reg.filter(r => r.active !== false); // active might be undefined or true
+          let activeReg = (reg || []).filter(r => r.active !== false);
+          if (activeReg.length === 0 && (reg || []).length > 0) activeReg = reg;
           setRegisters(activeReg);
-          if (activeReg.length > 0) setStartShiftForm(prev => ({ ...prev, registerId: activeReg[0].id }));
+          if (activeReg.length > 0) {
+            setStartShiftForm(prev => ({ ...prev, registerId: String(activeReg[0].id) }));
+          }
         }
       } catch (err) {
         setIsLoadingShift(false);
