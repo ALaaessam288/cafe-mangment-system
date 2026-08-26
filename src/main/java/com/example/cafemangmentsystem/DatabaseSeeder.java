@@ -109,24 +109,12 @@ public class DatabaseSeeder implements CommandLineRunner {
             }
         }
 
-        // Seed default Shift Audit Raw Materials if empty
-        try {
-            int auditItemCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM shift_audit_items", Integer.class);
-            if (auditItemCount == 0) {
-                Long firstTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants LIMIT 1", Long.class);
-                if (firstTenantId != null) {
-                    jdbcTemplate.execute("INSERT INTO shift_audit_items (tenant_id, name, unit, stock_quantity, min_threshold, requires_audit, active, created_at, updated_at) " +
-                            "VALUES (" + firstTenantId + ", 'قهوة / بن (جرام)', 'جرام', 1000.0, 100.0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
-                    jdbcTemplate.execute("INSERT INTO shift_audit_items (tenant_id, name, unit, stock_quantity, min_threshold, requires_audit, active, created_at, updated_at) " +
-                            "VALUES (" + firstTenantId + ", 'حليب / لبن (لتر)', 'لتر', 10.0, 2.0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
-                    jdbcTemplate.execute("INSERT INTO shift_audit_items (tenant_id, name, unit, stock_quantity, min_threshold, requires_audit, active, created_at, updated_at) " +
-                            "VALUES (" + firstTenantId + ", 'أكواب سفري (قطعة)', 'قطعة', 200.0, 20.0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
-                    System.out.println("[SEEDER] Seeded default Shift Audit Items (Coffee, Milk, Cups).");
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("[SEEDER] Default audit item seeding skipped: " + e.getMessage());
-        }
+        // Shift audit raw materials (audit_items) are intentionally never seeded: they are
+        // business-specific (a bakery's ingredients look nothing like a coffee shop's), and the
+        // Inventory page already has a full add/edit/delete UI for them. A prior version of this
+        // seeder hardcoded 3 fixed items (coffee, milk, cups) via `SELECT id FROM tenants LIMIT 1`
+        // gated by a global `COUNT(*) == 0` check - so it only ever ran once, for whichever tenant
+        // happened to be first, and every tenant created afterward silently got none at all.
 
         // Seed default Cash Register if empty
         try {
