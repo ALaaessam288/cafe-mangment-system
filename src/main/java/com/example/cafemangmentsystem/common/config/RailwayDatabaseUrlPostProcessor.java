@@ -1,4 +1,4 @@
-package com.example.cafemangmentsystem.config;
+package com.example.cafemangmentsystem.common.config;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
@@ -10,18 +10,21 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Railway (and Heroku-style) Postgres plugins inject DATABASE_URL as a URI
- * ("postgresql://user:pass@host:port/db"), but Spring's DriverManagerDataSource
- * needs a JDBC URL ("jdbc:postgresql://host:port/db"). This rewrites it before
- * spring.datasource.* properties are resolved, so application.properties can
- * keep using ${DATABASE_URL:...} unchanged.
+ * Railway's Postgres plugin injects DATABASE_URL as a URI
+ * ("postgresql://user:pass@host:port/db" or "postgres://..."), but Spring's
+ * DriverManagerDataSource needs a JDBC URL ("jdbc:postgresql://host:port/db").
+ * This rewrites it before spring.datasource.* properties are resolved, so
+ * application.properties can keep using ${DATABASE_URL:...} unchanged.
  */
-public class DatabaseUrlEnvironmentPostProcessor implements EnvironmentPostProcessor {
+public class RailwayDatabaseUrlPostProcessor implements EnvironmentPostProcessor {
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         String databaseUrl = environment.getProperty("DATABASE_URL");
-        if (databaseUrl == null || databaseUrl.isBlank() || databaseUrl.startsWith("jdbc:")) {
+        if (databaseUrl == null || databaseUrl.isBlank()) {
+            return;
+        }
+        if (!databaseUrl.startsWith("postgresql://") && !databaseUrl.startsWith("postgres://")) {
             return;
         }
 
