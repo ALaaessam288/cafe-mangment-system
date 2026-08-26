@@ -1912,6 +1912,40 @@
 
 .shift-strip__close:hover { background: rgba(239, 68, 68, 0.18); }
 
+.pos-quick-exp-btn {
+  padding: 3px 10px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: #f59e0b !important;
+  color: #f59e0b !important;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pos-quick-exp-btn:hover {
+  background: rgba(245, 158, 11, 0.3) !important;
+}
+
+.pos-pending-badge-btn {
+  padding: 3px 10px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: pulseWarning 2s infinite alternate;
+}
+
+@keyframes pulseWarning {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.04); }
+}
+
 /* Takeaway customer recall */
 .takeaway-list__search { margin: 0 0 6px; width: 100%; text-align: start; }
 
