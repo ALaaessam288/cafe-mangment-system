@@ -6,6 +6,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { printExpenseVoucher } from '../../utils/printUtils';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { ROLES } from '../../utils/constants';
 import DailyReportModal from '../../components/DailyReportModal/DailyReportModal';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
@@ -25,9 +26,11 @@ const EXPENSE_TYPES = {
 
 export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   const toast = useToast();
-  const { user } = useAuth();
+  const { role, user } = useAuth();
   const [report, setReport] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
+
+  const canViewFinancialTotals = role === ROLES.ADMIN || role === ROLES.SUPERVISOR;
 
   // Quick Expense Modal State inside POS
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -58,7 +61,6 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
         expensesApi.findAll()
       ]);
       setReport(rep);
-      // Filter expenses associated with this shift or pending settlement
       setExpenses(expList || []);
     } catch {
       // Failed refresh won't interrupt order taking
@@ -185,34 +187,39 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   return (
     <>
       <div className="shift-strip">
-        <span className="shift-strip__cell">
-          <TrendingUp size={13} />
-          <span className="shift-strip__label">مبيعات الشيفت</span>
-          <strong>{formatCurrency(revenue)}</strong>
-        </span>
+        {/* Only ADMIN and SUPERVISOR can see live revenue and drawer totals */}
+        {canViewFinancialTotals && (
+          <>
+            <span className="shift-strip__cell">
+              <TrendingUp size={13} />
+              <span className="shift-strip__label">مبيعات الشيفت</span>
+              <strong>{formatCurrency(revenue)}</strong>
+            </span>
 
-        <span className="shift-strip__cell">
-          <Utensils size={13} />
-          <span className="shift-strip__label">مطعم</span>
-          <strong>{formatCurrency(food)}</strong>
-        </span>
+            <span className="shift-strip__cell">
+              <Utensils size={13} />
+              <span className="shift-strip__label">مطعم</span>
+              <strong>{formatCurrency(food)}</strong>
+            </span>
 
-        <span className="shift-strip__cell">
-          <Coffee size={13} />
-          <span className="shift-strip__label">بوفيه</span>
-          <strong>{formatCurrency(buffet)}</strong>
-        </span>
+            <span className="shift-strip__cell">
+              <Coffee size={13} />
+              <span className="shift-strip__label">بوفيه</span>
+              <strong>{formatCurrency(buffet)}</strong>
+            </span>
 
-        <span className="shift-strip__cell shift-strip__cell--drawer" title="العهدة الافتتاحية + الكاش المحصَّل - المصاريف">
-          <Wallet size={13} />
-          <span className="shift-strip__label">المفروض في الدرج</span>
-          <strong>{formatCurrency(opening + cash)}</strong>
-        </span>
+            <span className="shift-strip__cell shift-strip__cell--drawer" title="العهدة الافتتاحية + الكاش المحصَّل - المصاريف">
+              <Wallet size={13} />
+              <span className="shift-strip__label">المفروض في الدرج</span>
+              <strong>{formatCurrency(opening + cash)}</strong>
+            </span>
+          </>
+        )}
 
         {shift?.openedAt && (
           <span className="shift-strip__cell shift-strip__cell--muted">
             <Receipt size={13} />
-            <span className="shift-strip__label">بدأ</span>
+            <span className="shift-strip__label">بدأ الشيفت</span>
             <strong>{new Date(shift.openedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</strong>
           </span>
         )}
@@ -239,15 +246,18 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           <Plus size={13} /> مصروف سريع 💸
         </button>
 
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          style={{ padding: '3px 8px', fontSize: '11px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}
-          onClick={() => setShowReportModal(true)}
-          title="عرض وطباعة تقرير اليومية الشامل"
-        >
-          <FileText size={13} /> تقرير اليومية 📊
-        </button>
+        {/* Only ADMIN and SUPERVISOR can view/print full Daily Report */}
+        {canViewFinancialTotals && (
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            style={{ padding: '3px 8px', fontSize: '11px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}
+            onClick={() => setShowReportModal(true)}
+            title="عرض وطباعة تقرير اليومية الشامل"
+          >
+            <FileText size={13} /> تقرير اليومية 📊
+          </button>
+        )}
 
         <button type="button" className="shift-strip__close" onClick={onCloseShift}>
           <Lock size={13} /> قفل الشيفت
@@ -436,7 +446,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
         </Modal>
       )}
 
-      {showReportModal && shift?.id && (
+      {showReportModal && shift?.id && canViewFinancialTotals && (
         <DailyReportModal
           isOpen={showReportModal}
           onClose={() => setShowReportModal(false)}
