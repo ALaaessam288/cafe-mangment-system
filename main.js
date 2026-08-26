@@ -8,6 +8,12 @@ const fs = require('fs');
 let springProcess = null;
 let mainWindow = null;
 
+// Packaged (production) builds are a thin client against the hosted SaaS backend on Railway;
+// they do not spawn a local Java process at all. Dev builds (app.isPackaged === false) still
+// spawn the local jar against localhost:8080, so `npm start` / local testing keeps working
+// offline without needing a Railway deployment.
+const PROD_BACKEND_URL = 'https://cafe-mangment-system-production.up.railway.app';
+
 // ── Logging ──
 // Set up at module scope, before any window or webContents handler can fire. Previously both the
 // log file descriptor and writeLog lived inside createWindow, but the 'console-message' and
@@ -232,129 +238,133 @@ async function createWindow() {
   mainWindow.maximize();
   mainWindow.show();
 
-  // ── Resolve java executable & jar path ──
-  const javaExe = locateJava();
-  let jarPath;
-
   if (app.isPackaged) {
-    jarPath = path.join(process.resourcesPath, 'backend.jar');
+    // ── Production: thin client against the hosted Railway backend ──
+    // No local Java process, no port management, no local health polling - just load the
+    // deployed app directly. did-fail-load (registered above) logs if the terminal has no
+    // network route to Railway.
+    writeLog(`[LAUNCHER] --- Startup at ${new Date().toISOString()} ---\n`);
+    writeLog(`[LAUNCHER] Production thin-client mode: loading ${PROD_BACKEND_URL}\n`);
+    mainWindow.loadURL(PROD_BACKEND_URL);
   } else {
-    jarPath = path.join(__dirname, 'target', 'cafe-mangment-system-0.0.1-SNAPSHOT.jar');
-  }
+    // ── Dev: resolve java executable & local jar path ──
+    const javaExe = locateJava();
+    const jarPath = path.join(__dirname, 'target', 'cafe-mangment-system-0.0.1-SNAPSHOT.jar');
 
-  // Write initialization diagnostics to backend.log
-  writeLog(`[LAUNCHER] --- Startup at ${new Date().toISOString()} ---\n`);
-  writeLog(`[LAUNCHER] app.isPackaged: ${app.isPackaged}\n`);
-  writeLog(`[LAUNCHER] Resolved javaExe: ${javaExe}\n`);
-  writeLog(`[LAUNCHER] Resolved jarPath: ${jarPath}\n`);
+    // Write initialization diagnostics to backend.log
+    writeLog(`[LAUNCHER] --- Startup at ${new Date().toISOString()} ---\n`);
+    writeLog(`[LAUNCHER] app.isPackaged: ${app.isPackaged}\n`);
+    writeLog(`[LAUNCHER] Resolved javaExe: ${javaExe}\n`);
+    writeLog(`[LAUNCHER] Resolved jarPath: ${jarPath}\n`);
 
-  if (!fs.existsSync(jarPath)) {
-    const errorMsg = `ملف الباكند مش موجود:\n${jarPath}\n\nشغّل build.ps1 الأول.`;
-    writeLog(`[LAUNCHER] ERROR: ${errorMsg}\n`);
-    dialog.showErrorBox('خطأ في التشغيل', errorMsg);
-    app.quit();
-    return;
-  }
-
-  // ── Launch Spring Boot ──
-  const spawnOptions = {
-    detached: false,
-    windowsHide: true,
-    stdio: ['ignore', logFd, logFd]
-  };
-
-  // If using plain 'java' command, execute via shell to ensure path expansion works on Windows
-  if (javaExe === 'java') {
-    spawnOptions.shell = true;
-    spawnOptions.windowsHide = true;
-  }
-
-  // ── Ensure Port 8080 is free before starting ──
-  if (!(await ensurePortFree(8080))) {
-    app.quit();
-    return;
-  }
-
-  writeLog(`[LAUNCHER] Spawning backend process...\n`);
-
-  // Argument order matters and was wrong before: anything after `-jar <file>` is handed to the
-  // application's main(String[]), not to the JVM. The old `-Dspring.profiles.active=prod` sat
-  // after `-jar` and was therefore silently ignored, so the production profile never activated
-  // and SQL logging stayed on in shipped builds. JVM flags now come first, and the Spring
-  // settings use the `--key=value` application-argument form, which Spring Boot does read.
-  springProcess = spawn(javaExe, [
-    '-Xms128m',
-    '-Xmx512m',
-    '-jar', jarPath,
-    '--server.port=8080',
-    '--spring.profiles.active=prod',
-  ], spawnOptions);
-
-  springProcess.on('error', (err) => {
-    const errorMsg = `فشل تشغيل الباكند:\n${err.message}\n\nتأكد إن Java مثبتة على الجهاز.`;
-    writeLog(`[LAUNCHER] SPAWN ERROR: ${err.message}\n`);
-    dialog.showErrorBox('فشل تشغيل الباكند', errorMsg);
-    app.quit();
-  });
-
-  let isHealthy = false;
-
-  springProcess.on('close', (code) => {
-    writeLog(`[LAUNCHER] Backend process closed with code: ${code}\n`);
-    if (!isHealthy && code !== 0 && code !== null) {
-      if (pollInterval) clearInterval(pollInterval);
-      let extra = '';
-      try {
-        const content = fs.readFileSync(logFilePath, 'utf8');
-        const lines = content.trim().split('\n');
-        const lastFew = lines.slice(-8).join('\n');
-        extra = `\n\nتفاصيل الخطأ:\n${lastFew}`;
-      } catch (_) {}
-      dialog.showErrorBox(
-        'خطأ في تشغيل السيرفر',
-        `توقف خادم التطبيق بشكل غير متوقع (كود: ${code}).${extra}\n\nمسار ملف اللوج:\n${logFilePath}`
-      );
-      app.quit();
-    }
-  });
-
-  // ── Poll health endpoint until backend is ready ──
-  // 120s rather than 60: the first launch on a low-end terminal pays for JVM startup *and*
-  // Hibernate's schema sync against SQLite, and timing out on a backend that was merely slow
-  // left the user with an error dialog and no app.
-  let attempts = 0;
-  const MAX_WAIT = 120;
-  const pollInterval = setInterval(() => {
-    attempts++;
-
-    // Keep the splash honest once the wait gets noticeable.
-    if (attempts === 15 && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL(bootSplash('التشغيل الأول قد يستغرق دقيقة...'));
-    }
-
-    if (attempts > MAX_WAIT) {
-      clearInterval(pollInterval);
-      const errorMsg = 'الباكند استغرق وقت طويل جداً للبدء. افتح ملف اللوج:\n' + logFilePath;
-      writeLog(`[LAUNCHER] TIMEOUT: Actuator health did not respond after ${MAX_WAIT}s.\n`);
-      dialog.showErrorBox('تأخر التشغيل', errorMsg);
+    if (!fs.existsSync(jarPath)) {
+      const errorMsg = `ملف الباكند مش موجود:\n${jarPath}\n\nشغّل build.ps1 الأول.`;
+      writeLog(`[LAUNCHER] ERROR: ${errorMsg}\n`);
+      dialog.showErrorBox('خطأ في التشغيل', errorMsg);
       app.quit();
       return;
     }
 
-    const req = http.get('http://localhost:8080/actuator/health', { timeout: 2000 }, (res) => {
-      res.resume(); // drain, otherwise the socket is never released
-      if (res.statusCode === 200) {
-        isHealthy = true;
-        clearInterval(pollInterval);
-        writeLog(`[LAUNCHER] Backend is healthy! Loading app UI.\n`);
-        mainWindow.loadURL('http://localhost:8080');
+    // ── Launch Spring Boot ──
+    const spawnOptions = {
+      detached: false,
+      windowsHide: true,
+      stdio: ['ignore', logFd, logFd]
+    };
+
+    // If using plain 'java' command, execute via shell to ensure path expansion works on Windows
+    if (javaExe === 'java') {
+      spawnOptions.shell = true;
+      spawnOptions.windowsHide = true;
+    }
+
+    // ── Ensure Port 8080 is free before starting ──
+    if (!(await ensurePortFree(8080))) {
+      app.quit();
+      return;
+    }
+
+    writeLog(`[LAUNCHER] Spawning backend process...\n`);
+
+    // Argument order matters and was wrong before: anything after `-jar <file>` is handed to the
+    // application's main(String[]), not to the JVM. The old `-Dspring.profiles.active=prod` sat
+    // after `-jar` and was therefore silently ignored, so the production profile never activated
+    // and SQL logging stayed on in shipped builds. JVM flags now come first, and the Spring
+    // settings use the `--key=value` application-argument form, which Spring Boot does read.
+    springProcess = spawn(javaExe, [
+      '-Xms128m',
+      '-Xmx512m',
+      '-jar', jarPath,
+      '--server.port=8080',
+      '--spring.profiles.active=prod',
+    ], spawnOptions);
+
+    springProcess.on('error', (err) => {
+      const errorMsg = `فشل تشغيل الباكند:\n${err.message}\n\nتأكد إن Java مثبتة على الجهاز.`;
+      writeLog(`[LAUNCHER] SPAWN ERROR: ${err.message}\n`);
+      dialog.showErrorBox('فشل تشغيل الباكند', errorMsg);
+      app.quit();
+    });
+
+    let isHealthy = false;
+
+    springProcess.on('close', (code) => {
+      writeLog(`[LAUNCHER] Backend process closed with code: ${code}\n`);
+      if (!isHealthy && code !== 0 && code !== null) {
+        if (pollInterval) clearInterval(pollInterval);
+        let extra = '';
+        try {
+          const content = fs.readFileSync(logFilePath, 'utf8');
+          const lines = content.trim().split('\n');
+          const lastFew = lines.slice(-8).join('\n');
+          extra = `\n\nتفاصيل الخطأ:\n${lastFew}`;
+        } catch (_) {}
+        dialog.showErrorBox(
+          'خطأ في تشغيل السيرفر',
+          `توقف خادم التطبيق بشكل غير متوقع (كود: ${code}).${extra}\n\nمسار ملف اللوج:\n${logFilePath}`
+        );
+        app.quit();
       }
     });
-    req.on('timeout', () => req.destroy());
-    req.on('error', () => {
-      // Backend not ready yet
-    });
-  }, 1000);
+
+    // ── Poll health endpoint until backend is ready ──
+    // 120s rather than 60: the first launch on a low-end terminal pays for JVM startup *and*
+    // Hibernate's schema sync against SQLite, and timing out on a backend that was merely slow
+    // left the user with an error dialog and no app.
+    let attempts = 0;
+    const MAX_WAIT = 120;
+    const pollInterval = setInterval(() => {
+      attempts++;
+
+      // Keep the splash honest once the wait gets noticeable.
+      if (attempts === 15 && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadURL(bootSplash('التشغيل الأول قد يستغرق دقيقة...'));
+      }
+
+      if (attempts > MAX_WAIT) {
+        clearInterval(pollInterval);
+        const errorMsg = 'الباكند استغرق وقت طويل جداً للبدء. افتح ملف اللوج:\n' + logFilePath;
+        writeLog(`[LAUNCHER] TIMEOUT: Actuator health did not respond after ${MAX_WAIT}s.\n`);
+        dialog.showErrorBox('تأخر التشغيل', errorMsg);
+        app.quit();
+        return;
+      }
+
+      const req = http.get('http://localhost:8080/actuator/health', { timeout: 2000 }, (res) => {
+        res.resume(); // drain, otherwise the socket is never released
+        if (res.statusCode === 200) {
+          isHealthy = true;
+          clearInterval(pollInterval);
+          writeLog(`[LAUNCHER] Backend is healthy! Loading app UI.\n`);
+          mainWindow.loadURL('http://localhost:8080');
+        }
+      });
+      req.on('timeout', () => req.destroy());
+      req.on('error', () => {
+        // Backend not ready yet
+      });
+    }, 1000);
+  }
 
   // ── IPC: list the printers installed on this machine ──
   // Used by Settings to let each POS terminal map Kitchen / Bar / Receipt to a

@@ -4,8 +4,16 @@ import { toFriendlyMessage } from '../utils/errorMessages';
 
 /* ── API base ──
    Single source of truth. The refresh call below used to repeat the full URL literally, so the
-   host lived in two places and any change had to be made twice. */
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+   host lived in two places and any change had to be made twice.
+
+   Defaults to a relative path rather than an absolute localhost URL: this app is always served
+   from the same origin as its API (the local jar on :8080 for the Electron dev build, or the
+   Railway deployment in production), so a relative path resolves correctly either way without a
+   build-time env var. Vite's dev server proxies /api -> localhost:8080 (see vite.config.js) so
+   this also works unmodified under `npm run dev`. VITE_API_URL is still available to override
+   this for a frontend deployed on a different origin than its API (e.g. a standalone Vercel
+   deploy pointed at a separately-hosted backend). */
+export const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 /* ── Singleton Axios instance ── */
 const client = axios.create({
