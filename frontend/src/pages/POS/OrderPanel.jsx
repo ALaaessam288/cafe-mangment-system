@@ -237,11 +237,12 @@ export default function OrderPanel({
                       {(() => {
                         const product = products?.find(p => p.id === group.productId);
                         if (!product) return null;
-                        const isLow = (product.stockQuantity || 0) <= 3;
-                        const isMed = (product.stockQuantity || 0) <= 10;
+                        const currentStock = product.availableQuantity !== undefined ? product.availableQuantity : (product.stockQuantity ?? 0);
+                        const isLow = currentStock <= 3;
+                        const isMed = currentStock <= 10;
                         const threshold = product.minStockThreshold ? product.minStockThreshold * 3 : 20;
-                        const percent = Math.min(100, Math.max(0, ((product.stockQuantity || 0) / threshold) * 100));
-                        return (product.trackInventory || (product.stockQuantity !== undefined && product.stockQuantity !== null)) && (
+                        const percent = Math.min(100, Math.max(0, (currentStock / threshold) * 100));
+                        return (product.trackInventory || product.availableQuantity !== undefined || (product.stockQuantity !== undefined && product.stockQuantity !== null)) && (
                           <div style={{ marginTop: '6px', width: '100%' }}>
                             <div 
                               style={{
@@ -251,7 +252,7 @@ export default function OrderPanel({
                                 borderRadius: '1.5px',
                                 overflow: 'hidden'
                               }}
-                              title={`المخزون المتبقي: ${product.stockQuantity ?? 0}`}
+                              title={`المخزون المتاح: ${currentStock}`}
                             >
                               <div 
                                 style={{
@@ -267,7 +268,7 @@ export default function OrderPanel({
                               />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              <span>المخزون المتبقي: {product.stockQuantity ?? 0}</span>
+                              <span>المخزون المتاح: {currentStock}</span>
                               {isLow && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️ مخزون حرج!</span>}
                             </div>
                           </div>

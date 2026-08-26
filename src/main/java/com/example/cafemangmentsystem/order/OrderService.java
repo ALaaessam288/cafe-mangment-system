@@ -390,7 +390,7 @@ public class OrderService {
      * cancelItem(), releaseStockForOrder(), and consumeStock() below.
      */
     private void reserveStock(Product product, int quantity) {
-        if (!product.isTrackInventory()) {
+        if (!product.isTrackInventory() && product.getStockQuantity() <= 0) {
             return;
         }
         int available = product.getStockQuantity() - product.getReservedQuantity();
@@ -404,7 +404,7 @@ public class OrderService {
 
     /** Releases a quantity previously held by {@link #reserveStock} without ever having been sent. */
     private void releaseReservation(Product product, int quantity) {
-        if (!product.isTrackInventory()) {
+        if (!product.isTrackInventory() && product.getStockQuantity() <= 0 && product.getReservedQuantity() <= 0) {
             return;
         }
         product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - quantity));
@@ -418,10 +418,10 @@ public class OrderService {
      */
     private void consumeStock(OrderItem item) {
         Product product = item.getProduct();
-        if (product == null || !product.isTrackInventory()) {
+        if (product == null || (!product.isTrackInventory() && product.getStockQuantity() <= 0)) {
             return;
         }
-        product.setStockQuantity(product.getStockQuantity() - item.getQuantity());
+        product.setStockQuantity(Math.max(0, product.getStockQuantity() - item.getQuantity()));
         product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - item.getQuantity()));
         if (product.getStockQuantity() <= 0) {
             product.setAvailable(false);

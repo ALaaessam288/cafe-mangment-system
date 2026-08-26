@@ -99,6 +99,7 @@ public class ProductService {
     public ProductResponse addStock(Long id, int quantity) {
         Product product = getOrThrow(id);
         product.setStockQuantity(product.getStockQuantity() + quantity);
+        product.setTrackInventory(true);
         if (product.getStockQuantity() > 0) {
             product.setAvailable(true);
         }

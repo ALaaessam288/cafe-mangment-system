@@ -608,19 +608,19 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_ORDER', payload: updated });
 
-      // Reflect the reservation the server just took (see OrderService.reserveStock) on this
-      // screen immediately, rather than waiting for the next 20s background menu refresh.
-      // Other cashiers' screens pick it up from that poll instead.
-      if (product.trackInventory) {
-        dispatch({
-          type: 'SET_PRODUCTS',
-          payload: state.products.map((p) =>
-            p.id === product.id
-              ? { ...p, availableQuantity: Math.max(0, (p.availableQuantity ?? 0) - quantity) }
-              : p
-          ),
-        });
-      }
+      // Reflect the reservation immediately on this screen
+      dispatch({
+        type: 'SET_PRODUCTS',
+        payload: state.products.map((p) =>
+          p.id === product.id
+            ? {
+                ...p,
+                stockQuantity: Math.max(0, (p.stockQuantity ?? p.availableQuantity ?? 0) - quantity),
+                availableQuantity: Math.max(0, (p.availableQuantity ?? p.stockQuantity ?? 0) - quantity),
+              }
+            : p
+        ),
+      });
 
       // Newest server row = the one to undo, and one more tally for this
       // cashier's quick-access strip.
@@ -792,6 +792,21 @@ export default function POSPage() {
         : await ordersApi.removeItem(state.activeOrder.id, lastAddedItemId);
 
       dispatch({ type: 'SET_ORDER', payload: updated });
+      if (item?.productId) {
+        const qty = item.quantity || 1;
+        dispatch({
+          type: 'SET_PRODUCTS',
+          payload: state.products.map((p) =>
+            p.id === item.productId
+              ? {
+                  ...p,
+                  stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + qty,
+                  availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + qty,
+                }
+              : p
+          ),
+        });
+      }
       setLastAddedItemId(null);
       toast.success('تم التراجع عن آخر صنف.');
       loadOrders();
@@ -1012,9 +1027,25 @@ export default function POSPage() {
   async function handleCancelItem(itemId, reason) {
     if (!state.activeOrder) return;
     try {
+      const item = (state.activeOrder.items ?? []).find((i) => i.id === itemId);
       const updated = await ordersApi.cancelItem(state.activeOrder.id, itemId, { reason });
       sounds.playError();
       dispatch({ type: 'SET_ORDER', payload: updated });
+      if (item?.productId) {
+        const qty = item.quantity || 1;
+        dispatch({
+          type: 'SET_PRODUCTS',
+          payload: state.products.map((p) =>
+            p.id === item.productId
+              ? {
+                  ...p,
+                  stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + qty,
+                  availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + qty,
+                }
+              : p
+          ),
+        });
+      }
       toast.success('الصنف اتلغى.');
       await loadOrders();
     } catch (err) {
@@ -1030,8 +1061,24 @@ export default function POSPage() {
   async function handleRemoveItem(itemId) {
     if (!state.activeOrder) return;
     try {
+      const item = (state.activeOrder.items ?? []).find((i) => i.id === itemId);
       const updated = await ordersApi.removeItem(state.activeOrder.id, itemId);
       dispatch({ type: 'SET_ORDER', payload: updated });
+      if (item?.productId) {
+        const qty = item.quantity || 1;
+        dispatch({
+          type: 'SET_PRODUCTS',
+          payload: state.products.map((p) =>
+            p.id === item.productId
+              ? {
+                  ...p,
+                  stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + qty,
+                  availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + qty,
+                }
+              : p
+          ),
+        });
+      }
       if (itemId === lastAddedItemId) setLastAddedItemId(null);
       loadOrders();
     } catch (err) {
