@@ -36,13 +36,9 @@ public class WanasMenuSeeder {
             try {
                 TenantContext.set(tenant.getId());
                 transactionTemplate.executeWithoutResult(status -> {
-                    boolean hasWanasMenu = categoryRepository.findAll().stream()
-                            .anyMatch(c -> "مشروبات ساخنة".equals(c.getNameAr()));
-                    if (!hasWanasMenu) {
+                    long catCount = categoryRepository.count();
+                    if (catCount == 0) {
                         System.out.println("[WANAS SEEDER] Seeding complete Wanas Café menu for tenant: " + tenant.getSlug());
-                        productOptionRepository.deleteAll();
-                        productRepository.deleteAll();
-                        categoryRepository.deleteAll();
                         seedFullWanasMenu();
                     }
                 });

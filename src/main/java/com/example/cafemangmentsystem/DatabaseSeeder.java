@@ -33,84 +33,84 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Add orders.delivery_fee if missing (added for the takeaway delivery-fee feature).
-        // Hibernate's ddl-auto=update generates "ALTER TABLE ... ADD COLUMN delivery_fee ...
-        // NOT NULL" with no DEFAULT clause (Lombok's @Builder.Default has no effect on the actual
-        // DDL Hibernate emits - it's a builder-only convenience Hibernate doesn't see at all).
-        // SQLite refuses to add a NOT NULL column with no default to a non-empty table, so on any
-        // database that already had rows in `orders`, that ALTER TABLE silently failed at startup
-        // and left the column missing entirely - breaking every subsequent order query. This adds
-        // it explicitly with a default, and is a no-op once the column exists.
+        boolean isSqlite = false;
         try {
-            boolean hasDeliveryFee = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) > 0 FROM pragma_table_info('orders') WHERE name = 'delivery_fee'",
-                Boolean.class));
-            if (!hasDeliveryFee) {
-                jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0");
-                System.out.println("[SEEDER] Added missing orders.delivery_fee column.");
-            }
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Failed to add orders.delivery_fee column: " + e.getMessage());
-        }
+            String dbProductName = jdbcTemplate.getDataSource().getConnection().getMetaData().getDatabaseProductName();
+            isSqlite = dbProductName != null && dbProductName.toLowerCase().contains("sqlite");
+        } catch (Exception ignored) {}
 
-        try {
-            boolean hasSnacksNet = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) > 0 FROM pragma_table_info('shifts') WHERE name = 'snacks_net'",
-                Boolean.class));
-            if (!hasSnacksNet) {
-                jdbcTemplate.execute("ALTER TABLE shifts ADD COLUMN snacks_net NUMERIC(10,2) NOT NULL DEFAULT 0");
-                System.out.println("[SEEDER] Added missing shifts.snacks_net column.");
-            }
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Failed to add shifts.snacks_net column: " + e.getMessage());
-        }
-
-        // Ensure expenses table columns exist for Petty Cash Advance & Settlement
-        String[] expenseCols = {
-            "status TEXT DEFAULT 'COMPLETED'",
-            "advance_amount NUMERIC(10,2)",
-            "actual_amount NUMERIC(10,2)",
-            "returned_amount NUMERIC(10,2)",
-            "is_advance INTEGER DEFAULT 0",
-            "settled_at INTEGER",
-            "settled_by INTEGER"
-        };
-        for (String colDef : expenseCols) {
-            String colName = colDef.split(" ")[0];
+        if (isSqlite) {
             try {
-                boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) > 0 FROM pragma_table_info('expenses') WHERE name = '" + colName + "'",
+                boolean hasDeliveryFee = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('orders') WHERE name = 'delivery_fee'",
                     Boolean.class));
-                if (!exists) {
-                    jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN " + colDef);
-                    System.out.println("[SEEDER] Added missing expenses." + colName + " column.");
+                if (!hasDeliveryFee) {
+                    jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0");
+                    System.out.println("[SEEDER] Added missing orders.delivery_fee column.");
                 }
             } catch (Exception e) {
-                System.err.println("[SEEDER] Failed to add expenses." + colName + ": " + e.getMessage());
+                System.err.println("[SEEDER] Failed to add orders.delivery_fee column: " + e.getMessage());
             }
-        }
 
-        // Ensure tenants table columns exist for SaaS Subscriptions
-        String[] tenantCols = {
-            "subscription_plan TEXT DEFAULT 'PRO'",
-            "trial_ends_at INTEGER",
-            "subscription_ends_at INTEGER",
-            "max_tables INTEGER",
-            "max_users INTEGER",
-            "max_products INTEGER"
-        };
-        for (String colDef : tenantCols) {
-            String colName = colDef.split(" ")[0];
             try {
-                boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) > 0 FROM pragma_table_info('tenants') WHERE name = '" + colName + "'",
+                boolean hasSnacksNet = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('shifts') WHERE name = 'snacks_net'",
                     Boolean.class));
-                if (!exists) {
-                    jdbcTemplate.execute("ALTER TABLE tenants ADD COLUMN " + colDef);
-                    System.out.println("[SEEDER] Added missing tenants." + colName + " column.");
+                if (!hasSnacksNet) {
+                    jdbcTemplate.execute("ALTER TABLE shifts ADD COLUMN snacks_net NUMERIC(10,2) NOT NULL DEFAULT 0");
+                    System.out.println("[SEEDER] Added missing shifts.snacks_net column.");
                 }
             } catch (Exception e) {
-                System.err.println("[SEEDER] Failed to add tenants." + colName + ": " + e.getMessage());
+                System.err.println("[SEEDER] Failed to add shifts.snacks_net column: " + e.getMessage());
+            }
+
+            // Ensure expenses table columns exist for Petty Cash Advance & Settlement
+            String[] expenseCols = {
+                "status TEXT DEFAULT 'COMPLETED'",
+                "advance_amount NUMERIC(10,2)",
+                "actual_amount NUMERIC(10,2)",
+                "returned_amount NUMERIC(10,2)",
+                "is_advance INTEGER DEFAULT 0",
+                "settled_at INTEGER",
+                "settled_by INTEGER"
+            };
+            for (String colDef : expenseCols) {
+                String colName = colDef.split(" ")[0];
+                try {
+                    boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) > 0 FROM pragma_table_info('expenses') WHERE name = '" + colName + "'",
+                        Boolean.class));
+                    if (!exists) {
+                        jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN " + colDef);
+                        System.out.println("[SEEDER] Added missing expenses." + colName + " column.");
+                    }
+                } catch (Exception e) {
+                    System.err.println("[SEEDER] Failed to add expenses." + colName + ": " + e.getMessage());
+                }
+            }
+
+            // Ensure tenants table columns exist for SaaS Subscriptions
+            String[] tenantCols = {
+                "subscription_plan TEXT DEFAULT 'PRO'",
+                "trial_ends_at INTEGER",
+                "subscription_ends_at INTEGER",
+                "max_tables INTEGER",
+                "max_users INTEGER",
+                "max_products INTEGER"
+            };
+            for (String colDef : tenantCols) {
+                String colName = colDef.split(" ")[0];
+                try {
+                    boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) > 0 FROM pragma_table_info('tenants') WHERE name = '" + colName + "'",
+                        Boolean.class));
+                    if (!exists) {
+                        jdbcTemplate.execute("ALTER TABLE tenants ADD COLUMN " + colDef);
+                        System.out.println("[SEEDER] Added missing tenants." + colName + " column.");
+                    }
+                } catch (Exception e) {
+                    System.err.println("[SEEDER] Failed to add tenants." + colName + ": " + e.getMessage());
+                }
             }
         }
 
