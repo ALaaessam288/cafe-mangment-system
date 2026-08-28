@@ -79,6 +79,9 @@ export default function ExpensesPage() {
     notes: '',
     autoPrint: true
   });
+  const [lineItems, setLineItems] = useState([
+    { description: '', price: '' }
+  ]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Settlement Modal State
@@ -111,6 +114,7 @@ export default function ExpensesPage() {
 
   function handleOpenModal(mode = 'DIRECT') {
     setEntryMode(mode);
+    setLineItems([{ description: '', price: '' }]);
     setForm({
       type: mode === 'ADVANCE' ? 'MATERIALS' : 'MATERIALS',
       revenueLine: 'SHARED',
@@ -125,11 +129,46 @@ export default function ExpensesPage() {
     setIsModalOpen(true);
   }
 
+  function handleAddLineItem() {
+    setLineItems(prev => [...prev, { description: '', price: '' }]);
+  }
+
+  function handleRemoveLineItem(index) {
+    if (lineItems.length <= 1) {
+      setLineItems([{ description: '', price: '' }]);
+      setForm(prev => ({ ...prev, amount: '' }));
+      return;
+    }
+    const updated = lineItems.filter((_, idx) => idx !== index);
+    setLineItems(updated);
+    const sum = updated.reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+    if (sum > 0) {
+      setForm(prev => ({ ...prev, amount: String(sum) }));
+    }
+  }
+
+  function handleLineItemChange(index, field, value) {
+    const updated = [...lineItems];
+    updated[index][field] = value;
+    setLineItems(updated);
+    const sum = updated.reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+    if (sum > 0) {
+      setForm(prev => ({ ...prev, amount: String(sum) }));
+    }
+  }
+
   async function handleSave(e) {
     e.preventDefault();
     if (!form.amount || parseFloat(form.amount) <= 0) {
       toast.error('يرجى كتابة مبلغ صحيح أكبر من الصفر');
       return;
+    }
+
+    const validItems = lineItems.filter(i => i.description.trim() || (parseFloat(i.price) > 0));
+    let finalNotes = form.notes.trim();
+    if (validItems.length > 0) {
+      const itemsSummary = validItems.map(i => `${i.description.trim() || 'صنف'}: ${i.price || 0} ج`).join(' | ');
+      finalNotes = finalNotes ? `${finalNotes} [${itemsSummary}]` : itemsSummary;
     }
 
     setIsSaving(true);
@@ -143,8 +182,11 @@ export default function ExpensesPage() {
         isAdvance: entryMode === 'ADVANCE',
         employeeId: form.type === 'SALARIES' ? form.employeeId : null,
         paidFromDrawer: form.paidFromDrawer,
-        notes: form.notes
+        notes: finalNotes
       });
+
+      // Attach items for the immediate thermal printer
+      created.items = validItems;
 
       toast.success(entryMode === 'ADVANCE' ? 'تم تسجيل وتأكيد سحب العُهدة المؤقتة بنجاح' : 'تم تسجيل المصروف بنجاح');
       setIsModalOpen(false);
@@ -644,16 +686,6 @@ export default function ExpensesPage() {
             )}
 
             <Input
-              label={entryMode === 'ADVANCE' ? 'المبلغ المسحوب مؤقتاً كعُهدة (جنيه)' : 'المبلغ المصروف (جنيه)'}
-              type="number"
-              step="0.01"
-              min="0.5"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              required
-            />
-            
-            <Input
               label="تاريخ الإخراج"
               type="date"
               max={todayISO()}
@@ -663,12 +695,103 @@ export default function ExpensesPage() {
             />
 
             <Input
-              label="البيان والتفاصيل (ماذا سيتم شراؤه؟)"
+              label="ملاحظات عامة (اختياري)"
               type="text"
-              placeholder={entryMode === 'ADVANCE' ? 'مثال: شراء شاي وسكر ونعناع من الماركت' : 'مثال: فاتورة كهرباء شهر أغسطس'}
+              placeholder={entryMode === 'ADVANCE' ? 'مثال: عُهدة شراء مستلزمات عامة' : 'مثال: مشتريات السوق الأسبوعية'}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              required={entryMode === 'ADVANCE'}
+            />
+
+            {/* Itemized breakdown builder */}
+            <div style={{ gridColumn: '1 / -1', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontWeight: 'bold', fontSize: '13px', color: 'var(--text-primary)' }}>
+                  📝 بنود وتفاصيل المشتريات (البيان والسعر لكل بند)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddLineItem}
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: 'var(--accent)',
+                    border: '1px solid var(--accent)',
+                    borderRadius: '6px',
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  + إضافة بند آخر
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {lineItems.map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder={`البيان (مثال: شاي / سكر / فاتورة)`}
+                      value={item.description}
+                      onChange={(e) => handleLineItemChange(idx, 'description', e.target.value)}
+                      style={{
+                        flex: 2,
+                        padding: '8px 10px',
+                        background: 'var(--bg-secondary, #1a1d27)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontSize: '13px'
+                      }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="السعر (ج.م)"
+                      value={item.price}
+                      onChange={(e) => handleLineItemChange(idx, 'price', e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        background: 'var(--bg-secondary, #1a1d27)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontSize: '13px'
+                      }}
+                    />
+                    {lineItems.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLineItem(idx)}
+                        style={{
+                          background: 'rgba(220, 38, 38, 0.2)',
+                          color: '#ef4444',
+                          border: '1px solid #ef4444',
+                          borderRadius: '6px',
+                          padding: '6px 10px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                        title="حذف هذا البند"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Input
+              label={entryMode === 'ADVANCE' ? 'إجمالي المبلغ المسحوب مؤقتاً كعُهدة (جنيه)' : 'إجمالي المبلغ المصروف (جنيه)'}
+              type="number"
+              step="0.01"
+              min="0.5"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              required
             />
 
             <div className="exp-presets" style={{ gridColumn: '1 / -1' }}>

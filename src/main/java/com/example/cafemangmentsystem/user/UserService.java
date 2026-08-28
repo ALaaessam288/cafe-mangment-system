@@ -70,6 +70,14 @@ public class UserService {
         User user = getOrThrow(id);
         user.setFullName(request.fullName());
         user.setRole(request.role());
+        if (request.username() != null && !request.username().isBlank() && !request.username().equals(user.getUsername())) {
+            userRepository.findByUsername(request.username().trim()).ifPresent(existing -> {
+                if (!existing.getId().equals(user.getId())) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "اسم المستخدم مستخدم بالفعل");
+                }
+            });
+            user.setUsername(request.username().trim());
+        }
         if (request.pin() != null) {
             user.setPinHash(passwordEncoder.encode(request.pin()));
         }

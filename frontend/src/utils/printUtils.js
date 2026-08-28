@@ -961,7 +961,13 @@ export function buildExpenseVoucherHtml({ expense, cafeName }) {
   <head>
     <meta charset="utf-8" />
     <title>إيصال مصروفات - ${voucherId}</title>
-    ${thermalPrintCss}
+    <style>
+      ${baseCss('80mm auto')}
+      .title { text-align:center; font-size:20px; font-weight:900; margin-bottom:2px; }
+      .subtitle { text-align:center; font-size:14px; font-weight:800; }
+      .meta { border:1px solid #000; border-radius:4px; padding:4px 6px; margin:6px 0; background:#fbfbfb; }
+      .row { display:flex; justify-content:space-between; align-items:baseline; margin:3px 0; }
+    </style>
   </head>
   <body>
     <div class="title">${esc(currentCafeName)}</div>
@@ -988,6 +994,28 @@ export function buildExpenseVoucherHtml({ expense, cafeName }) {
     <div style="font-size:11px; background:#f9fafb; padding:4px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px; word-break:break-word;">
       ${esc(notesText)}
     </div>
+
+    ${Array.isArray(expense.items) && expense.items.length > 0 ? `
+      <div style="margin-top:6px;">
+        <div style="font-weight:bold; font-size:11px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:4px;">📋 تفاصيل وبنود المصروف:</div>
+        <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:6px;">
+          <thead>
+            <tr style="border-bottom:1px solid #000; background:#f4f4f4;">
+              <th style="text-align:right; padding:3px;">البند / البيان</th>
+              <th style="text-align:left; padding:3px;">المبلغ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${expense.items.map(item => `
+              <tr style="border-bottom:1px dotted #ccc;">
+                <td style="padding:3px;">${esc(item.description || item.name || 'بند')}</td>
+                <td style="padding:3px; text-align:left;" class="num">${money(item.price || item.amount || 0)} ج.م</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : ''}
 
     ${amountSectionHtml}
 

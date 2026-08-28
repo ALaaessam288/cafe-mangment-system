@@ -1,9 +1,13 @@
 package com.example.cafemangmentsystem;
 
+import com.example.cafemangmentsystem.common.tenant.TenantContext;
 import com.example.cafemangmentsystem.tenant.TenantService;
+import com.example.cafemangmentsystem.tenant.entity.Tenant;
+import com.example.cafemangmentsystem.tenant.entity.BusinessType;
 import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest;
-import com.example.cafemangmentsystem.tenant.entity.BusinessType;
+import com.example.cafemangmentsystem.user.entity.User;
+import com.example.cafemangmentsystem.user.entity.Role;
 import com.example.cafemangmentsystem.menu.WanasMenuSeeder;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -266,12 +270,10 @@ public class DatabaseSeeder implements CommandLineRunner {
                     User adminUser = userRepository.findByUsername("alaaHarb").orElse(null);
                     if (adminUser == null) {
                         adminUser = User.builder()
-                                .tenantId(platformTenant.getId())
                                 .username("alaaHarb")
                                 .passwordHash(passwordEncoder.encode("alaa@12345"))
                                 .fullName("Alaa Harb")
                                 .role(Role.ADMIN)
-                                .active(true)
                                 .build();
                         userRepository.save(adminUser);
                         System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
@@ -311,24 +313,20 @@ public class DatabaseSeeder implements CommandLineRunner {
                     User wanasAdmin = userRepository.findByUsername("alaaHarb").orElse(null);
                     if (wanasAdmin == null) {
                         wanasAdmin = User.builder()
-                                .tenantId(wanasTenant.getId())
                                 .username("alaaHarb")
                                 .passwordHash(passwordEncoder.encode("alaa@12345"))
                                 .fullName("Alaa Harb")
                                 .role(Role.ADMIN)
-                                .active(true)
                                 .build();
                         userRepository.save(wanasAdmin);
                     }
                     User cashier = userRepository.findByUsername("cashier1").orElse(null);
                     if (cashier == null) {
                         cashier = User.builder()
-                                .tenantId(wanasTenant.getId())
                                 .username("cashier1")
                                 .passwordHash(passwordEncoder.encode("123456"))
                                 .fullName("كاشير 1")
                                 .role(Role.CASHIER)
-                                .active(true)
                                 .build();
                         userRepository.save(cashier);
                     }
