@@ -19,10 +19,19 @@ public class RailwayDatabaseUrlPostProcessor implements EnvironmentPostProcessor
     public void postProcessEnvironment(ConfigurableEnvironment environment,
                                        SpringApplication application) {
         String url = environment.getProperty("DATABASE_URL");
-        if (url != null && url.startsWith("postgresql://")) {
-            String jdbcUrl = "jdbc:postgresql://" + url.substring("postgresql://".length());
+        if (url != null && (url.startsWith("postgresql://") || url.startsWith("postgres://"))) {
+            String cleanUrl = url.startsWith("postgresql://")
+                    ? url.substring("postgresql://".length())
+                    : url.substring("postgres://".length());
+            String jdbcUrl = "jdbc:postgresql://" + cleanUrl;
+
             Map<String, Object> map = new HashMap<>();
             map.put("DATABASE_URL", jdbcUrl);
+            map.put("spring.datasource.url", jdbcUrl);
+            map.put("spring.datasource.driver-class-name", "org.postgresql.Driver");
+            map.put("spring.jpa.database-platform", "org.hibernate.dialect.PostgreSQLDialect");
+            map.put("spring.jpa.properties.hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
+            
             environment.getPropertySources()
                     .addFirst(new MapPropertySource("railwayUrlFix", map));
         }

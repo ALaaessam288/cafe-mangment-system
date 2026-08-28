@@ -249,7 +249,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             if (platformTenantId == null) {
                 jdbcTemplate.execute(
                     "INSERT INTO tenants (name, slug, business_type, status, timezone, currency, subscription_plan, max_tables, max_users, max_products, plan_selected, created_at, updated_at) " +
-                    "VALUES ('Caffio Platform', 'platform', 'CAFE_AND_RESTAURANT', 'ACTIVE', 'Africa/Cairo', 'EGP', 'ENTERPRISE', 9999, 9999, 9999, 1, datetime('now'), datetime('now'))"
+                    "VALUES ('Caffio Platform', 'platform', 'CAFE_AND_RESTAURANT', 'ACTIVE', 'Africa/Cairo', 'EGP', 'ENTERPRISE', 9999, 9999, 9999, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 );
                 platformTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants WHERE slug = 'platform'", Long.class);
                 System.out.println("[SEEDER] Created Master Platform Tenant (ID: " + platformTenantId + ")");
@@ -263,7 +263,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                     String pwdHash = passwordEncoder.encode("alaa@12345");
                     jdbcTemplate.update(
                         "INSERT INTO users (tenant_id, username, password_hash, full_name, role, active, version, created_at, updated_at) " +
-                        "VALUES (?, 'alaaHarb', ?, 'Alaa Harb', 'ADMIN', 1, 0, datetime('now'), datetime('now'))",
+                        "VALUES (?, 'alaaHarb', ?, 'Alaa Harb', 'ADMIN', true, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                         platformTenantId, pwdHash
                     );
                     System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
