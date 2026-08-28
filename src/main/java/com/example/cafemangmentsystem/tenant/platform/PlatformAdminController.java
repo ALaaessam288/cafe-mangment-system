@@ -18,7 +18,7 @@ public class PlatformAdminController {
     private final TenantService tenantService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public List<TenantResponse> listAllTenants() {
         return tenantService.findAllTenants();
     }
@@ -30,25 +30,25 @@ public class PlatformAdminController {
     ) {}
 
     @PostMapping("/provision")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse provisionTenant(@RequestBody com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest request) {
         return tenantService.provisionWithSetup(request);
     }
 
     @PutMapping("/{id}/subscription")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public TenantResponse updateSubscription(@PathVariable Long id, @RequestBody UpdateSubscriptionRequest request) {
         return tenantService.updateTenantSubscription(id, request.plan(), request.status(), request.extendDays());
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public java.util.Map<String, Object> getPlatformStats() {
         return tenantService.getPlatformStats();
     }
 
     @GetMapping("/{id}/usage")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public java.util.Map<String, Object> getTenantUsage(@PathVariable Long id) {
         return tenantService.getTenantUsage(id);
     }
@@ -60,13 +60,39 @@ public class PlatformAdminController {
     ) {}
 
     @PutMapping("/{id}/quotas")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public TenantResponse updateQuotas(@PathVariable Long id, @RequestBody UpdateQuotasRequest request) {
         return tenantService.updateQuotas(id, request.maxTables(), request.maxUsers(), request.maxProducts());
     }
 
-    @GetMapping("/{id}/activity")
-    @PreAuthorize("hasRole('ADMIN')")
+    public record CustomizePlanRequest(
+            SubscriptionPlan plan,
+            TenantStatus status,
+            Integer maxTables,
+            Integer maxUsers,
+            Integer maxProducts,
+            Integer serviceChargePercent,
+            Boolean whatsappAlertsEnabled,
+            Integer extendDays,
+            java.time.Instant subscriptionEndsAt,
+            java.time.Instant trialEndsAt
+    ) {}
+
+    @PutMapping("/{id}/customize-plan")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public TenantResponse customizePlan(@PathVariable Long id, @RequestBody CustomizePlanRequest request) {
+        return tenantService.customizeTenantPlan(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void deleteTenant(@PathVariable Long id) {
+        tenantService.deleteTenant(id);
+    }
+
+    @GetMapping("/{id}/activity-log")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getActivityLogs(@PathVariable Long id) {
         return tenantService.getTenantActivityLogs(id);
     }

@@ -13,6 +13,7 @@ import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
 import com.example.cafemangmentsystem.tenant.entity.Tenant;
 import com.example.cafemangmentsystem.tenant.dto.PublicTenantDto;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -67,7 +68,43 @@ public class AuthController {
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        Tenant tenant = tenantService.resolveLoginableTenant(request.tenantSlug());
+        Tenant tenant;
+        if (request.tenantSlug() != null && !request.tenantSlug().trim().isEmpty()) {
+            tenant = tenantService.resolveLoginableTenant(request.tenantSlug());
+        } else {
+            String uname = request.username() != null ? request.username().trim() : "";
+            var customerUserOpt = userRepository.findAll().stream()
+                    .filter(u -> u.getUsername().equalsIgnoreCase(uname) && u.isActive())
+                    .filter(u -> {
+                        return tenantRepository.findById(u.getTenantId())
+                                .map(t -> !"platform".equalsIgnoreCase(t.getSlug()))
+                                .orElse(false);
+                    })
+                    .findFirst();
+
+            if (customerUserOpt.isPresent()) {
+                tenant = tenantRepository.findById(customerUserOpt.get().getTenantId())
+                        .orElseGet(() -> tenantService.resolveLoginableTenant(null));
+            } else {
+                var anyUserOpt = userRepository.findAll().stream()
+                        .filter(u -> u.getUsername().equalsIgnoreCase(uname) && u.isActive())
+                        .findFirst();
+                if (anyUserOpt.isPresent() && anyUserOpt.get().getTenantId() != null) {
+                    tenant = tenantRepository.findById(anyUserOpt.get().getTenantId())
+                            .orElseGet(() -> tenantService.resolveLoginableTenant(null));
+                } else {
+                    tenant = tenantService.resolveLoginableTenant(null);
+                }
+            }
+        }
+
+        if (tenant == null) {
+            throw new BadCredentialsException("Unknown tenant");
+        }
+
+        if (tenant.getStatus() == com.example.cafemangmentsystem.tenant.entity.TenantStatus.SUSPENDED) {
+            throw new DisabledException("تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني للتفعيل.");
+        }
 
         TenantContext.set(tenant.getId());
         try {
@@ -92,7 +129,38 @@ public class AuthController {
             return new LoginResponse(token, "Bearer", refreshToken, principal.getId(), principal.getUsername(),
                     principal.getFullName(), role, tenant.getName(), tenant.getSlug(),
                     plan.name(), plan.getDisplayName(), tenant.getTrialEndsAt(), tenant.getSubscriptionEndsAt(),
-                    maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses());
+                    maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses(), tenant.getLogoUrl(),
+                    Boolean.TRUE.equals(tenant.getPlanSelected()));
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    public record SuperAdminLoginRequest(
+            @NotBlank(message = "اسم مستخدم مالك المنصة مطلوب") String username,
+            @NotBlank(message = "كلمة مرور مالك المنصة مطلوبة") String password
+    ) {}
+
+    @PostMapping("/super-admin/login")
+    public LoginResponse superAdminLogin(@Valid @RequestBody SuperAdminLoginRequest request) {
+        // Look in platform tenant first, or fallback to caffio
+        Tenant platformTenant = tenantRepository.findBySlug("platform")
+                .or(() -> tenantRepository.findBySlug("caffio"))
+                .or(() -> tenantRepository.findAll().stream().findFirst())
+                .orElseThrow(() -> new BadCredentialsException("No tenant found"));
+
+        TenantContext.set(platformTenant.getId());
+        try {
+            var authentication = tenantAwareAuthenticator.authenticate(request.username().trim(), request.password());
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+
+            String token = jwtService.generateToken(principal);
+            String refreshToken = refreshTokenService.issue(principal.getId());
+
+            return new LoginResponse(token, "Bearer", refreshToken, principal.getId(), principal.getUsername(),
+                    principal.getFullName(), com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN.name(), "Caffio Platform Master", "platform",
+                    "ENTERPRISE", "Platform Master", null, null,
+                    9999, 9999, 9999, true, true, null, true);
         } finally {
             TenantContext.clear();
         }
@@ -101,6 +169,10 @@ public class AuthController {
     @PostMapping("/login-pin")
     public LoginResponse loginPin(@Valid @RequestBody com.example.cafemangmentsystem.auth.dto.LoginPinRequest request) {
         Tenant tenant = tenantService.resolveLoginableTenant(request.getTenantSlug());
+        if (tenant.getStatus() == com.example.cafemangmentsystem.tenant.entity.TenantStatus.SUSPENDED) {
+            throw new DisabledException("تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني للتفعيل.");
+        }
+
         TenantContext.set(tenant.getId());
         try {
             com.example.cafemangmentsystem.user.entity.User user = tenantAwareAuthenticator.authenticateByPin(request.getPin());
@@ -117,7 +189,8 @@ public class AuthController {
             return new LoginResponse(token, "Bearer", refreshToken, principal.getId(), principal.getUsername(),
                     principal.getFullName(), role, tenant.getName(), tenant.getSlug(),
                     plan.name(), plan.getDisplayName(), tenant.getTrialEndsAt(), tenant.getSubscriptionEndsAt(),
-                    maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses());
+                    maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses(), tenant.getLogoUrl(),
+                    Boolean.TRUE.equals(tenant.getPlanSelected()));
         } finally {
             TenantContext.clear();
         }
@@ -130,6 +203,11 @@ public class AuthController {
         String token = jwtService.generateToken(principal);
         String role = principal.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
         Tenant tenant = tenantRepository.findById(result.user().getTenantId()).orElse(null);
+
+        if (tenant != null && tenant.getStatus() == com.example.cafemangmentsystem.tenant.entity.TenantStatus.SUSPENDED) {
+            throw new DisabledException("تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني للتفعيل.");
+        }
+
         String tenantName = tenant != null ? tenant.getName() : null;
         String tenantSlug = tenant != null ? tenant.getSlug() : null;
 
@@ -141,7 +219,8 @@ public class AuthController {
         return new LoginResponse(token, "Bearer", result.rawRefreshToken(), principal.getId(), principal.getUsername(),
                 principal.getFullName(), role, tenantName, tenantSlug,
                 plan.name(), plan.getDisplayName(), tenant != null ? tenant.getTrialEndsAt() : null, tenant != null ? tenant.getSubscriptionEndsAt() : null,
-                maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses());
+                maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses(), tenant != null ? tenant.getLogoUrl() : null,
+                tenant != null && Boolean.TRUE.equals(tenant.getPlanSelected()));
     }
 
     @PostMapping("/logout")
@@ -150,9 +229,15 @@ public class AuthController {
         refreshTokenService.revoke(request.refreshToken());
     }
 
-    @ExceptionHandler({BadCredentialsException.class, DisabledException.class})
-    public ResponseEntity<Map<String, Object>> handleAuthFailure(Exception ex) {
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<Map<String, Object>> handleDisabled(DisabledException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("status", 403, "error", "ACCOUNT_DISABLED", "message", ex.getMessage() != null ? ex.getMessage() : "تم إيقاف هذا الحساب من قِبل إدارة المنصة"));
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthFailure(BadCredentialsException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("status", 401, "error", "Unauthorized", "message", "Invalid username or password"));
+                .body(Map.of("status", 401, "error", "Unauthorized", "message", "اسم المستخدم أو كلمة المرور غير صحيحة"));
     }
 }

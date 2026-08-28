@@ -25,6 +25,8 @@ import SettingsPage    from './pages/Settings/SettingsPage';
 import InventoryPage   from './pages/Inventory/InventoryPage';
 import DebtsPage       from './pages/Debts/DebtsPage';
 import SuperAdminPage  from './pages/SuperAdmin/SuperAdminPage';
+import SuperAdminLoginPage from './pages/SuperAdmin/SuperAdminLoginPage';
+import SuperAdminLayout from './layouts/SuperAdminLayout';
 
 import { ROLES, ROUTES } from './utils/constants';
 
@@ -39,10 +41,13 @@ export default function App() {
             <Routes>
             {/* Public */}
             <Route path={ROUTES.SPLASH} element={<SplashScreen />} />
-            <Route path={ROUTES.WELCOME} element={<WelcomePage />} />
-            <Route path={ROUTES.SETUP} element={<SetupWizard />} />
             <Route path={ROUTES.LOGIN}  element={<LoginPage />} />
-            <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+            <Route path="/tenant/login" element={<LoginPage />} />
+            <Route path="/:tenantSlug/login" element={<LoginPage />} />
+            <Route path={ROUTES.SUPER_ADMIN_LOGIN} element={<SuperAdminLoginPage />} />
+            <Route path={ROUTES.WELCOME} element={<Navigate to={ROUTES.LOGIN} replace />} />
+            <Route path={ROUTES.SETUP} element={<Navigate to={ROUTES.LOGIN} replace />} />
+            <Route path={ROUTES.REGISTER} element={<Navigate to={ROUTES.LOGIN} replace />} />
 
             {/* Protected — Cashier & Supervisor only (Hidden from Admin) */}
             <Route
@@ -80,7 +85,7 @@ export default function App() {
             <Route
               path={ROUTES.SETTINGS}
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                   <AppLayout>
                     <SettingsPage />
                   </AppLayout>
@@ -207,10 +212,8 @@ export default function App() {
             <Route
               path={ROUTES.SUPER_ADMIN}
               element={
-                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                  <AppLayout>
-                    <SuperAdminPage />
-                  </AppLayout>
+                <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN]}>
+                  <SuperAdminPage />
                 </ProtectedRoute>
               }
             />

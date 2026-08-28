@@ -42,8 +42,7 @@ const NAV_ITEMS = [
   { label: 'الجرد',        icon: Package,         route: ROUTES.INVENTORY, section: 'CATALOG', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
 
   { label: 'المستخدمين',   icon: Users,           route: ROUTES.USERS,     section: 'SYSTEM',  roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
-  { label: 'الإعدادات',    icon: Settings,        route: ROUTES.SETTINGS,  section: 'SYSTEM',  roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.CASHIER] },
-  { label: 'مالك المنصة',  icon: Crown,           route: ROUTES.SUPER_ADMIN, section: 'SYSTEM', roles: [ROLES.ADMIN] },
+  { label: 'الإعدادات',    icon: Settings,        route: ROUTES.SETTINGS,  section: 'SYSTEM',  roles: [ROLES.ADMIN] },
 ];
 
 const SECTIONS_KEY  = 'caffio_sidebar_sections';
@@ -149,8 +148,12 @@ export default function AppLayout({ children }) {
           </button>
 
           <div className="app-topbar__brand">
-            <Coffee size={15} className="app-topbar__brand-icon" />
-            <span className="app-topbar__brand-name">{user?.tenantName || 'كافيه ونس'}</span>
+            <img
+              src={user?.logoUrl || '/caffio-logo.png'}
+              alt="Logo"
+              style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: 6, filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4))' }}
+            />
+            <span className="app-topbar__brand-name">{user?.tenantName || 'كافيو POS'}</span>
           </div>
         </div>
 
@@ -246,9 +249,13 @@ export default function AppLayout({ children }) {
       <aside className={`sidebar ${isSidebarOpen ? 'sidebar--open' : ''}`}>
         {/* Logo & Close Button */}
         <div className="sidebar__logo">
-          <Coffee size={20} className="sidebar__logo-icon" />
-          <span className="sidebar__logo-text" title={user?.tenantName || 'الكافيه'}>
-            {user?.tenantName || 'الكافيه'}
+          <img
+            src={user?.logoUrl || '/caffio-logo.png'}
+            alt="Logo"
+            style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 8, filter: 'drop-shadow(0 3px 8px rgba(245, 158, 11, 0.45))' }}
+          />
+          <span className="sidebar__logo-text" title={user?.tenantName || 'كافيو POS'}>
+            {user?.tenantName || 'كافيو POS'}
           </span>
           <button
             type="button"

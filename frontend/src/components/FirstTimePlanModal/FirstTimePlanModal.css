@@ -1,0 +1,213 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   FIRST TIME PLAN SELECTION MODAL
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.ft-plan-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(9, 13, 22, 0.92);
+  backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  direction: rtl;
+  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.ft-plan-dialog {
+  width: 100%;
+  max-width: 1100px;
+  background: #0f172a;
+  border: 1px solid #33476a;
+  border-radius: 20px;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(245, 158, 11, 0.2);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: ftPopIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ftPopIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.ft-plan-header {
+  text-align: center;
+}
+
+.ft-plan-header__badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 4px 12px;
+  border-radius: 99px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.ft-plan-header__title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  margin: 0 0 6px;
+}
+
+.ft-plan-header__subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  max-width: 650px;
+  margin: 0 auto;
+  line-height: 1.4;
+}
+
+/* ── Grid ── */
+.ft-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 992px) {
+  .ft-plan-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 576px) {
+  .ft-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ft-plan-card {
+  background: #131d31;
+  border: 2px solid #23324d;
+  border-radius: 14px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.ft-plan-card:hover {
+  border-color: #475569;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.ft-plan-card--selected {
+  border-color: #f59e0b !important;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.15) 0%, #131d31 100%) !important;
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.3) !important;
+}
+
+.ft-plan-card--featured {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.ft-plan-card__top {
+  text-align: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 12px;
+}
+
+.ft-plan-card__badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  margin-bottom: 6px;
+  display: inline-block;
+}
+
+.ft-plan-card__name {
+  font-size: 17px;
+  font-weight: 900;
+  color: #ffffff;
+  margin: 0 0 4px;
+}
+
+.ft-plan-card__price {
+  font-size: 19px;
+  font-weight: 900;
+  color: #f59e0b;
+}
+
+.ft-plan-card__price small {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.ft-plan-card__features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+}
+
+.ft-plan-card__features li {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.25;
+}
+
+.ft-plan-card__features li i {
+  color: #10b981;
+  font-size: 14px;
+  font-weight: 900;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ft-plan-card__select-indicator {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ft-plan-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+}
+
+.ft-plan-submit-btn {
+  min-width: 240px;
+  height: 46px;
+  font-size: 14.5px !important;
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  border: none !important;
+  color: #090d16 !important;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4) !important;
+}
+
+.ft-plan-submit-btn:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important;
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.55) !important;
+  transform: translateY(-1px);
+}

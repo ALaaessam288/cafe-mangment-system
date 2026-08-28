@@ -12,6 +12,7 @@ import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
+import QuotaExceededModal from '../../components/QuotaExceededModal/QuotaExceededModal';
 import { ROLES } from '../../utils/constants';
 
 const stationNames = {
@@ -22,11 +23,12 @@ const stationNames = {
 
 export default function ProductsPage() {
   const toast = useToast();
-  const { role } = useAuth();
+  const { role, user: currentUser } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [quotaModal, setQuotaModal] = useState({ open: false, message: '' });
 
   // Filters
   const [search, setSearch] = useState('');
@@ -256,6 +258,13 @@ export default function ProductsPage() {
         setRecipesLoading(false);
       }
     } else {
+      if (currentUser?.maxProducts && products.length >= currentUser.maxProducts) {
+        setQuotaModal({
+          open: true,
+          message: `لقد بلغت الحد الأقصى للأصناف والمنتجات المسموحة في باقتك (${products.length} من أصل ${currentUser.maxProducts} صنف). يرجى ترقية الباقة لإضافة منيو وأصناف جديدة.`
+        });
+        return;
+      }
       setEditingProduct(null);
       setForm({
         name: '',
@@ -319,7 +328,12 @@ export default function ProductsPage() {
       setIsModalOpen(false);
       await loadData();
     } catch (err) {
-      toast.error(err.message, 'فشل حفظ المنتج أو المكونات');
+      if (err.status === 403 || err.message?.includes('وصلت للحد الأقصى') || err.message?.includes('Quota exceeded') || err.data?.error === 'QUOTA_EXCEEDED') {
+        setIsModalOpen(false);
+        setQuotaModal({ open: true, message: err.message });
+      } else {
+        toast.error(err.message, 'فشل حفظ المنتج أو المكونات');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -358,7 +372,23 @@ export default function ProductsPage() {
           <h1 className="page__title">المنتجات</h1>
           <p className="page__subtitle">إدارة المنتجات والأسعار والتوافر</p>
         </div>
-        <div className="page__actions">
+        <div className="page__actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {currentUser?.maxProducts && (
+            <span
+              className="badge"
+              style={{
+                background: products.length >= currentUser.maxProducts ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.15)',
+                color: products.length >= currentUser.maxProducts ? '#ef4444' : '#f59e0b',
+                border: `1px solid ${products.length >= currentUser.maxProducts ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.3)'}`,
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.85rem'
+              }}
+            >
+              السعة: {products.length} / {currentUser.maxProducts} صنف
+            </span>
+          )}
           {role === ROLES.SUPERVISOR && (
             <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()}>
               إضافة منتج
@@ -366,6 +396,16 @@ export default function ProductsPage() {
           )}
         </div>
       </div>
+
+      {/* Quota Limit Reached Modal */}
+      <QuotaExceededModal
+        isOpen={quotaModal.open}
+        onClose={() => setQuotaModal({ open: false, message: '' })}
+        resourceName="الأصناف والمنتجات"
+        currentCount={products.length}
+        maxLimit={currentUser?.maxProducts || products.length}
+        customMessage={quotaModal.message}
+      />
 
       <div className="page-filters">
         <Input

@@ -8,8 +8,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record DebtRequest(
-        @NotBlank String creditorName,
-        @NotNull @Positive BigDecimal amount,
+        @NotBlank(message = "اسم العميل أو الدائن مطلوب")
+        String creditorName,
+
+        @NotNull(message = "مبلغ المديونية مطلوب")
+        @Positive(message = "يجب أن يكون المبلغ أكبر من صفر")
+        BigDecimal amount,
+
         String notes,
         LocalDate debtDate,
         LocalDate dueDate

@@ -5,6 +5,7 @@ export const auditApi = {
   saveAuditItem: (dto) => client.post('/inventory/audit-items', dto).then((r) => r.data),
   deleteAuditItem: (id) => client.delete(`/inventory/audit-items/${id}`).then((r) => r.data),
 
+  getAllRecipes: () => client.get('/inventory/recipes').then((r) => r.data),
   getProductRecipes: (productId) => client.get(`/inventory/recipes/${productId}`).then((r) => r.data),
   saveProductRecipes: (productId, recipeDtos) => client.post(`/inventory/recipes/${productId}`, recipeDtos).then((r) => r.data),
 

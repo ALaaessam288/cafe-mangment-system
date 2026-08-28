@@ -104,6 +104,13 @@ public class ShiftAuditService {
     }
 
     @Transactional(readOnly = true)
+    public List<ProductRecipeDto> getAllRecipes() {
+        return productRecipeRepository.findAll().stream()
+                .map(ProductRecipeDto::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<ProductRecipeDto> getProductRecipes(Long productId) {
         return productRecipeRepository.findAllByProductId(productId).stream()
                 .map(ProductRecipeDto::from)
@@ -232,15 +239,6 @@ public class ShiftAuditService {
                 // Deduct stock quantity
                 double newStock = Math.max(0.0, auditItem.getStockQuantity() - totalDeducted);
                 auditItem.setStockQuantity(newStock);
-
-                // If stock reaches 0, auto-disable the product!
-                if (newStock <= 0.0) {
-                    Product product = item.getProduct();
-                    product.setAvailable(false);
-                    productRepository.save(product);
-                    System.out.println("[RECIPE AUDIT] Raw material '" + auditItem.getName() + "' depleted! Auto-disabled product: " + product.getNameAr());
-                }
-
                 shiftAuditItemRepository.save(auditItem);
 
                 // Update shift audit record sold deduction count if present

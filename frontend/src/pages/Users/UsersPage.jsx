@@ -9,6 +9,7 @@ import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
+import QuotaExceededModal from '../../components/QuotaExceededModal/QuotaExceededModal';
 import { ROLES } from '../../utils/constants';
 
 export default function UsersPage() {
@@ -22,6 +23,7 @@ export default function UsersPage() {
   // Modals
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [quotaModal, setQuotaModal] = useState({ open: false, message: '' });
   
   const [editingUser, setEditingUser] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,11 +50,19 @@ export default function UsersPage() {
     if (user) {
       setEditingUser(user);
       setForm({ fullName: user.fullName, username: user.username, role: user.role, password: '', pin: '' });
+      setIsEditModalOpen(true);
     } else {
+      if (currentUser?.maxUsers && users.length >= currentUser.maxUsers) {
+        setQuotaModal({
+          open: true,
+          message: `لقد بلغت الحد الأقصى للمستخدمين المسموح بهم في باقتك (${users.length} من أصل ${currentUser.maxUsers} مستخدم). يرجى ترقية الباقة لإضافة كاشيرات وموظفين جدد.`
+        });
+        return;
+      }
       setEditingUser(null);
       setForm({ fullName: '', username: '', role: 'CASHIER', password: '', pin: '' });
+      setIsEditModalOpen(true);
     }
-    setIsEditModalOpen(true);
   }
 
   function handleOpenPassword(user) {
@@ -92,7 +102,12 @@ export default function UsersPage() {
       setIsEditModalOpen(false);
       await loadUsers();
     } catch (err) {
-      toast.error(err.message, 'فشل حفظ بيانات المستخدم');
+      if (err.status === 403 || err.message?.includes('وصلت للحد الأقصى') || err.message?.includes('Quota exceeded') || err.data?.error === 'QUOTA_EXCEEDED') {
+        setIsEditModalOpen(false);
+        setQuotaModal({ open: true, message: err.message });
+      } else {
+        toast.error(err.message, 'فشل حفظ بيانات المستخدم');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -148,7 +163,23 @@ export default function UsersPage() {
           <h1 className="page__title">إدارة المستخدمين 👤</h1>
           <p className="page__subtitle">إدارة حسابات الموظفين، تحديد الصلاحيات وتغيير كلمات المرور</p>
         </div>
-        <div className="page__actions">
+        <div className="page__actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {currentUser?.maxUsers && (
+            <span
+              className="badge"
+              style={{
+                background: users.length >= currentUser.maxUsers ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.15)',
+                color: users.length >= currentUser.maxUsers ? '#ef4444' : '#f59e0b',
+                border: `1px solid ${users.length >= currentUser.maxUsers ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.3)'}`,
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.85rem'
+              }}
+            >
+              السعة: {users.length} / {currentUser.maxUsers} مستخدم
+            </span>
+          )}
           {canManageUsers && (
             <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenEdit()} variant="primary">
               إضافة مستخدم جديد
@@ -156,6 +187,16 @@ export default function UsersPage() {
           )}
         </div>
       </div>
+
+      {/* Quota Limit Reached Modal */}
+      <QuotaExceededModal
+        isOpen={quotaModal.open}
+        onClose={() => setQuotaModal({ open: false, message: '' })}
+        resourceName="المستخدمين"
+        currentCount={users.length}
+        maxLimit={currentUser?.maxUsers || users.length}
+        customMessage={quotaModal.message}
+      />
 
       <div className="data-table-wrap">
         {loading ? (

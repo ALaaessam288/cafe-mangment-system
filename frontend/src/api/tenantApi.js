@@ -24,4 +24,14 @@ export const tenantApi = {
       })
       .then((r) => r.data);
   },
+
+  getMe: () => client.get('/tenant/me').then((r) => r.data),
+
+  getUsage: () => client.get('/tenant/usage').then((r) => r.data),
+
+  updateLogo: (logoUrl) => client.put('/tenant/logo', { logoUrl }).then((r) => r.data),
+
+  selectPlan: (plan) => client.put('/tenant/plan', { plan }).then((r) => r.data),
+
+  activateLicense: (key) => client.post('/tenant/license/activate', { key }).then((r) => r.data),
 };

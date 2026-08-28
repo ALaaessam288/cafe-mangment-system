@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, ShoppingCart, LayoutDashboard, Package, Tag, Table2,
   Users, Receipt, BarChart3, Settings, LogOut, Coffee, Contact,
-  Landmark, ChefHat, Maximize, Volume2, VolumeX, Keyboard, ArrowRight
+  Landmark, ChefHat, Maximize, Volume2, VolumeX, Keyboard, ArrowRight, Crown
 } from 'lucide-react';
 import { ROUTES, ROLES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
@@ -19,7 +19,7 @@ export default function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
 
   const isCashier = role === ROLES.CASHIER;
   const isSupervisor = role === ROLES.SUPERVISOR;
-  const isAdmin = role === ROLES.ADMIN;
+  const isAdmin = role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN;
 
   useEffect(() => {
     if (isOpen) {

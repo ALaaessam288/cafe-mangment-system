@@ -25,12 +25,68 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
     private static final List<String> EXEMPT_PATHS = List.of(
             "/api/auth/",
             "/api/platform/",
+            "/api/admin/",
+            "/api/tenant/license/",
+            "/api/tenant/me",
+            "/api/tenant/usage",
+            "/api/tenant/logo",
+            "/api/license/",
             "/v3/api-docs",
             "/swagger-ui"
     );
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        String path = request.getRequestURI();
+        
+        for (String exempt : EXEMPT_PATHS) {
+            if (path.startsWith(exempt)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
+
+        Long tenantId = TenantContext.get();
+        if (tenantId != null) {
+            Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+            if (tenant != null) {
+                // If suspended by Super Admin, block ALL requests (including GET)
+                if (tenant.getStatus() == TenantStatus.SUSPENDED) {
+                    sendForbiddenResponse(response, "تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني.");
+                    return;
+                }
+
+                // Allow GET requests in read-only mode for expired trials/subscriptions
+                if ("GET".equalsIgnoreCase(request.getMethod())) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
+                Instant now = Instant.now();
+                if (tenant.getStatus() == TenantStatus.TRIAL && tenant.getTrialEndsAt() != null && now.isAfter(tenant.getTrialEndsAt())) {
+                    sendForbiddenResponse(response, "انتهت الفترة التجريبية (14 يوم). يرجى ترقية الباقة أو إدخال مفتاح الترخيص لمتابعة العمل.");
+                    return;
+                }
+
+                if (tenant.getStatus() == TenantStatus.ACTIVE && tenant.getSubscriptionEndsAt() != null && now.isAfter(tenant.getSubscriptionEndsAt())) {
+                    sendForbiddenResponse(response, "انتهت صلاحية اشتراكك. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد.");
+                    return;
+                }
+            }
+        }
+
+        // Allow GET requests if no tenant or tenant not expired
+        if ("GET".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         filterChain.doFilter(request, response);
+    }
+
+    private void sendForbiddenResponse(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"error\":\"SUBSCRIPTION_EXPIRED\",\"status\":403,\"message\":\"" + message + "\"}");
     }
 }

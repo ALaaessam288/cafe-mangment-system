@@ -5,6 +5,7 @@ import com.example.cafemangmentsystem.inventory.entity.ProductRecipe;
 public record ProductRecipeDto(
         Long id,
         Long productId,
+        String productName,
         Long auditItemId,
         String auditItemName,
         String auditItemUnit,
@@ -13,10 +14,11 @@ public record ProductRecipeDto(
     public static ProductRecipeDto from(ProductRecipe recipe) {
         return new ProductRecipeDto(
                 recipe.getId(),
-                recipe.getProduct().getId(),
-                recipe.getAuditItem().getId(),
-                recipe.getAuditItem().getName(),
-                recipe.getAuditItem().getUnit(),
+                recipe.getProduct() != null ? recipe.getProduct().getId() : null,
+                recipe.getProduct() != null ? recipe.getProduct().getNameAr() : null,
+                recipe.getAuditItem() != null ? recipe.getAuditItem().getId() : null,
+                recipe.getAuditItem() != null ? recipe.getAuditItem().getName() : null,
+                recipe.getAuditItem() != null ? recipe.getAuditItem().getUnit() : null,
                 recipe.getDeductionQuantity()
         );
     }

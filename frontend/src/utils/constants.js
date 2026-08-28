@@ -3,6 +3,7 @@ export const BASE_URL = '/api';
 
 /* ── Roles ── */
 export const ROLES = {
+  SUPER_ADMIN: 'SUPER_ADMIN',
   ADMIN:      'ADMIN',
   SUPERVISOR: 'SUPERVISOR',
   CASHIER:    'CASHIER',
@@ -51,38 +52,41 @@ export const SHIFT_STATUS = {
 
 /* ── Routes ── */
 export const ROUTES = {
-  SPLASH:     '/',
-  WELCOME:    '/welcome',
-  SETUP:      '/setup',
-  LOGIN:      '/login',
-  REGISTER:   '/register',
-  DASHBOARD:  '/dashboard',
-  POS:        '/pos',
-  KDS:        '/kds',
-  PRODUCTS:   '/products',
-  CATEGORIES: '/categories',
-  TABLES:     '/tables',
-  USERS:      '/users',
-  EXPENSES:   '/expenses',
-  INVOICES:   '/invoices',
-  EMPLOYEES:  '/employees',
-  REPORTS:    '/reports',
-  SETTINGS:   '/settings',
-  INVENTORY:  '/inventory',
-  DEBTS:      '/debts',
-  SUPER_ADMIN: '/super-admin',
+  SPLASH:            '/',
+  WELCOME:           '/welcome',
+  SETUP:             '/setup',
+  LOGIN:             '/login',
+  REGISTER:          '/register',
+  DASHBOARD:         '/dashboard',
+  POS:               '/pos',
+  KDS:               '/kds',
+  PRODUCTS:          '/products',
+  CATEGORIES:        '/categories',
+  TABLES:            '/tables',
+  USERS:             '/users',
+  EXPENSES:          '/expenses',
+  INVOICES:          '/invoices',
+  EMPLOYEES:         '/employees',
+  REPORTS:           '/reports',
+  SETTINGS:          '/settings',
+  INVENTORY:         '/inventory',
+  DEBTS:             '/debts',
+  SUPER_ADMIN:       '/super-admin',
+  SUPER_ADMIN_LOGIN: '/super-admin/login',
 };
 
 /* ── Role default routes ── */
 export const ROLE_DEFAULT_ROUTE = {
-  [ROLES.CASHIER]:    ROUTES.POS,
-  [ROLES.SUPERVISOR]: ROUTES.DASHBOARD,
-  [ROLES.ADMIN]:      ROUTES.DASHBOARD,
+  [ROLES.CASHIER]:     ROUTES.POS,
+  [ROLES.SUPERVISOR]:  ROUTES.DASHBOARD,
+  [ROLES.ADMIN]:       ROUTES.DASHBOARD,
+  [ROLES.SUPER_ADMIN]: ROUTES.SUPER_ADMIN,
 };
 
 /* ── Role-allowed routes ── */
 export const ROLE_ROUTES = {
-  [ROLES.CASHIER]:    [ROUTES.POS, ROUTES.KDS, ROUTES.INVOICES, ROUTES.EXPENSES, ROUTES.EMPLOYEES, ROUTES.SETTINGS],
-  [ROLES.SUPERVISOR]: Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN && r !== ROUTES.SUPER_ADMIN),
-  [ROLES.ADMIN]:      Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN && r !== ROUTES.POS && r !== ROUTES.KDS),
+  [ROLES.CASHIER]:     [ROUTES.POS, ROUTES.KDS, ROUTES.INVOICES, ROUTES.EXPENSES, ROUTES.EMPLOYEES],
+  [ROLES.SUPERVISOR]:  Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN && r !== ROUTES.SUPER_ADMIN && r !== ROUTES.SUPER_ADMIN_LOGIN && r !== ROUTES.SETTINGS),
+  [ROLES.SUPER_ADMIN]: [ROUTES.SUPER_ADMIN],
+  [ROLES.ADMIN]:       Object.values(ROUTES).filter((r) => r !== ROUTES.SPLASH && r !== ROUTES.LOGIN && r !== ROUTES.POS && r !== ROUTES.KDS && r !== ROUTES.SUPER_ADMIN && r !== ROUTES.SUPER_ADMIN_LOGIN),
 };

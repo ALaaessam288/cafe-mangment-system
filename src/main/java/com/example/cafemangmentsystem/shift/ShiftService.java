@@ -113,12 +113,20 @@ public class ShiftService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Shift is already closed");
         }
 
+        BigDecimal openFloat = shift.getOpeningFloat() != null ? shift.getOpeningFloat() : BigDecimal.ZERO;
         BigDecimal cashCollected = paymentRepository.sumAmountByShiftIdAndMethod(shift.getId(), PaymentMethod.CASH);
+        BigDecimal cash = cashCollected != null ? cashCollected : BigDecimal.ZERO;
         BigDecimal drawerExpenses = expenseRepository.sumDrawerAmountByShiftId(shift.getId());
-        shift.setExpectedCash(shift.getOpeningFloat().add(cashCollected).subtract(drawerExpenses));
-        shift.setCountedCash(request.countedCash());
-        shift.setVariance(request.countedCash().subtract(shift.getExpectedCash()));
-        if (request.snacksNet() != null) {
+        BigDecimal exp = drawerExpenses != null ? drawerExpenses : BigDecimal.ZERO;
+
+        BigDecimal expected = openFloat.add(cash).subtract(exp);
+        shift.setExpectedCash(expected);
+
+        BigDecimal counted = request != null && request.countedCash() != null ? request.countedCash() : BigDecimal.ZERO;
+        shift.setCountedCash(counted);
+        shift.setVariance(counted.subtract(expected));
+
+        if (request != null && request.snacksNet() != null) {
             shift.setSnacksNet(request.snacksNet());
         }
         shift.setClosedAt(Instant.now());

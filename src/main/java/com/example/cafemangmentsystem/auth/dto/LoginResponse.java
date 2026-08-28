@@ -18,6 +18,8 @@ public record LoginResponse(
         Integer maxUsers,
         Integer maxProducts,
         Boolean includesKds,
-        Boolean includesExpenses
+        Boolean includesExpenses,
+        String logoUrl,
+        Boolean planSelected
 ) {
 }

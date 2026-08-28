@@ -9,10 +9,19 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record ExpenseRequest(
-        @NotNull ExpenseType type,
-        @NotNull RevenueLine revenueLine,
-        @NotNull @Positive BigDecimal amount,
-        @NotNull LocalDate expenseDate,
+        @NotNull(message = "نوع المصروف مطلوب")
+        ExpenseType type,
+
+        @NotNull(message = "بند الإيراد مطلوب")
+        RevenueLine revenueLine,
+
+        @NotNull(message = "مبلغ المصروف مطلوب")
+        @Positive(message = "يجب أن يكون المبلغ أكبر من صفر")
+        BigDecimal amount,
+
+        @NotNull(message = "تاريخ المصروف مطلوب")
+        LocalDate expenseDate,
+
         boolean recurring,
         boolean paidFromDrawer,
         boolean isAdvance,

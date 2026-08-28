@@ -35,7 +35,7 @@ public class ShiftController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR', 'CASHIER')")
     public ShiftResponse open(@AuthenticationPrincipal UserPrincipal principal, @Valid @RequestBody OpenShiftRequest request) {
         return shiftService.open(principal.getId(), request);
     }

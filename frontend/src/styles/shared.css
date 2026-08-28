@@ -194,6 +194,41 @@
   gap: 14px;
 }
 
+/* ── Compact & Scrollable Modal Form Utilities ── */
+.modal-form-scrollable {
+  max-height: calc(82vh - 110px);
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+.modal-form-scrollable::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-form-scrollable::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+}
+
+.modal-form-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+}
+
+.modal-form-scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+.form-grid--compact {
+  gap: 10px;
+}
+
+.form-grid--compact .field-input,
+.form-grid--compact .field-select__control {
+  height: 38px;
+  font-size: 13px;
+}
+
 @media (max-width: 600px) {
   .form-grid--2 {
     grid-template-columns: 1fr;

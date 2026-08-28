@@ -43,6 +43,12 @@ public class ShiftAuditController {
         shiftAuditService.deleteAuditItem(id);
     }
 
+    @GetMapping("/inventory/recipes")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR','CASHIER')")
+    public List<ProductRecipeDto> getAllRecipes() {
+        return shiftAuditService.getAllRecipes();
+    }
+
     @GetMapping("/inventory/recipes/{productId}")
     @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR','CASHIER')")
     public List<ProductRecipeDto> getProductRecipes(@PathVariable Long productId) {

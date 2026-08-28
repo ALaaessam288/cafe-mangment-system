@@ -29,6 +29,8 @@ import com.example.cafemangmentsystem.payment.entity.Payment;
 import com.example.cafemangmentsystem.payment.entity.PaymentMethod;
 import com.example.cafemangmentsystem.payment.repository.PaymentRepository;
 import com.example.cafemangmentsystem.printing.PrintJobService;
+import com.example.cafemangmentsystem.register.entity.Register;
+import com.example.cafemangmentsystem.register.repository.RegisterRepository;
 import com.example.cafemangmentsystem.shift.entity.Shift;
 import com.example.cafemangmentsystem.shift.repository.ShiftRepository;
 import com.example.cafemangmentsystem.common.tenant.TenantContext;
@@ -49,6 +51,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -72,6 +75,7 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final CafeTableRepository cafeTableRepository;
     private final ProductRepository productRepository;
+    private final RegisterRepository registerRepository;
     private final ShiftRepository shiftRepository;
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
@@ -82,10 +86,25 @@ public class OrderService {
     private final com.example.cafemangmentsystem.inventory.ShiftAuditService shiftAuditService;
 
     public OrderResponse open(Long userId, OpenOrderRequest request) {
-        Shift shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "You must have an open shift to open an order"));
-
         User openedBy = userRepository.findById(userId).orElseThrow();
+
+        Shift shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
+                .or(() -> shiftRepository.findAllByClosedAtIsNull().stream().findFirst())
+                .orElseGet(() -> {
+                    List<Register> registers = registerRepository.findAll();
+                    Register reg = registers.stream().filter(Register::isActive).findFirst()
+                            .orElseGet(() -> {
+                                Register newReg = Register.builder().name("الكاشير الرئيسي").build();
+                                return registerRepository.save(newReg);
+                            });
+                    Shift autoShift = Shift.builder()
+                            .user(openedBy)
+                            .register(reg)
+                            .openedAt(Instant.now())
+                            .openingFloat(BigDecimal.ZERO)
+                            .build();
+                    return shiftRepository.save(autoShift);
+                });
 
         CafeTable table = null;
         if (request.type() == OrderType.DINE_IN) {
@@ -393,11 +412,6 @@ public class OrderService {
         if (!product.isTrackInventory() && product.getStockQuantity() <= 0) {
             return;
         }
-        int available = product.getStockQuantity() - product.getReservedQuantity();
-        if (quantity > available) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "الكمية المتاحة من «" + product.getNameAr() + "» غير كافية (متاح: " + Math.max(0, available) + ")");
-        }
         product.setReservedQuantity(product.getReservedQuantity() + quantity);
         productRepository.save(product);
     }
@@ -423,10 +437,7 @@ public class OrderService {
         }
         product.setStockQuantity(Math.max(0, product.getStockQuantity() - item.getQuantity()));
         product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - item.getQuantity()));
-        if (product.getStockQuantity() <= 0) {
-            product.setAvailable(false);
-            log.warn("Product {} stock dropped to 0 or below. Marked as unavailable.", product.getNameAr());
-        }
+        product.setAvailable(true);
         productRepository.save(product);
     }
 

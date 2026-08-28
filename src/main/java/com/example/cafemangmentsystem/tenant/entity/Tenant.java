@@ -74,4 +74,11 @@ public class Tenant extends BaseEntity {
     @Column(name = "whatsapp_alerts_enabled")
     @Builder.Default
     private Boolean whatsappAlertsEnabled = false;
+
+    @Column(name = "logo_url", length = 1000000)
+    private String logoUrl;
+
+    @Column(name = "plan_selected")
+    @Builder.Default
+    private Boolean planSelected = false;
 }

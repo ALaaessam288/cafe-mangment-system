@@ -18,4 +18,7 @@ export const authApi = {
 
   getTenants: () =>
     client.get('/auth/tenants').then((r) => r.data),
+
+  loginSuperAdmin: (username, password) =>
+    client.post('/auth/super-admin/login', { username, password }).then((r) => r.data),
 };

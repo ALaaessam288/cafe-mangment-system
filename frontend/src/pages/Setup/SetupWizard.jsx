@@ -60,32 +60,51 @@ export default function SetupWizard() {
     setIsSubmitting(true);
     setError(null);
     try {
+      const bType =
+        formData.businessType === 'BOTH'
+          ? 'CAFE_AND_RESTAURANT'
+          : formData.businessType === 'RESTAURANT'
+          ? 'RESTAURANT'
+          : 'CAFE';
+
+      const tpl =
+        formData.menuTemplate === 'BOTH'
+          ? 'CAFE_AND_RESTAURANT'
+          : formData.menuTemplate === 'EGYPTIAN_RESTO'
+          ? 'EGYPTIAN_RESTAURANT'
+          : formData.menuTemplate === 'EMPTY'
+          ? null
+          : 'CLASSIC_CAFE';
+
       const payload = {
-        name: formData.tenantName,
-        slug: formData.tenantSlug,
-        ownerName: formData.ownerName,
-        email: `${formData.username}@example.com`, // dummy email for now
-        phone: formData.whatsapp,
-        adminUsername: formData.username,
-        adminPassword: formData.password,
-        settings: {
-          businessType: formData.businessType,
-          tablesCount: formData.tablesCount,
-          menuTemplate: formData.menuTemplate
-        }
+        name: formData.tenantName.trim(),
+        slug: formData.tenantSlug.trim(),
+        businessType: bType,
+        ownerUsername: formData.username.trim(),
+        ownerPassword: formData.password,
+        ownerFullName: formData.ownerName ? formData.ownerName.trim() : formData.username.trim(),
+        timezone: 'Africa/Cairo',
+        currency: 'EGP',
+        templateId: tpl,
+        defaultTables: Number(formData.tablesCount) || 5,
       };
 
       await tenantApi.provision(payload);
 
-      // login
-      const result = await login(formData.tenantSlug, formData.username, formData.password);
+      // auto-login with username and password
+      const result = await login(payload.slug, payload.ownerUsername, payload.ownerPassword);
       if (result.success) {
-        navigate(result.defaultRoute);
+        navigate(result.defaultRoute || ROUTES.POS);
       } else {
-        setError(result.message || 'فشل تسجيل الدخول التلقائي');
+        setError(result.message || 'تم التأسيس بنجاح ولكن فشل تسجيل الدخول التلقائي');
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'حدث خطأ أثناء الإعداد');
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'حدث خطأ أثناء تأسيس المنشأة';
+      setError(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -332,13 +351,19 @@ export default function SetupWizard() {
 
   const isStepValid = () => {
     if (step === 1) return formData.tenantName && formData.tenantSlug;
-    if (step === 2) return formData.ownerName && formData.username && formData.password && formData.password === formData.confirmPassword;
+    if (step === 2) return formData.ownerName && formData.username && formData.password && formData.password.length >= 8 && formData.password === formData.confirmPassword;
     return true;
   };
 
   return (
     <main className="setup-page">
       <div className="setup-container">
+        {/* Brand Logo Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '16px' }}>
+          <img src="/caffio-logo.png" alt="Caffio" style={{ width: 44, height: 44, objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(245, 158, 11, 0.45))' }} />
+          <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.5px' }}>Caffio Setup</span>
+        </div>
+
         {/* Progress Bar */}
         <div className="setup-progress">
           {Array.from({ length: 5 }).map((_, i) => (

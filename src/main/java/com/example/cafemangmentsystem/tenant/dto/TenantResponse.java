@@ -20,7 +20,9 @@ public record TenantResponse(
         int maxUsers,
         int maxProducts,
         boolean includesKds,
-        boolean includesExpenses
+        boolean includesExpenses,
+        String logoUrl,
+        boolean planSelected
 ) {
     public static TenantResponse from(Tenant tenant) {
         var plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
@@ -44,7 +46,9 @@ public record TenantResponse(
                 users,
                 products,
                 plan.isIncludesKds(),
-                plan.isIncludesExpenses()
+                plan.isIncludesExpenses(),
+                tenant.getLogoUrl(),
+                Boolean.TRUE.equals(tenant.getPlanSelected())
         );
     }
 }

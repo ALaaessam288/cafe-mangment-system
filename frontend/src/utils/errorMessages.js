@@ -1,18 +1,8 @@
 /*
- * Turns backend error strings into something a cashier can act on.
- *
- * The API speaks English and describes state ("Order must be fully paid before it can be closed
- * (current status: SENT)"). That is the right message for a developer reading a log and the wrong
- * one for someone standing at a till with a queue: it names the rule that was broken but not the
- * button to press next. Every rule below answers "so what do I do now?" in the same Egyptian
- * Arabic the rest of the screen uses.
- *
- * Rules are tried in order and the first match wins, so put specific patterns above general ones.
- * Anything unmatched falls through unchanged rather than being hidden behind a vague apology - a
- * strange English string is still more useful to whoever gets called over than "حصل خطأ".
+ * Turns backend error strings and validation errors into intuitive Arabic messages.
+ * Every rule answers "so what do I do now?" in Egyptian Arabic with clear guidance.
  */
 
-/* Order lifecycle states, for messages that quote the current status back. */
 const ORDER_STATUS_AR = {
   OPEN: 'مفتوح',
   SENT: 'متبعت للمطبخ',
@@ -33,131 +23,121 @@ const ITEM_STATUS_AR = {
 const orderStatusAr = (s) => ORDER_STATUS_AR[s] ?? s;
 const itemStatusAr = (s) => ITEM_STATUS_AR[s] ?? s;
 
-/* [pattern, replacement]. Replacement may be a string or a function of the regex match. */
-const RULES = [
-  /* ── Shift ── */
-  [/You must have an open shift/i,
-    'لازم تفتح الشيفت الأول. دوس على «ابدأ الشيفت» وأدخل الفلوس اللي في الدرج.'],
-  [/No open shift for the current user/i,
-    'مفيش شيفت مفتوح باسمك دلوقتي. افتح شيفت جديد عشان تقدر تشتغل.'],
+export const RULES = [
+  /* ── Quota & Subscriptions ── */
+  [/Quota exceeded.*table/i, 'وصلت للحد الأقصى لعدد الطاولات المسموحة في باقتك. يرجى ترقية الباقة لزيادة السعة.'],
+  [/Quota exceeded.*user/i, 'وصلت للحد الأقصى لعدد المستخدمين المسموح به في باقتك. يرجى ترقية الباقة لإضافة مستخدمين جدد.'],
+  [/Quota exceeded.*product/i, 'وصلت للحد الأقصى لعدد الأصناف المسموحة في باقتك. يرجى ترقية الباقة لإضافة أصناف أخرى.'],
+  [/QUOTA_EXCEEDED/i, 'تم تجاوز الحد الأقصى المسموح به في باقة الاشتراك الحالية.'],
+  [/ACCOUNT_DISABLED|تم إيقاف هذا الحساب/i, 'تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني للتفعيل.'],
+  [/SUBSCRIPTION_EXPIRED|انتهت الفترة التجريبية/i, 'انتهت الفترة التجريبية أو الاشتراك. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد.'],
+
+  /* ── Validation Messages ── */
+  [/must not be null|must not be blank|is required/i, 'يرجى ملء جميع الحقول المطلوبة والتأكد من إدخال البيانات بشكل صحيح.'],
+  [/must be greater than 0|must be positive/i, 'يجب أن تكون القيمة المدخلة أكبر من الصفر.'],
+  [/must be greater than or equal to 0/i, 'يجب ألا تكون القيمة سالبة (صفر أو أكبر).'],
+  [/password must be at least/i, 'كلمة المرور يجب أن تتكون من 6 أحرف على الأقل.'],
+  [/slug must be lowercase/i, 'المعرف المختصر (Slug) يجب أن يتكون من حروف إنجليزية صغيرة وأرقام وعلامة (-) فقط.'],
+  [/Slug already taken/i, 'هذا المعرف (Slug) مستخدم بالفعل، يرجى اختيار اسم أو معرف آخر.'],
+  [/Username already taken|Username already exists/i, 'اسم المستخدم هذا مسجل بالفعل لمستخدم آخر، يرجى اختيار اسم مختلف.'],
+  [/Table number already exists/i, 'رقم الطاولة هذا مسجل بالفعل، يرجى إدخال رقم مختلف.'],
+
+  /* ── Shifts ── */
+  [/You must have an open shift/i, 'لازم تفتح الشيفت الأول. اضغط على «ابدأ الشيفت» وأدخل الفلوس اللي في الدرج.'],
+  [/No open shift for the current user/i, 'لا يوجد شيفت مفتوح باسمك حالياً. افتح شيفت جديد لتتمكن من العمل.'],
   [/(There is already an open shift for this register|Register already has an open shift)/i,
-    'الدرج ده لسه مفتوح من شيفت قبل كده. لازم يتقفل الأول قبل ما تفتح شيفت جديد.'],
-  [/Shift is already closed/i, 'الشيفت ده مقفول خلاص.'],
-  [/You can only close your own shift/i,
-    'مينفعش تقفل شيفت حد تاني. كل واحد بيقفل شيفته بنفسه.'],
-  [/You can only view your own shift/i, 'مينفعش تشوف شيفت حد تاني.'],
-  [/Register is not active/i, 'الدرج ده مقفول. اختار درج تاني أو كلّم المدير.'],
+    'الخزينة/الدرج مفتوح بالفعل من شيفت سابق. يجب إغلاقه أولاً قبل فتح شيفت جديد.'],
+  [/Shift is already closed/i, 'هذا الشيفت مغلق بالفعل.'],
+  [/You can only close your own shift/i, 'لا يمكنك إغلاق شيفت مستخدم آخر. كل مستخدم يغلق شيفته بنفسه.'],
+  [/You can only view your own shift/i, 'يمكنك فقط عرض تفاصيل شيفك الخاص.'],
+  [/Register is not active/i, 'هذه الخزينة متوقفة حالياً. تواصل مع الإدارة لتفعيلها.'],
 
   /* ── Opening an order ── */
-  [/Table (\S+) already has an open order/i,
-    (m) => `ترابيزة ${m[1]} مفتوحة بأوردر تاني. دوس عليها من الشمال تشوف الأوردر بتاعها.`],
-  [/Dine-in orders require a tableId/i, 'اختار ترابيزة الأول.'],
-  [/Takeaway orders require a customerName/i, 'اكتب اسم العميل عشان تعرف الأوردر لمين.'],
-  [/Takeaway orders must not have a tableId/i, 'أوردر التيك أواي مالوش ترابيزة.'],
-  [/Dine-in orders must not include takeaway pickup details/i,
-    'أوردر الصالة مالوش بيانات استلام.'],
-  [/Table (\S+) is not active/i,
-    (m) => `ترابيزة ${m[1]} مقفولة دلوقتي. اختار ترابيزة تانية.`],
-  [/Table not found/i, 'الترابيزة دي مش موجودة. اعمل تحديث للشاشة.'],
-  [/Scheduled pickup is only available for restaurant tenants/i,
-    'تحديد ميعاد الاستلام متاح للمطاعم بس.'],
-  [/pickupAt must be in the future/i, 'ميعاد الاستلام لازم يكون بعد دلوقتي.'],
+  [/Table (\\S+) already has an open order/i, (m) => `طاولة ${m[1]} مشغولة بأوردر مفتوح بالفعل.`],
+  [/Dine-in orders require a tableId/i, 'يرجى اختيار الطاولة أولاً لطلبات الصالة.'],
+  [/Takeaway orders require a customerName/i, 'يرجى كتابة اسم العميل لطلب التيك أواي.'],
+  [/Takeaway orders must not have a tableId/i, 'طلبات التيك أواي لا ترتبط بطاولة.'],
+  [/Dine-in orders must not include takeaway pickup details/i, 'طلبات الصالة لا تحتاج بيانات استلام تيك أواي.'],
+  [/Table (\\S+) is not active/i, (m) => `طاولة ${m[1]} غير متاحة أو معطلة حالياً.`],
+  [/Table not found/i, 'هذه الطاولة غير موجودة. يرجى تحديث الشاشة.'],
+  [/Scheduled pickup is only available for restaurant tenants/i, 'تحديد موعد الاستلام متاح للمطاعم فقط.'],
+  [/pickupAt must be in the future/i, 'موعد الاستلام يجب أن يكون وقتاً مستقبلياً.'],
 
   /* ── Items ── */
-  [/Product is not available:?\s*(.*)/i,
-    (m) => `«${(m[1] || 'الصنف').trim()}» خلص أو متوقف دلوقتي. كلّم المدير يرجّعه للمنيو.`],
-  [/Product not found/i, 'الصنف ده مش موجود. اقفل الشاشة وافتحها تاني عشان تحدّث المنيو.'],
-  [/Item is already cancelled/i, 'الصنف ده ملغي خلاص.'],
+  [/Product is not available:?\\s*(.*)/i, (m) => `الصنف «${(m[1] || '').trim()}» نفد أو غير متاح حالياً.`],
+  [/Product not found/i, 'الصنف المطلوب غير موجود. يرجى تحديث القائمة.'],
+  [/Item is already cancelled/i, 'هذا الصنف تم إلغاؤه بالفعل.'],
   [/Only items that have not been sent to the kitchen can be removed/i,
-    'الصنف ده راح للمطبخ خلاص. لازم تلغيه بسبب بدل ما تشيله.'],
-  [/Item is (\w+) and cannot be modified/i,
-    (m) => `الصنف ده ${itemStatusAr(m[1])}، مش هينفع يتعدّل.`],
-  [/Quantity must be at least 1/i, 'الكمية لازم تكون 1 على الأقل. لو عايز تشيله، دوس على (−).'],
-  [/Cannot discount a cancelled item/i, 'مينفعش تحط خصم على صنف ملغي.'],
-  [/Order item .* does not belong to order/i, 'الصنف ده مش في الأوردر ده. اعمل تحديث للشاشة.'],
-  [/Order item not found/i, 'الصنف ده مش موجود في الأوردر. اعمل تحديث للشاشة.'],
+    'تم إرسال هذا الصنف للمطبخ بالفعل. لإلغائه يرجى استخدام زر الإلغاء مع توضيح السبب.'],
+  [/Item is (\\w+) and cannot be modified/i, (m) => `الصنف ${itemStatusAr(m[1])} ولا يمكن تعديله.`],
+  [/Quantity must be at least 1/i, 'الكمية يجب أن تكون 1 على الأقل.'],
+  [/Cannot discount a cancelled item/i, 'لا يمكن تطبيق خصم على صنف ملغي.'],
+  [/Order item .* does not belong to order/i, 'الصنف لا ينتمي لهذا الأوردر.'],
+  [/Order item not found/i, 'الصنف غير موجود في الأوردر.'],
 
   /* ── Order state ── */
-  [/Order must be fully paid before it can be closed \(current status:\s*(\w+)/i,
-    () => 'لسه فيه باقي على الفاتورة. حصّل الباقي الأول وبعدين اقفل الأوردر.'],
-  [/Order is already fully paid/i, 'الفاتورة اتدفعت بالكامل خلاص.'],
-  [/Order must be PAID or CLOSED to be refunded/i,
-    'مينفعش ترجّع فلوس على أوردر لسه ما اتدفعش.'],
-  [/Order is (\w+) and cannot accept payments/i,
-    (m) => `الأوردر ده ${orderStatusAr(m[1])}، مش هينفع تسجّل عليه دفع.`],
-  [/Order is (\w+) and cannot be voided/i,
-    (m) => `الأوردر ده ${orderStatusAr(m[1])}، مش هينفع يتلغي.`],
-  [/Order is (\w+) and cannot be marked served/i,
-    (m) => `الأوردر ده ${orderStatusAr(m[1])}. ابعته للمطبخ الأول.`],
-  [/Order is (\w+) and cannot be modified/i,
-    (m) => `الأوردر ده ${orderStatusAr(m[1])}، مش هينفع تزوّد أو تشيل منه.`],
-  [/Order is already on table (\S+)/i, (m) => `الأوردر أصلاً على ترابيزة ${m[1]}.`],
-  [/Only dine-in orders can be transferred/i, 'أوردر التيك أواي مينفعش يتنقل لترابيزة.'],
-  [/Order not found/i, 'الأوردر ده مش موجود. اعمل تحديث للشاشة.'],
+  [/Order must be fully paid before it can be closed/i, 'يوجد متبقي غير مدفوع على الفاتورة. يرجى تحصيل المبلغ أولاً.'],
+  [/Order is already fully paid/i, 'تم سداد الفاتورة بالكامل مسبقاً.'],
+  [/Order must be PAID or CLOSED to be refunded/i, 'لا يمكن استرجاع أوردر لم يتم سداده بعد.'],
+  [/Order is (\\w+) and cannot accept payments/i, (m) => `الأوردر ${orderStatusAr(m[1])} ولا يقبل عمليات دفع جديدة.`],
+  [/Order is (\\w+) and cannot be voided/i, (m) => `الأوردر ${orderStatusAr(m[1])} ولا يمكن إلغاؤه.`],
+  [/Order is (\\w+) and cannot be marked served/i, (m) => `الأوردر ${orderStatusAr(m[1])}. يرجى إرساله للمطبخ أولاً.`],
+  [/Order is (\\w+) and cannot be modified/i, (m) => `الأوردر ${orderStatusAr(m[1])} ولا يمكن تعديله.`],
+  [/Order is already on table (\\S+)/i, (m) => `الأوردر موجود بالفعل على طاولة ${m[1]}.`],
+  [/Only dine-in orders can be transferred/i, 'يمكن نقل طلبات الصالة فقط بين الطاولات.'],
+  [/Order not found/i, 'الأوردر المطلوب غير موجود.'],
 
   /* ── Payment ── */
-  [/received is required for CASH payments/i, 'اكتب المبلغ اللي استلمته من العميل.'],
-  [/received cannot be less than amount/i,
-    'المبلغ اللي استلمته أقل من المطلوب. راجع الرقم.'],
-  [/Amount exceeds remaining balance of\s*([\d.]+)/i,
-    (m) => `المبلغ أكبر من الباقي على الفاتورة (${m[1]} ج.م). صحّح الرقم.`],
-  [/Delivery fee must be zero or positive/i, 'رسوم التوصيل لازم تكون صفر أو أكتر.'],
-  [/Service fee must be zero or positive/i, 'رسوم الخدمة لازم تكون صفر أو أكتر.'],
+  [/received is required for CASH payments/i, 'يرجى إدخال المبلغ المستلم نقداً من العميل.'],
+  [/received cannot be less than amount/i, 'المبلغ المستلم نقداً أقل من القيمة المطلوبة.'],
+  [/Amount exceeds remaining balance of\\s*([\\d.]+)/i, (m) => `المبلغ أكبر من المتبقي على الفاتورة (${m[1]} ج.م).`],
+  [/Delivery fee must be zero or positive/i, 'رسوم التوصيل يجب أن تكون صفراً أو قيمة موجبة.'],
+  [/Service fee must be zero or positive/i, 'رسوم الخدمة يجب أن تكون صفراً أو قيمة موجبة.'],
 
-  /* ── Session ── */
-  [/(Invalid refresh token|Refresh token expired)/i,
-    'الجلسة انتهت. سجّل دخول تاني.'],
-  [/User is deactivated/i, 'الحساب ده متوقف. كلّم المدير.'],
-  [/Bad credentials|Invalid username or password/i, 'اسم المستخدم أو الباسورد غلط.'],
+  /* ── Debts & Employees ── */
+  [/Advance amount exceeds/i, 'مبلغ السلفة يتجاوز الحد المسموح به لراتب الموظف.'],
+  [/Settlement amount exceeds debt balance/i, 'مبلغ السداد أكبر من إجمالي رصيد المديونية المستحق.'],
+
+  /* ── Session & Auth ── */
+  [/(Invalid refresh token|Refresh token expired)/i, 'انتهت الجلسة. يرجى تسجيل الدخول مجدداً.'],
+  [/User is deactivated/i, 'هذا الحساب تم تعطيله. يرجى مراجعة إدارة المنشأة.'],
+  [/Bad credentials|Invalid username or password|UNAUTHORIZED/i, 'اسم المستخدم أو كلمة المرور غير صحيحة.'],
+  [/ACCESS_DENIED|FORBIDDEN/i, 'ليس لديك الصلاحية الكافية لإتمام هذا الإجراء.'],
 
   /* ── Inventory ── */
-  [/Product does not track inventory/i, 'الصنف ده مش متسجل عليه مخزون.'],
-  [/RESTOCK requires a positive quantityChange/i, 'كمية التوريد لازم تكون أكبر من صفر.'],
-  [/WASTE requires a negative quantityChange/i, 'كمية الهالك لازم تكون بالسالب.'],
-  [/quantityChange must not be zero/i, 'الكمية مينفعش تكون صفر.'],
+  [/Product does not track inventory/i, 'هذا الصنف غير مفعل عليه تتبع المخزون.'],
+  [/RESTOCK requires a positive quantityChange/i, 'كمية التوريد يجب أن تكون أكبر من صفر.'],
+  [/WASTE requires a negative quantityChange/i, 'كمية الهالك يجب أن تكون قيمة سالبة.'],
+  [/quantityChange must not be zero/i, 'كمية تعديل المخزون لا يمكن أن تكون صفراً.'],
 ];
 
-/* Status-only fallbacks, used when nothing above matched. */
 const BY_STATUS = {
-  0: 'مفيش اتصال بالسيرفر. لو التطبيق لسه بيفتح استنى شوية، وإلا كلّم الدعم.',
-  401: 'الجلسة انتهت. سجّل دخول تاني.',
-  403: 'الصلاحية دي مش متاحة ليك. كلّم المدير.',
-  404: 'الحاجة دي مش موجودة. اعمل تحديث للشاشة.',
-  500: 'حصلت مشكلة في السيرفر. جرّب تاني، ولو اتكررت كلّم الدعم.',
-  503: 'السيرفر مش شغال دلوقتي. استنى شوية وجرّب تاني.',
+  0: 'تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت أو تشغيل الخادم.',
+  400: 'بيانات غير صالحة. يرجى مراجعة الحقول المدخلة.',
+  401: 'انتهت الجلسة أو بيانات الدخول غير صحيحة.',
+  403: 'ليس لديك الصلاحية الكافية أو الباقة لا تدعم هذه الميزة.',
+  404: 'العنصر المطلوب غير موجود.',
+  409: 'يوجد تعارض في البيانات (الاسم أو الرقم مسجل مسبقاً).',
+  500: 'حدث خطأ في الخادم. يرجى المحاولة مرة أخرى لاحقاً.',
+  503: 'الخدمة غير متوفرة حالياً، جاري معالجة البيانات.',
 };
 
-/**
- * True for messages already written in Arabic at the source (a few in OrderService are).
- *
- * Tests the *opening* characters rather than "contains an Arabic letter anywhere": several English
- * messages interpolate Arabic data, e.g. `Product is not available: لاتيه`, and a contains-check
- * would wave those through untranslated.
- */
 function isArabic(text) {
-  return /^[\s"'«(]*[؀-ۿ]/.test(text);
+  return /^[\\s"'«(]*[؀-ۿ]/.test(text);
 }
 
-/**
- * @param {string} message raw message from the API
- * @param {number} [status] HTTP status, used only when no rule matches
- * @returns {string} something the cashier can act on
- */
 export function toFriendlyMessage(message, status) {
   const raw = (message ?? '').trim();
 
-  // Rules first: a rule is always a better answer than passing the original through, including
-  // for the English-with-Arabic-data messages that isArabic deliberately does not claim.
   for (const [pattern, replacement] of RULES) {
     const match = raw.match(pattern);
     if (match) return typeof replacement === 'function' ? replacement(match) : replacement;
   }
 
   if (raw && isArabic(raw)) return raw;
-
   if (BY_STATUS[status]) return BY_STATUS[status];
 
-  return raw || 'حصلت مشكلة غير متوقعة. جرّب تاني.';
+  return raw || 'حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.';
 }
 
 export default toFriendlyMessage;

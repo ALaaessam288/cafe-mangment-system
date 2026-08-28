@@ -5,8 +5,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
 public record CategoryRequest(
-        @NotBlank String nameAr,
+        @NotBlank(message = "اسم القسم مطلوب")
+        String nameAr,
+
         String nameEn,
-        @NotNull @PositiveOrZero Integer displayOrder
+
+        @NotNull(message = "ترتيب العرض مطلوب")
+        @PositiveOrZero(message = "يجب أن يكون ترتيب العرض رقماً موجباً أو صفراً")
+        Integer displayOrder
 ) {
 }

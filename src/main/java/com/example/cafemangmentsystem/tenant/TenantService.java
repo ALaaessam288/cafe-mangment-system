@@ -35,6 +35,10 @@ public class TenantService {
     private final com.example.cafemangmentsystem.security.jwt.JwtService jwtService;
     private final com.example.cafemangmentsystem.menu.MenuTemplateService menuTemplateService;
     private final com.example.cafemangmentsystem.tenant.repository.TenantActivityLogRepository tenantActivityLogRepository;
+    private final com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository cafeTableRepository;
+    private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
+    private final com.example.cafemangmentsystem.menu.repository.ProductRepository productRepository;
+    private final com.example.cafemangmentsystem.common.whatsapp.WhatsAppService whatsAppService;
 
     /**
      * Resolves a tenant for login. Deliberately throws the same {@link BadCredentialsException}
@@ -62,7 +66,7 @@ public class TenantService {
     @Transactional(readOnly = true)
     public List<PublicTenantDto> findAllPublic() {
         return tenantRepository.findAll().stream()
-                .filter(t -> LOGINABLE.contains(t.getStatus()))
+                .filter(t -> LOGINABLE.contains(t.getStatus()) && !"platform".equalsIgnoreCase(t.getSlug()))
                 .map(t -> new PublicTenantDto(t.getSlug(), t.getName(), t.getBusinessType().name()))
                 .collect(Collectors.toList());
     }
@@ -70,6 +74,7 @@ public class TenantService {
     @Transactional(readOnly = true)
     public List<TenantResponse> findAllTenants() {
         return tenantRepository.findAll().stream()
+                .filter(t -> !"platform".equalsIgnoreCase(t.getSlug()))
                 .map(TenantResponse::from)
                 .collect(Collectors.toList());
     }
@@ -121,6 +126,55 @@ public class TenantService {
         return TenantResponse.from(saved);
     }
 
+    @Transactional
+    public TenantResponse selectTenantPlan(Long tenantId, com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+
+        if (plan != null) {
+            tenant.setSubscriptionPlan(plan);
+            if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE) {
+                tenant.setMaxTables(1000);
+                tenant.setMaxUsers(1000);
+                tenant.setMaxProducts(1000);
+                tenant.setStatus(TenantStatus.ACTIVE);
+                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
+            } else if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO) {
+                tenant.setMaxTables(25);
+                tenant.setMaxUsers(8);
+                tenant.setMaxProducts(1000);
+                tenant.setStatus(TenantStatus.ACTIVE);
+                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
+            } else if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.STARTER) {
+                tenant.setMaxTables(10);
+                tenant.setMaxUsers(4);
+                tenant.setMaxProducts(100);
+                tenant.setStatus(TenantStatus.ACTIVE);
+                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
+            } else {
+                tenant.setMaxTables(5);
+                tenant.setMaxUsers(2);
+                tenant.setMaxProducts(30);
+                tenant.setStatus(TenantStatus.TRIAL);
+                if (tenant.getTrialEndsAt() == null) {
+                    tenant.setTrialEndsAt(java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS));
+                }
+            }
+        }
+        tenant.setPlanSelected(true);
+
+        Tenant saved = tenantRepository.save(tenant);
+
+        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
+                .tenantId(saved.getId())
+                .action("PLAN_SELECTED")
+                .details("Tenant selected plan: " + (plan != null ? plan.name() : "DEFAULT"))
+                .performedBy("TENANT_ADMIN")
+                .build());
+
+        return TenantResponse.from(saved);
+    }
+
     /**
      * Provisions a new tenant + its owner user.
      *
@@ -140,14 +194,26 @@ public class TenantService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + request.slug());
         }
 
+        com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan = 
+                request.subscriptionPlan() != null ? request.subscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO;
+        TenantStatus status = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? TenantStatus.TRIAL : TenantStatus.ACTIVE;
+        java.time.Instant subEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? null : java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS);
+        java.time.Instant trialEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS) : null;
+
         Tenant tenant = Tenant.builder()
                 .name(request.name())
                 .slug(request.slug())
                 .businessType(request.businessType())
-                .status(TenantStatus.TRIAL)
-                .subscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL)
-                .trialEndsAt(java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS))
-                .timezone(request.timezone() == null ? "UTC" : request.timezone())
+                .status(status)
+                .subscriptionPlan(plan)
+                .maxTables(plan.getMaxTables())
+                .maxUsers(plan.getMaxUsers())
+                .maxProducts(plan.getMaxProducts())
+                .subscriptionEndsAt(subEnd)
+                .trialEndsAt(trialEnd)
+                .planSelected(true)
+                .ownerWhatsapp(request.ownerWhatsapp())
+                .timezone(request.timezone() == null ? "Africa/Cairo" : request.timezone())
                 .currency(request.currency() == null ? "EGP" : request.currency())
                 .build();
 
@@ -174,15 +240,21 @@ public class TenantService {
             TenantContext.clear();
         }
 
+        // Dispatch instant background WhatsApp message to tenant owner with login credentials
+        whatsAppService.sendTenantCredentials(tenant, request.ownerUsername(), request.ownerPassword(), null);
+
         String jwtToken = jwtService.generateToken(new com.example.cafemangmentsystem.security.UserPrincipal(owner));
         return new ProvisionTenantResponse(tenant.getId(), tenant.getSlug(), request.ownerUsername(), jwtToken);
     }
     
     @Transactional(readOnly = true)
     public java.util.Map<String, Object> getPlatformStats() {
-        long totalTenants = tenantRepository.count();
-        long activeTenants = tenantRepository.findAll().stream().filter(t -> t.getStatus() == TenantStatus.ACTIVE).count();
-        long trialTenants = tenantRepository.findAll().stream().filter(t -> t.getStatus() == TenantStatus.TRIAL).count();
+        List<Tenant> customerTenants = tenantRepository.findAll().stream()
+                .filter(t -> !"platform".equalsIgnoreCase(t.getSlug()))
+                .toList();
+        long totalTenants = customerTenants.size();
+        long activeTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.ACTIVE).count();
+        long trialTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.TRIAL).count();
         return java.util.Map.of(
             "totalTenants", totalTenants,
             "activeTenants", activeTenants,
@@ -194,8 +266,6 @@ public class TenantService {
     public java.util.Map<String, Object> getTenantUsage(Long tenantId) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        // For a full implementation, we'd query counts from tables using a specific repository method
-        // that takes tenantId. However, we can just return the max quotas for now or dummy usage.
         return java.util.Map.of(
             "maxTables", tenant.getMaxTables() != null ? tenant.getMaxTables() : -1,
             "maxUsers", tenant.getMaxUsers() != null ? tenant.getMaxUsers() : -1,
@@ -210,6 +280,123 @@ public class TenantService {
         if (maxUsers != null) tenant.setMaxUsers(maxUsers);
         if (maxProducts != null) tenant.setMaxProducts(maxProducts);
         return TenantResponse.from(tenantRepository.save(tenant));
+    }
+
+    public TenantResponse customizeTenantPlan(Long tenantId, com.example.cafemangmentsystem.tenant.platform.PlatformAdminController.CustomizePlanRequest req) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+        
+        if (req.plan() != null) {
+            tenant.setSubscriptionPlan(req.plan());
+        }
+        if (req.status() != null) {
+            tenant.setStatus(req.status());
+        }
+        if (req.maxTables() != null) {
+            tenant.setMaxTables(req.maxTables());
+        }
+        if (req.maxUsers() != null) {
+            tenant.setMaxUsers(req.maxUsers());
+        }
+        if (req.maxProducts() != null) {
+            tenant.setMaxProducts(req.maxProducts());
+        }
+        if (req.serviceChargePercent() != null) {
+            tenant.setServiceChargePercent(req.serviceChargePercent());
+        }
+        if (req.whatsappAlertsEnabled() != null) {
+            tenant.setWhatsappAlertsEnabled(req.whatsappAlertsEnabled());
+        }
+        if (req.subscriptionEndsAt() != null) {
+            tenant.setSubscriptionEndsAt(req.subscriptionEndsAt());
+        }
+        if (req.trialEndsAt() != null) {
+            tenant.setTrialEndsAt(req.trialEndsAt());
+        }
+        if (req.extendDays() != null && req.extendDays() > 0) {
+            java.time.Instant base = tenant.getSubscriptionEndsAt() != null ? tenant.getSubscriptionEndsAt() : (tenant.getTrialEndsAt() != null ? tenant.getTrialEndsAt() : java.time.Instant.now());
+            tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
+            tenant.setStatus(TenantStatus.ACTIVE);
+        }
+        tenant.setPlanSelected(true);
+
+        Tenant saved = tenantRepository.save(tenant);
+
+        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
+                .tenantId(saved.getId())
+                .action("PLAN_CUSTOMIZED")
+                .details("Plan customized: " + saved.getSubscriptionPlan() + ", Tables: " + saved.getMaxTables() + ", Users: " + saved.getMaxUsers() + ", Products: " + saved.getMaxProducts())
+                .performedBy("SUPER_ADMIN")
+                .build());
+
+        return TenantResponse.from(saved);
+    }
+
+    public TenantResponse updateLogo(Long tenantId, String logoUrl) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        tenant.setLogoUrl(logoUrl);
+        Tenant saved = tenantRepository.save(tenant);
+        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
+                .tenantId(saved.getId())
+                .action("LOGO_UPDATED")
+                .details(logoUrl != null ? "Logo updated" : "Logo removed")
+                .performedBy("TENANT_ADMIN")
+                .build());
+        return TenantResponse.from(saved);
+    }
+
+    @Transactional
+    public void deleteTenant(Long tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+        if ("platform".equalsIgnoreCase(tenant.getSlug())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete master platform tenant");
+        }
+        userRepository.deleteAll(userRepository.findAll().stream().filter(u -> tenantId.equals(u.getTenantId())).toList());
+        tenantActivityLogRepository.deleteAll(tenantActivityLogRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
+        tenantRepository.delete(tenant);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getTenantUsageDetails(Long tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+
+        var plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
+        int maxTables = tenant.getMaxTables() != null ? tenant.getMaxTables() : plan.getMaxTables();
+        int maxUsers = tenant.getMaxUsers() != null ? tenant.getMaxUsers() : plan.getMaxUsers();
+        int maxProducts = tenant.getMaxProducts() != null ? tenant.getMaxProducts() : plan.getMaxProducts();
+
+        long tablesCount = cafeTableRepository.count();
+        long usersCount = userRepository.count();
+        long productsCount = productRepository.count();
+
+        long daysRemaining = 0;
+        if (tenant.getStatus() == TenantStatus.TRIAL && tenant.getTrialEndsAt() != null) {
+            daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getTrialEndsAt()));
+        } else if (tenant.getStatus() == TenantStatus.ACTIVE && tenant.getSubscriptionEndsAt() != null) {
+            daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getSubscriptionEndsAt()));
+        }
+
+        java.util.Map<String, Object> usage = new java.util.LinkedHashMap<>();
+        usage.put("tenantId", tenant.getId());
+        usage.put("tenantName", tenant.getName());
+        usage.put("tenantSlug", tenant.getSlug());
+        usage.put("status", tenant.getStatus().name());
+        usage.put("plan", plan.name());
+        usage.put("planDisplayName", plan.getDisplayName());
+        usage.put("tablesUsed", tablesCount);
+        usage.put("maxTables", maxTables);
+        usage.put("usersUsed", usersCount);
+        usage.put("maxUsers", maxUsers);
+        usage.put("productsUsed", productsCount);
+        usage.put("maxProducts", maxProducts);
+        usage.put("daysRemaining", daysRemaining);
+        usage.put("logoUrl", tenant.getLogoUrl() != null ? tenant.getLogoUrl() : "");
+        usage.put("includesKds", plan.isIncludesKds());
+        usage.put("includesExpenses", plan.isIncludesExpenses());
+        return usage;
     }
 
     @Transactional(readOnly = true)

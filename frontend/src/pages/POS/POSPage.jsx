@@ -64,10 +64,11 @@ function reducer(state, action) {
     /* ── Optimistic add: the line shows up the instant the cashier taps,
           then gets replaced by the authoritative server order. ── */
     case 'ADD_TEMP_ITEM': {
-      if (!state.activeOrder) return state;
-      const item = action.payload;
-      const order = applyTempDelta(state.activeOrder, num(item.lineTotal));
-      return { ...state, activeOrder: { ...order, items: [...(state.activeOrder.items ?? []), item] } };
+      const item = action.payload.item || action.payload;
+      const baseOrder = action.payload.baseOrder || state.activeOrder;
+      if (!baseOrder) return state;
+      const order = applyTempDelta(baseOrder, num(item.lineTotal));
+      return { ...state, activeOrder: { ...order, items: [...(baseOrder.items ?? []), item] } };
     }
     case 'REMOVE_TEMP_ITEM': {
       if (!state.activeOrder) return state;
@@ -85,6 +86,59 @@ function reducer(state, action) {
     case 'SET_CATS':     return { ...state, categories: action.payload };
     case 'SET_PRODUCTS': return { ...state, products: action.payload };
     case 'SET_TOP':      return { ...state, topProducts: action.payload };
+    case 'DEDUCT_PRODUCT_STOCK': {
+      const { productId, quantity } = action.payload;
+      const updateList = (list) => (list ?? []).map((p) =>
+        p.id === productId
+          ? {
+              ...p,
+              stockQuantity: Math.max(0, (p.stockQuantity ?? p.availableQuantity ?? 0) - quantity),
+              availableQuantity: Math.max(0, (p.availableQuantity ?? p.stockQuantity ?? 0) - quantity),
+            }
+          : p
+      );
+      return {
+        ...state,
+        products: updateList(state.products),
+        topProducts: updateList(state.topProducts),
+      };
+    }
+    case 'RESTORE_PRODUCT_STOCK': {
+      const { productId, quantity } = action.payload;
+      const updateList = (list) => (list ?? []).map((p) =>
+        p.id === productId
+          ? {
+              ...p,
+              stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + quantity,
+              availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + quantity,
+            }
+          : p
+      );
+      return {
+        ...state,
+        products: updateList(state.products),
+        topProducts: updateList(state.topProducts),
+      };
+    }
+    case 'REFILL_PRODUCT_STOCK': {
+      const { productId, quantity } = action.payload;
+      const updateList = (list) => (list ?? []).map((p) =>
+        p.id === productId
+          ? {
+              ...p,
+              stockQuantity: (p.stockQuantity ?? 0) + quantity,
+              availableQuantity: (p.availableQuantity ?? 0) + quantity,
+              available: true,
+              active: true,
+            }
+          : p
+      );
+      return {
+        ...state,
+        products: updateList(state.products),
+        topProducts: updateList(state.topProducts),
+      };
+    }
     case 'SELECT_TABLE': return { ...state, activeTable: action.payload, activeOrder: null };
     case 'SELECT_ORDER': return { ...state, activeOrder: action.payload, activeTable: null };
     case 'SET_ORDER':    return { ...state, activeOrder: action.payload };
@@ -409,12 +463,25 @@ export default function POSPage() {
   /* ── Close Shift ── */
   async function handleCloseShift(e) {
     e.preventDefault();
-    if (!closeShiftForm.countedCash) return;
+    if (closeShiftForm.countedCash === '' || closeShiftForm.countedCash === undefined || isNaN(parseFloat(closeShiftForm.countedCash))) {
+      toast.warning('يرجى إدخال مبلغ الكاش الفعلي في الدرج');
+      return;
+    }
     try {
-      const closedShiftId = state.activeShift?.id;
+      let closedShiftId = state.activeShift?.id;
+      if (!closedShiftId) {
+        const openShifts = await shiftsApi.findAll(true).catch(() => []);
+        if (openShifts.length > 0) {
+          closedShiftId = openShifts[0].id;
+        }
+      }
+      if (!closedShiftId) {
+        toast.warning('لا يوجد شيفت مفتوح لقفله');
+        return;
+      }
       await shiftsApi.close(closedShiftId, {
-        countedCash: parseFloat(closeShiftForm.countedCash),
-        snacksNet: closeShiftForm.snacksNet ? parseFloat(closeShiftForm.snacksNet) : 0
+        countedCash: parseFloat(closeShiftForm.countedCash) || 0,
+        snacksNet: closeShiftForm.snacksNet ? (parseFloat(closeShiftForm.snacksNet) || 0) : 0
       });
       toast.success('تم قفل الشيفت بنجاح!');
       setShowCloseShift(false);
@@ -547,8 +614,8 @@ export default function POSPage() {
       const newOrder = await ordersApi.open({
         tableId: state.activeTable.id,
         type:    'DINE_IN',
-        shiftId: state.activeShift.id,
-        userId:  user.id,
+        shiftId: state.activeShift ? state.activeShift.id : undefined,
+        userId:  user?.id,
       });
       dispatch({ type: 'SET_ORDER', payload: newOrder });
       toast.success(`اتفتح أوردر لترابيزة ${state.activeTable.number}`);
@@ -583,20 +650,29 @@ export default function POSPage() {
     dispatch({
       type: 'ADD_TEMP_ITEM',
       payload: {
-        id: tempId,
-        productId: product.id,
-        productNameSnapshot: product.name,
-        categoryNameSnapshot: product.categoryNameAr,
-        unitPriceSnapshot: unitPrice,
-        stationSnapshot: product.stationCode,
-        revenueLineSnapshot: product.revenueLine,
-        quantity,
-        status: 'PENDING',
-        note: note || null,
-        cancelReason: null,
-        discountAmount: 0,
-        lineTotal: unitPrice * quantity,
+        item: {
+          id: tempId,
+          productId: product.id,
+          productNameSnapshot: product.name,
+          categoryNameSnapshot: product.categoryNameAr,
+          unitPriceSnapshot: unitPrice,
+          stationSnapshot: product.stationCode,
+          revenueLineSnapshot: product.revenueLine,
+          quantity,
+          status: 'PENDING',
+          note: note || null,
+          cancelReason: null,
+          discountAmount: 0,
+          lineTotal: unitPrice * quantity,
+        },
+        baseOrder: order,
       },
+    });
+
+    // Deduct stock and progress bar INSTANTLY on click
+    dispatch({
+      type: 'DEDUCT_PRODUCT_STOCK',
+      payload: { productId: product.id, quantity },
     });
 
     try {
@@ -608,20 +684,6 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_ORDER', payload: updated });
 
-      // Reflect the reservation immediately on this screen
-      dispatch({
-        type: 'SET_PRODUCTS',
-        payload: state.products.map((p) =>
-          p.id === product.id
-            ? {
-                ...p,
-                stockQuantity: Math.max(0, (p.stockQuantity ?? p.availableQuantity ?? 0) - quantity),
-                availableQuantity: Math.max(0, (p.availableQuantity ?? p.stockQuantity ?? 0) - quantity),
-              }
-            : p
-        ),
-      });
-
       // Newest server row = the one to undo, and one more tally for this
       // cashier's quick-access strip.
       const newest = (updated.items ?? []).reduce((max, i) => (i.id > max ? i.id : max), 0);
@@ -630,6 +692,11 @@ export default function POSPage() {
       setQuickVersion((v) => v + 1);
     } catch (err) {
       dispatch({ type: 'REMOVE_TEMP_ITEM', payload: tempId });
+      // Rollback stock on error
+      dispatch({
+        type: 'RESTORE_PRODUCT_STOCK',
+        payload: { productId: product.id, quantity },
+      });
       toast.error(err.message, 'فشل في إضافة الصنف');
     }
   }
@@ -650,10 +717,11 @@ export default function POSPage() {
     const quantity = multiplier;
     setMultiplier(1);
 
-    // If nothing's actually left to sell right now (accounting for what other open orders
-    // already hold), show the quick refill modal instead of letting the request round-trip
-    // just to come back with the same "insufficient stock" rejection.
-    if (product.availableQuantity !== undefined && product.availableQuantity !== null && product.availableQuantity <= 0) {
+    const currentStock = product.availableQuantity !== undefined ? product.availableQuantity : (product.stockQuantity ?? 0);
+    const isTracked = product.trackInventory || product.availableQuantity !== undefined || (product.stockQuantity !== undefined && product.stockQuantity !== null);
+
+    // If stock is 0 or depleted, show popup to refill
+    if (isTracked && currentStock <= 0) {
       setRefillProduct(product);
       setRefillQty('10');
       return;
@@ -693,13 +761,20 @@ export default function POSPage() {
       await menuApi.addStock(refillProduct.id, qty);
       toast.success(`تم تغذية مخزون «${refillProduct.name}» بـ ${qty} قطعة بنجاح 🎉`);
 
-      // Reload menu to get updated stock values
-      window.dispatchEvent(new Event('reload-pos-menu'));
+      // Update product in local state immediately across all categories & top lists
+      dispatch({
+        type: 'REFILL_PRODUCT_STOCK',
+        payload: { productId: refillProduct.id, quantity: qty },
+      });
 
       // Auto-add the product to the current order
       const order = await ensureOrder();
       if (order) {
-        const updatedProduct = { ...refillProduct, stockQuantity: qty };
+        const updatedProduct = {
+          ...refillProduct,
+          stockQuantity: (refillProduct.stockQuantity ?? 0) + qty,
+          availableQuantity: (refillProduct.availableQuantity ?? 0) + qty,
+        };
         await addToOrder(order, updatedProduct, { quantity: 1 });
       }
 
@@ -795,16 +870,8 @@ export default function POSPage() {
       if (item?.productId) {
         const qty = item.quantity || 1;
         dispatch({
-          type: 'SET_PRODUCTS',
-          payload: state.products.map((p) =>
-            p.id === item.productId
-              ? {
-                  ...p,
-                  stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + qty,
-                  availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + qty,
-                }
-              : p
-          ),
+          type: 'RESTORE_PRODUCT_STOCK',
+          payload: { productId: item.productId, quantity: qty },
         });
       }
       setLastAddedItemId(null);
@@ -1034,16 +1101,8 @@ export default function POSPage() {
       if (item?.productId) {
         const qty = item.quantity || 1;
         dispatch({
-          type: 'SET_PRODUCTS',
-          payload: state.products.map((p) =>
-            p.id === item.productId
-              ? {
-                  ...p,
-                  stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + qty,
-                  availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + qty,
-                }
-              : p
-          ),
+          type: 'RESTORE_PRODUCT_STOCK',
+          payload: { productId: item.productId, quantity: qty },
         });
       }
       toast.success('الصنف اتلغى.');
@@ -1067,16 +1126,8 @@ export default function POSPage() {
       if (item?.productId) {
         const qty = item.quantity || 1;
         dispatch({
-          type: 'SET_PRODUCTS',
-          payload: state.products.map((p) =>
-            p.id === item.productId
-              ? {
-                  ...p,
-                  stockQuantity: (p.stockQuantity ?? p.availableQuantity ?? 0) + qty,
-                  availableQuantity: (p.availableQuantity ?? p.stockQuantity ?? 0) + qty,
-                }
-              : p
-          ),
+          type: 'RESTORE_PRODUCT_STOCK',
+          payload: { productId: item.productId, quantity: qty },
         });
       }
       if (itemId === lastAddedItemId) setLastAddedItemId(null);

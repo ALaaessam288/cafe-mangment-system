@@ -9,6 +9,7 @@ import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
+import QuotaExceededModal from '../../components/QuotaExceededModal/QuotaExceededModal';
 import { ROLES } from '../../utils/constants';
 import './TablesPage.css';
 
@@ -20,7 +21,7 @@ const TABLE_ZONES = {
 
 export default function TablesPage() {
   const toast = useToast();
-  const { role } = useAuth();
+  const { user, role } = useAuth();
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,6 +29,7 @@ export default function TablesPage() {
   const [editingTable, setEditingTable] = useState(null);
   const [form, setForm] = useState({ number: '', seats: '', zone: 'INDOOR' });
   const [isSaving, setIsSaving] = useState(false);
+  const [quotaModal, setQuotaModal] = useState({ open: false, message: '' });
 
   const loadTables = useCallback(async () => {
     setLoading(true);
@@ -51,11 +53,20 @@ export default function TablesPage() {
         seats: table.seats || '',
         zone: table.zone || 'INDOOR',
       });
+      setIsModalOpen(true);
     } else {
+      // Check quota before opening
+      if (user?.maxTables && tables.length >= user.maxTables) {
+        setQuotaModal({
+          open: true,
+          message: `لقد بلغت الحد الأقصى للطاولات المسموحة في باقتك (${tables.length} من أصل ${user.maxTables} طاولة). يرجى ترقية الباقة لزيادة السعة.`
+        });
+        return;
+      }
       setEditingTable(null);
       setForm({ number: '', seats: '', zone: 'INDOOR' });
+      setIsModalOpen(true);
     }
-    setIsModalOpen(true);
   }
 
   async function handleSave(e) {
@@ -80,7 +91,12 @@ export default function TablesPage() {
       setIsModalOpen(false);
       await loadTables();
     } catch (err) {
-      toast.error(err.message, 'فشل في حفظ الترابيزة');
+      if (err.status === 403 || err.message?.includes('وصلت للحد الأقصى') || err.message?.includes('Quota exceeded') || err.data?.error === 'QUOTA_EXCEEDED') {
+        setIsModalOpen(false);
+        setQuotaModal({ open: true, message: err.message });
+      } else {
+        toast.error(err.message, 'فشل في حفظ الترابيزة');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -108,7 +124,23 @@ export default function TablesPage() {
           <h1 className="page__title">الترابيزات</h1>
           <p className="page__subtitle">إدارة ترابيزات الكافيه وسعة الجلوس</p>
         </div>
-        <div className="page__actions">
+        <div className="page__actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {user?.maxTables && (
+            <span
+              className="badge"
+              style={{
+                background: tables.length >= user.maxTables ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.15)',
+                color: tables.length >= user.maxTables ? '#ef4444' : '#f59e0b',
+                border: `1px solid ${tables.length >= user.maxTables ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.3)'}`,
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.85rem'
+              }}
+            >
+              السعة: {tables.length} / {user.maxTables} طاولة
+            </span>
+          )}
           {role === ROLES.SUPERVISOR && (
             <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()}>
               إضافة ترابيزة
@@ -167,6 +199,16 @@ export default function TablesPage() {
           </table>
         )}
       </div>
+
+      {/* Quota Limit Reached Modal */}
+      <QuotaExceededModal
+        isOpen={quotaModal.open}
+        onClose={() => setQuotaModal({ open: false, message: '' })}
+        resourceName="الطاولات"
+        currentCount={tables.length}
+        maxLimit={user?.maxTables || tables.length}
+        customMessage={quotaModal.message}
+      />
 
       {role === ROLES.SUPERVISOR && (
         <Modal

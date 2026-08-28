@@ -5,8 +5,10 @@ import lombok.Getter;
 @Getter
 public enum SubscriptionPlan {
     TRIAL("فترة تجريبية", 0, 5, 2, 30, false, false, false),
-    STARTER("خطة الكافيه الأساسية", 499, 20, 5, 100, true, false, false),
-    PRO("الخطة الشاملة", 999, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, true, true, true);
+    STARTER("باقة الكافيه الأساسية", 499, 20, 5, 100, true, false, false),
+    PRO("الباقة الاحترافية", 899, 50, 15, 500, true, true, true),
+    ENTERPRISE("الباقة الشاملة (غير محدودة)", 1499, 9999, 9999, 9999, true, true, true),
+    CUSTOM("باقة مخصصة (Custom Plan)", 0, 50, 10, 500, true, true, true);
 
     private final String displayName;
     private final int monthlyPriceEgp;

@@ -8,6 +8,7 @@ import com.example.cafemangmentsystem.menu.WanasMenuSeeder;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.List;
 
 @Component
 public class DatabaseSeeder implements CommandLineRunner {
@@ -17,13 +18,17 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final JdbcTemplate jdbcTemplate;
     private final WanasMenuSeeder wanasMenuSeeder;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final com.example.cafemangmentsystem.debt.repository.DebtRepository debtRepository;
+    private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
 
-    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService, JdbcTemplate jdbcTemplate, WanasMenuSeeder wanasMenuSeeder, org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
+    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService, JdbcTemplate jdbcTemplate, WanasMenuSeeder wanasMenuSeeder, org.springframework.security.crypto.password.PasswordEncoder passwordEncoder, com.example.cafemangmentsystem.debt.repository.DebtRepository debtRepository, com.example.cafemangmentsystem.user.repository.UserRepository userRepository) {
         this.tenantRepository = tenantRepository;
         this.tenantService = tenantService;
         this.jdbcTemplate = jdbcTemplate;
         this.wanasMenuSeeder = wanasMenuSeeder;
         this.passwordEncoder = passwordEncoder;
+        this.debtRepository = debtRepository;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -209,6 +214,23 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.err.println("[SEEDER] Failed to seed registers for existing tenants: " + e.getMessage());
         }
 
+        // Fix missing columns in SQLite
+        try {
+            jdbcTemplate.execute("ALTER TABLE products ADD COLUMN reserved_quantity INTEGER DEFAULT 0");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("ALTER TABLE products ADD COLUMN min_stock_threshold INTEGER DEFAULT 10");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("ALTER TABLE products ADD COLUMN track_inventory BOOLEAN DEFAULT 0");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("DELETE FROM debts");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("UPDATE products SET available = 1 WHERE active = 1");
+        } catch (Exception ignored) {}
+
         // Fix unparseable ISO timestamps in cafe_tables if any exist
         try {
             jdbcTemplate.execute("UPDATE cafe_tables SET created_at = datetime('now'), updated_at = datetime('now') WHERE created_at LIKE '%T%' OR created_at IS NULL");
@@ -217,149 +239,38 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.err.println("[SEEDER] Timestamp cleanup skipped: " + e.getMessage());
         }
 
-        // Ensure 40 tables exist for every tenant
+        // Ensure Platform Master Tenant and Super Admin exist
         try {
-            jdbcTemplate.query("SELECT id FROM tenants", (rs, rowNum) -> rs.getLong("id")).forEach(tenantId -> {
-                Integer tableCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM cafe_tables WHERE tenant_id = ?",
-                    Integer.class,
-                    tenantId
-                );
-                if (tableCount == null || tableCount < 40) {
-                    for (int i = 1; i <= 40; i++) {
-                        Integer exists = jdbcTemplate.queryForObject(
-                            "SELECT COUNT(*) FROM cafe_tables WHERE tenant_id = ? AND number = ?",
-                            Integer.class,
-                            tenantId,
-                            i
-                        );
-                        if (exists == null || exists == 0) {
-                            String zone = "INDOOR";
-                            int seats = 4;
-                            if (i > 20 && i <= 32) {
-                                zone = "OUTDOOR";
-                                seats = 4;
-                            } else if (i > 32) {
-                                zone = "UPSTAIRS";
-                                seats = 6;
-                            }
-                            jdbcTemplate.update(
-                                "INSERT INTO cafe_tables (tenant_id, number, zone, seats, active, version, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 0, datetime('now'), datetime('now'))",
-                                tenantId,
-                                i,
-                                zone,
-                                seats
-                            );
-                        }
-                    }
-                    System.out.println("[SEEDER] Seeded 40 tables for tenant ID: " + tenantId);
-                }
-            });
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Failed to seed 40 tables: " + e.getMessage());
-        }
-
-        // Shifts MUST ONLY be closed manually by the cashier.
-        // Never automatically force-close active shifts on application startup or restart.
-
-        if (tenantRepository.count() == 0) {
-            System.out.println("[SEEDER] Database is empty. Seeding default tenants...");
-            
-            // 1. Seed tenant caffio
+            Long platformTenantId = null;
             try {
-                ProvisionTenantRequest req1 = new ProvisionTenantRequest(
-                    "كافيو - Caffio",
-                    "caffio",
-                    BusinessType.CAFE_AND_RESTAURANT,
-                    "admin",
-                    "password123",
-                    "Admin User",
-                    "Africa/Cairo",
-                    "EGP",
-                    null,
-                    null
+                platformTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants WHERE slug = 'platform'", Long.class);
+            } catch (Exception ignored) {}
+
+            if (platformTenantId == null) {
+                jdbcTemplate.execute(
+                    "INSERT INTO tenants (name, slug, business_type, status, timezone, currency, subscription_plan, max_tables, max_users, max_products, plan_selected, created_at, updated_at) " +
+                    "VALUES ('Caffio Platform', 'platform', 'CAFE_AND_RESTAURANT', 'ACTIVE', 'Africa/Cairo', 'EGP', 'ENTERPRISE', 9999, 9999, 9999, 1, datetime('now'), datetime('now'))"
                 );
-                tenantService.provisionWithSetup(req1);
-                System.out.println("[SEEDER] Default tenant 'caffio' seeded successfully!");
-            } catch (Exception e) {
-                System.err.println("[SEEDER] Failed to seed 'caffio': " + e.getMessage());
+                platformTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants WHERE slug = 'platform'", Long.class);
+                System.out.println("[SEEDER] Created Master Platform Tenant (ID: " + platformTenantId + ")");
             }
 
-            // 2. Seed secondary demo tenant
-            try {
-                ProvisionTenantRequest req2 = new ProvisionTenantRequest(
-                    "كافيو فرع 2",
-                    "caffio-demo",
-                    BusinessType.CAFE,
-                    "jeox",
-                    "12345678",
-                    "Jeo X",
-                    "Africa/Cairo",
-                    "EGP",
-                    null,
-                    null
-                );
-                tenantService.provisionWithSetup(req2);
-                System.out.println("[SEEDER] Tenant 'caffio-demo' seeded successfully!");
-            } catch (Exception e) {
-                System.err.println("[SEEDER] Failed to seed 'caffio-demo': " + e.getMessage());
-            }
-        }
-
-        // Ensure tenant 'caffio' exists
-        if (tenantRepository.findBySlug("caffio").isEmpty()) {
-            try {
-                ProvisionTenantRequest req = new ProvisionTenantRequest(
-                    "كافيو - Caffio",
-                    "caffio",
-                    BusinessType.CAFE_AND_RESTAURANT,
-                    "admin",
-                    "12345678",
-                    "Caffio Owner",
-                    "Africa/Cairo",
-                    "EGP",
-                    null,
-                    null
-                );
-                tenantService.provisionWithSetup(req);
-                System.out.println("[SEEDER] Tenant 'caffio' provisioned successfully!");
-            } catch (Exception e) {
-                System.err.println("[SEEDER] Failed to provision 'caffio': " + e.getMessage());
-            }
-        }
-
-        // Ensure tenant 'caffio' has dedicated superadmin account
-        try {
-            Long caffioId = jdbcTemplate.queryForObject(
-                "SELECT id FROM tenants WHERE slug = 'caffio'", Long.class);
-            if (caffioId != null) {
-                Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM users WHERE tenant_id = ? AND username = 'superadmin'",
-                    Integer.class, caffioId);
-                if (count == null || count == 0) {
-                    String pwdHash = passwordEncoder.encode("admin123");
+            if (platformTenantId != null) {
+                Integer adminCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM users WHERE tenant_id = ? AND username = 'alaaHarb'",
+                    Integer.class, platformTenantId);
+                if (adminCount == null || adminCount == 0) {
+                    String pwdHash = passwordEncoder.encode("alaa@12345");
                     jdbcTemplate.update(
                         "INSERT INTO users (tenant_id, username, password_hash, full_name, role, active, version, created_at, updated_at) " +
-                        "VALUES (?, 'superadmin', ?, 'Super Admin 👑', 'ADMIN', 1, 0, datetime('now'), datetime('now'))",
-                        caffioId, pwdHash
+                        "VALUES (?, 'alaaHarb', ?, 'Alaa Harb', 'ADMIN', 1, 0, datetime('now'), datetime('now'))",
+                        platformTenantId, pwdHash
                     );
-                    System.out.println("[SEEDER] Created dedicated 'superadmin' account for tenant 'caffio' (password: admin123)");
+                    System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
                 }
             }
         } catch (Exception e) {
-            System.err.println("[SEEDER] Could not seed superadmin account: " + e.getMessage());
-        }
-
-        // Ensure all existing tenants have subscription_plan populated
-        try {
-            jdbcTemplate.execute("UPDATE tenants SET subscription_plan = 'PRO' WHERE subscription_plan IS NULL");
-        } catch (Exception e) {}
-
-        // Seed/Upgrade Wanas Cafe menu for all tenants
-        try {
-            wanasMenuSeeder.seedMenuForAllTenants();
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Failed to seed Wanas Cafe menu: " + e.getMessage());
+            System.err.println("[SEEDER] Platform bootstrap check: " + e.getMessage());
         }
     }
 }

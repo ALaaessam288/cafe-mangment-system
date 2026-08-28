@@ -28,6 +28,19 @@
   position: relative;
 }
 
+.splash__logo-img {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 25px rgba(245, 158, 11, 0.45));
+  animation: floatSlow 3s ease-in-out infinite;
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
 .splash__icon {
   width: 96px;
   height: 96px;
