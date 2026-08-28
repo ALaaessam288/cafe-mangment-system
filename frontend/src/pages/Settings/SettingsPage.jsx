@@ -13,6 +13,7 @@ import {
   Building2, User, KeyRound, Shield, RefreshCw, Sparkles, MessageCircle, 
   Upload, Trash2, Image, Key, CheckCircle, AlertTriangle, Crown, ArrowUpRight, Copy, Check
 } from 'lucide-react';
+import { ROLES } from '../../utils/constants';
 import PrinterSettings from './PrinterSettings';
 import './SettingsPage.css';
 
