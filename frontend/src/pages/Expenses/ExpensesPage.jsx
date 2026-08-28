@@ -73,6 +73,7 @@ export default function ExpensesPage() {
     revenueLine: 'SHARED',
     amount: '',
     employeeId: '',
+    spenderName: '',
     paidFromDrawer: true,
     expenseDate: todayISO(),
     recurring: false,
@@ -120,6 +121,7 @@ export default function ExpensesPage() {
       revenueLine: 'SHARED',
       amount: '',
       employeeId: '',
+      spenderName: '',
       paidFromDrawer: true,
       expenseDate: todayISO(),
       recurring: false,
@@ -180,13 +182,15 @@ export default function ExpensesPage() {
         expenseDate: form.expenseDate || todayISO(),
         recurring: !!form.recurring,
         isAdvance: entryMode === 'ADVANCE',
-        employeeId: form.type === 'SALARIES' ? form.employeeId : null,
+        employeeId: form.employeeId ? form.employeeId : null,
+        spenderName: form.spenderName ? form.spenderName.trim() : null,
         paidFromDrawer: form.paidFromDrawer,
         notes: finalNotes
       });
 
       // Attach items for the immediate thermal printer
       created.items = validItems;
+      created.spenderName = form.spenderName || created.employeeName;
 
       toast.success(entryMode === 'ADVANCE' ? 'تم تسجيل وتأكيد سحب العُهدة المؤقتة بنجاح' : 'تم تسجيل المصروف بنجاح');
       setIsModalOpen(false);
@@ -532,9 +536,9 @@ export default function ExpensesPage() {
                     </td>
                     <td style={{ fontWeight: 600 }}>
                       {EXPENSE_TYPES[exp.type] || exp.type}
-                      {exp.type === 'SALARIES' && exp.employeeName && (
-                        <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          الموظف: {exp.employeeName}
+                      {(exp.spenderName || exp.employeeName) && (
+                        <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--accent)', marginTop: '2px' }}>
+                          👤 المستلم: {exp.spenderName || exp.employeeName}
                         </span>
                       )}
                     </td>
@@ -665,25 +669,47 @@ export default function ExpensesPage() {
               </select>
             </div>
 
-            {form.type === 'SALARIES' && (
-              <div className="field-select">
-                <label className="field-select__label">اختر الموظف المستلم</label>
+            {/* Spender / Recipient selector */}
+            <div className="field-select" style={{ gridColumn: '1 / -1' }}>
+              <label className="field-select__label">
+                👤 اسم الشخص القائم بالصرف / المستلم للمبلغ
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <select
                   className="field-select__control"
                   value={form.employeeId}
                   onChange={(e) => {
-                    const emp = employees.find(x => x.id == e.target.value);
-                    setForm({ ...form, employeeId: e.target.value, amount: emp ? emp.baseSalary : '' });
+                    const empId = e.target.value;
+                    const emp = employees.find(x => String(x.id) === String(empId));
+                    setForm(prev => ({
+                      ...prev,
+                      employeeId: empId,
+                      spenderName: emp ? emp.name : prev.spenderName,
+                      amount: (prev.type === 'SALARIES' && emp) ? (emp.baseSalary ? String(emp.baseSalary) : prev.amount) : prev.amount
+                    }));
                   }}
-                  required
                 >
-                  <option value="">-- اختر الموظف --</option>
+                  <option value="">-- اختر من طاقم الموظفين (أو اكتب باليسار) --</option>
                   {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.jobTitle || 'موظف'})</option>
                   ))}
                 </select>
+                <input
+                  type="text"
+                  placeholder="أو اكتب اسم الشخص القائم بالصرف يدوياً"
+                  value={form.spenderName}
+                  onChange={(e) => setForm(prev => ({ ...prev, spenderName: e.target.value, employeeId: '' }))}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'var(--bg-secondary, #1a1d27)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    fontSize: '13px'
+                  }}
+                />
               </div>
-            )}
+            </div>
 
             <Input
               label="تاريخ الإخراج"

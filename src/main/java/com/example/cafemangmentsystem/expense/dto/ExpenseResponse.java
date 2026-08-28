@@ -30,9 +30,15 @@ public record ExpenseResponse(
         String recordedByUserName,
         Long employeeId,
         String employeeName,
+        String spenderName,
         String notes
 ) {
     public static ExpenseResponse from(Expense expense) {
+        String effectiveSpender = expense.getSpenderName();
+        if (effectiveSpender == null && expense.getEmployee() != null) {
+            effectiveSpender = expense.getEmployee().getName() != null ? expense.getEmployee().getName() : expense.getEmployee().getFullName();
+        }
+
         return new ExpenseResponse(
                 expense.getId(),
                 expense.getType(),
@@ -53,7 +59,8 @@ public record ExpenseResponse(
                 expense.getRecordedBy().getId(),
                 expense.getRecordedBy().getFullName(),
                 expense.getEmployee() == null ? null : expense.getEmployee().getId(),
-                expense.getEmployee() == null ? null : (expense.getEmployee().getName() != null ? expense.getEmployee().getName() : expense.getEmployee().getFullName()),
+                effectiveSpender,
+                effectiveSpender,
                 expense.getNotes()
         );
     }

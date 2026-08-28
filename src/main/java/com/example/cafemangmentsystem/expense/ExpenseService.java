@@ -62,6 +62,11 @@ public class ExpenseService {
         BigDecimal actualAmt = isAdvance ? null : request.amount();
         BigDecimal returnedAmt = isAdvance ? null : BigDecimal.ZERO;
 
+        String spender = request.spenderName();
+        if ((spender == null || spender.isBlank()) && employee != null) {
+            spender = employee.getName() != null ? employee.getName() : employee.getFullName();
+        }
+
         Expense expense = Expense.builder()
                 .type(request.type())
                 .revenueLine(request.revenueLine())
@@ -77,6 +82,7 @@ public class ExpenseService {
                 .notes(request.notes())
                 .shift(shift)
                 .employee(employee)
+                .spenderName(spender)
                 .recordedBy(recordedBy)
                 .build();
 

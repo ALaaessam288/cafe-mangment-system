@@ -26,6 +26,7 @@ public record ExpenseRequest(
         boolean paidFromDrawer,
         boolean isAdvance,
         Long employeeId,
+        String spenderName,
         String notes
 ) {
     public ExpenseRequest(
@@ -38,6 +39,6 @@ public record ExpenseRequest(
             Long employeeId,
             String notes
     ) {
-        this(type, revenueLine, amount, expenseDate, recurring, paidFromDrawer, false, employeeId, notes);
+        this(type, revenueLine, amount, expenseDate, recurring, paidFromDrawer, false, employeeId, null, notes);
     }
 }

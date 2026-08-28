@@ -86,6 +86,9 @@ public class Expense extends TenantScopedEntity {
     @JoinColumn(name = "shift_id")
     private Shift shift;
 
+    @Column(name = "spender_name")
+    private String spenderName;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
     private Employee employee;

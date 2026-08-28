@@ -977,7 +977,7 @@ export function buildExpenseVoucherHtml({ expense, cafeName }) {
       <b>تاريخ الإخراج:</b> ${stamp(expense.expenseDate || new Date())}<br>
       <b>مُسجّل الإيصال:</b> ${esc(recUser)}<br>
       ${expense.shiftId ? `<b>رقم الشيفت:</b> #${expense.shiftId}<br>` : ''}
-      ${expense.employeeName ? `<b>الموظف المستلم:</b> ${esc(expense.employeeName)}<br>` : ''}
+      ${(expense.spenderName || expense.employeeName) ? `<b>المستلم / القائم بالصرف:</b> ${esc(expense.spenderName || expense.employeeName)}<br>` : ''}
     </div>
 
     <div class="row">
@@ -1022,7 +1022,7 @@ export function buildExpenseVoucherHtml({ expense, cafeName }) {
     <div class="footer" style="margin-top:16px; font-size:10px;">
       <div style="display:flex; justify-content:space-between; margin-top:12px; font-weight:bold;">
         <span>توقيع الكاشير / المسؤول:<br>.......................</span>
-        <span>توقيع الموظف المستلم:<br>.......................</span>
+        <span>توقيع المستلم (${esc(expense.spenderName || expense.employeeName || 'الموظف')}):<br>.......................</span>
       </div>
       <span style="font-size:8px; color:#777; margin-top:10px; display:inline-block;">تم إصدار هذا الإيصال تلقائياً عبر نظام Caffio POS</span>
     </div>
