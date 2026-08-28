@@ -39,6 +39,12 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String path = request.getRequestURI();
         
+        // NEVER filter static assets or non-API routes
+        if (!path.startsWith("/api/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
         for (String exempt : EXEMPT_PATHS) {
             if (path.startsWith(exempt)) {
                 filterChain.doFilter(request, response);
