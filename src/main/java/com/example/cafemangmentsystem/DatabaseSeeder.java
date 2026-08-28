@@ -241,36 +241,103 @@ public class DatabaseSeeder implements CommandLineRunner {
 
         // Ensure Platform Master Tenant and Super Admin exist
         try {
-            Long platformTenantId = null;
-            try {
-                platformTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants WHERE slug = 'platform'", Long.class);
-            } catch (Exception ignored) {}
-
-            if (platformTenantId == null) {
-                jdbcTemplate.execute(
-                    "INSERT INTO tenants (name, slug, business_type, status, timezone, currency, subscription_plan, max_tables, max_users, max_products, plan_selected, created_at, updated_at) " +
-                    "VALUES ('Caffio Platform', 'platform', 'CAFE_AND_RESTAURANT', 'ACTIVE', 'Africa/Cairo', 'EGP', 'ENTERPRISE', 9999, 9999, 9999, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-                );
-                platformTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants WHERE slug = 'platform'", Long.class);
-                System.out.println("[SEEDER] Created Master Platform Tenant (ID: " + platformTenantId + ")");
+            Tenant platformTenant = tenantRepository.findBySlug("platform").orElse(null);
+            if (platformTenant == null) {
+                platformTenant = Tenant.builder()
+                        .name("Caffio Platform")
+                        .slug("platform")
+                        .businessType(BusinessType.CAFE_AND_RESTAURANT)
+                        .status(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE)
+                        .timezone("Africa/Cairo")
+                        .currency("EGP")
+                        .subscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE)
+                        .maxTables(9999)
+                        .maxUsers(9999)
+                        .maxProducts(9999)
+                        .planSelected(true)
+                        .build();
+                platformTenant = tenantRepository.save(platformTenant);
+                System.out.println("[SEEDER] Created Master Platform Tenant (ID: " + platformTenant.getId() + ")");
             }
 
-            if (platformTenantId != null) {
-                Integer adminCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM users WHERE tenant_id = ? AND username = 'alaaHarb'",
-                    Integer.class, platformTenantId);
-                if (adminCount == null || adminCount == 0) {
-                    String pwdHash = passwordEncoder.encode("alaa@12345");
-                    jdbcTemplate.update(
-                        "INSERT INTO users (tenant_id, username, password_hash, full_name, role, active, version, created_at, updated_at) " +
-                        "VALUES (?, 'alaaHarb', ?, 'Alaa Harb', 'ADMIN', true, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-                        platformTenantId, pwdHash
-                    );
-                    System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
+            if (platformTenant != null) {
+                TenantContext.set(platformTenant.getId());
+                try {
+                    User adminUser = userRepository.findByUsername("alaaHarb").orElse(null);
+                    if (adminUser == null) {
+                        adminUser = User.builder()
+                                .tenantId(platformTenant.getId())
+                                .username("alaaHarb")
+                                .passwordHash(passwordEncoder.encode("alaa@12345"))
+                                .fullName("Alaa Harb")
+                                .role(Role.ADMIN)
+                                .active(true)
+                                .build();
+                        userRepository.save(adminUser);
+                        System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
+                    }
+                } finally {
+                    TenantContext.clear();
                 }
             }
         } catch (Exception e) {
             System.err.println("[SEEDER] Platform bootstrap check: " + e.getMessage());
+        }
+
+        // Ensure default Wanas Cafe tenant exists
+        try {
+            Tenant wanasTenant = tenantRepository.findBySlug("wanas").orElse(null);
+            if (wanasTenant == null) {
+                wanasTenant = Tenant.builder()
+                        .name("Wanas Cafe")
+                        .slug("wanas")
+                        .businessType(BusinessType.CAFE)
+                        .status(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE)
+                        .timezone("Africa/Cairo")
+                        .currency("EGP")
+                        .subscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO)
+                        .maxTables(50)
+                        .maxUsers(10)
+                        .maxProducts(200)
+                        .planSelected(true)
+                        .build();
+                wanasTenant = tenantRepository.save(wanasTenant);
+                System.out.println("[SEEDER] Created Wanas Cafe Tenant (ID: " + wanasTenant.getId() + ")");
+            }
+
+            if (wanasTenant != null) {
+                TenantContext.set(wanasTenant.getId());
+                try {
+                    User wanasAdmin = userRepository.findByUsername("alaaHarb").orElse(null);
+                    if (wanasAdmin == null) {
+                        wanasAdmin = User.builder()
+                                .tenantId(wanasTenant.getId())
+                                .username("alaaHarb")
+                                .passwordHash(passwordEncoder.encode("alaa@12345"))
+                                .fullName("Alaa Harb")
+                                .role(Role.ADMIN)
+                                .active(true)
+                                .build();
+                        userRepository.save(wanasAdmin);
+                    }
+                    User cashier = userRepository.findByUsername("cashier1").orElse(null);
+                    if (cashier == null) {
+                        cashier = User.builder()
+                                .tenantId(wanasTenant.getId())
+                                .username("cashier1")
+                                .passwordHash(passwordEncoder.encode("123456"))
+                                .fullName("كاشير 1")
+                                .role(Role.CASHIER)
+                                .active(true)
+                                .build();
+                        userRepository.save(cashier);
+                    }
+                } finally {
+                    TenantContext.clear();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Wanas bootstrap check: " + e.getMessage());
         }
     }
 }
