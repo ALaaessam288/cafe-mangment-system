@@ -187,7 +187,9 @@ export default function POSPage() {
 
   // Quick Refill Modal states inside POS
   const [refillProduct, setRefillProduct] = useState(null);
+  const [refillMode, setRefillMode] = useState('GRAMS'); // 'GRAMS' or 'PIECES'
   const [refillQty, setRefillQty] = useState('');
+  const [refillGrams, setRefillGrams] = useState('');
   const [isSavingRefill, setIsSavingRefill] = useState(false);
 
   // Collapsible table panel - ~40 tables shouldn't own the screen once the
@@ -741,7 +743,17 @@ export default function POSPage() {
     // If stock is 0 or depleted, show popup to refill
     if (isTracked && currentStock <= 0) {
       setRefillProduct(product);
-      setRefillQty('10');
+      const isRecipe = Boolean(product.primaryIngredientName || product.recipeInventory);
+      if (isRecipe) {
+        setRefillMode('GRAMS');
+        setRefillGrams('250');
+        const perCup = product.deductionQuantity || 10;
+        setRefillQty(String(Math.floor(250 / perCup)));
+      } else {
+        setRefillMode('PIECES');
+        setRefillQty('10');
+        setRefillGrams('');
+      }
       return;
     }
 
@@ -769,35 +781,63 @@ export default function POSPage() {
   /* Quick refill stock for an out-of-stock product, then auto-add it to the order. */
   async function handleRefillAndAdd() {
     if (!refillProduct) return;
-    const qty = parseInt(refillQty);
-    if (isNaN(qty) || qty <= 0) {
-      toast.warning('الرجاء إدخال كمية صحيحة أكبر من الصفر');
-      return;
+    const isRecipe = Boolean(refillProduct.primaryIngredientName || refillProduct.recipeInventory);
+    const perCup = refillProduct.deductionQuantity || 10;
+
+    let rawQty = null;
+    let pieceQty = null;
+
+    if (isRecipe) {
+      if (refillMode === 'GRAMS') {
+        const g = parseFloat(refillGrams);
+        if (isNaN(g) || g <= 0) {
+          toast.warning('الرجاء إدخال كمية صحيحة بالجرام أكبر من الصفر');
+          return;
+        }
+        rawQty = g;
+        pieceQty = Math.max(1, Math.floor(g / perCup));
+      } else {
+        const q = parseInt(refillQty);
+        if (isNaN(q) || q <= 0) {
+          toast.warning('الرجاء إدخال عدد قطع أو فناجين صحيح أكبر من الصفر');
+          return;
+        }
+        pieceQty = q;
+        rawQty = q * perCup;
+      }
+    } else {
+      const q = parseInt(refillQty);
+      if (isNaN(q) || q <= 0) {
+        toast.warning('الرجاء إدخال كمية صحيحة أكبر من الصفر');
+        return;
+      }
+      pieceQty = q;
     }
+
     setIsSavingRefill(true);
     try {
-      await menuApi.addStock(refillProduct.id, qty);
-      toast.success(`تم تغذية مخزون «${refillProduct.name}» بـ ${qty} قطعة بنجاح 🎉`);
-
-      // Update product in local state immediately across all categories & top lists
-      dispatch({
-        type: 'REFILL_PRODUCT_STOCK',
-        payload: { productId: refillProduct.id, quantity: qty },
+      const updatedProduct = await menuApi.addStock(refillProduct.id, {
+        quantity: pieceQty,
+        rawQuantity: rawQty
       });
+
+      const successMsg = isRecipe
+        ? `تم تغذية مخزون «${refillProduct.primaryIngredientName || 'المادة الخام'}» بـ ${rawQty} ${refillProduct.primaryIngredientUnit || 'جرام'} (تكفي لعمل ${pieceQty} فنجان) بنجاح 🎉`
+        : `تم تغذية مخزون «${refillProduct.name}» بـ ${pieceQty} قطعة بنجاح 🎉`;
+      toast.success(successMsg);
+
+      // Refresh menu products
+      await loadMenu(state.categories);
 
       // Auto-add the product to the current order
       const order = await ensureOrder();
       if (order) {
-        const updatedProduct = {
-          ...refillProduct,
-          stockQuantity: (refillProduct.stockQuantity ?? 0) + qty,
-          availableQuantity: (refillProduct.availableQuantity ?? 0) + qty,
-        };
-        await addToOrder(order, updatedProduct, { quantity: 1 });
+        await addToOrder(order, updatedProduct || refillProduct, { quantity: 1 });
       }
 
       setRefillProduct(null);
       setRefillQty('');
+      setRefillGrams('');
     } catch (err) {
       toast.error(err.message, 'فشل في تغذية المخزون');
     } finally {
@@ -1783,77 +1823,242 @@ export default function POSPage() {
       )}
 
       {/* Quick Refill Stock Modal - shown when cashier taps an out-of-stock product */}
-      {refillProduct && (
-        <div className="pos__open-modal-overlay" onClick={() => setRefillProduct(null)}>
-          <div className="pos__open-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
-            <h3 style={{ margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '22px' }}>📦</span> الصنف نفذ من المخزون!
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 16px' }}>
-              «<strong>{refillProduct.name}</strong>» المخزون الحالي: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>0</span>.
-              <br />أدخل الكمية اللي وصلت عشان تتغذّي المخزون وتتضاف للأوردر تلقائي.
-            </p>
+      {refillProduct && (() => {
+        const isRecipe = Boolean(refillProduct.primaryIngredientName || refillProduct.recipeInventory);
+        const ingredientName = refillProduct.primaryIngredientName || 'المادة الخام';
+        const ingredientUnit = refillProduct.primaryIngredientUnit || 'جرام';
+        const perCup = refillProduct.deductionQuantity || 10;
+        const currentRawStock = refillProduct.primaryIngredientStock ?? 0;
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>كمية التغذية (عدد القطع الجديدة)</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="input"
-                  value={refillQty}
-                  onChange={(e) => setRefillQty(e.target.value)}
-                  onFocus={(e) => e.target.select()}
-                  autoFocus
-                  style={{ width: '100%', height: '40px', fontSize: '16px', fontWeight: 'bold', textAlign: 'center' }}
-                />
+        const calculatedCupsFromGrams = Math.floor((parseFloat(refillGrams) || 0) / perCup);
+        const calculatedGramsFromCups = (parseInt(refillQty) || 0) * perCup;
+
+        return (
+          <div className="pos__open-modal-overlay" onClick={() => setRefillProduct(null)}>
+            <div className="pos__open-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+              <h3 style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '22px' }}>📦</span> الصنف نفذ من المخزون!
+              </h3>
+
+              <div style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                marginBottom: '14px'
+              }}>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
+                  «{refillProduct.name}»
+                </div>
+                {isRecipe ? (
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span>المادة الخام: <strong style={{ color: 'var(--accent)' }}>{ingredientName}</strong> (المخزون الحالي: <strong style={{ color: currentRawStock <= 0 ? '#ef4444' : '#10b981' }}>{currentRawStock} {ingredientUnit}</strong>)</span>
+                    <span>المعيار: <strong>{perCup} {ingredientUnit}</strong> لكل فنجان</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    المخزون الحالي: <strong style={{ color: '#ef4444' }}>0 قطعة</strong>
+                  </div>
+                )}
               </div>
 
-              {/* Quick Presets */}
-              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                {[5, 10, 15, 20, 30, 50].map((amt) => (
+              {/* If Recipe: Mode Switcher (Grams vs Cups) */}
+              {isRecipe && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
                   <button
-                    key={amt}
                     type="button"
                     style={{
-                      padding: '4px 12px',
-                      fontSize: '12px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border-color)',
-                      background: parseInt(refillQty) === amt ? '#10b981' : 'var(--bg-surface)',
-                      color: parseInt(refillQty) === amt ? '#fff' : 'var(--text-primary)',
-                      cursor: 'pointer',
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid',
+                      borderColor: refillMode === 'GRAMS' ? '#10b981' : 'var(--border-color)',
+                      background: refillMode === 'GRAMS' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)',
+                      color: refillMode === 'GRAMS' ? '#10b981' : 'var(--text-secondary)',
                       fontWeight: '700',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
                     }}
-                    onClick={() => setRefillQty(String(amt))}
+                    onClick={() => {
+                      setRefillMode('GRAMS');
+                      if (!refillGrams) setRefillGrams('250');
+                    }}
                   >
-                    {amt}
+                    ⚖️ بالجرامات ({ingredientUnit})
                   </button>
-                ))}
-              </div>
+                  <button
+                    type="button"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid',
+                      borderColor: refillMode === 'PIECES' ? '#10b981' : 'var(--border-color)',
+                      background: refillMode === 'PIECES' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)',
+                      color: refillMode === 'PIECES' ? '#10b981' : 'var(--text-secondary)',
+                      fontWeight: '700',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                    onClick={() => {
+                      setRefillMode('PIECES');
+                      if (!refillQty) setRefillQty('25');
+                    }}
+                  >
+                    ☕ بالفناجين / القطع
+                  </button>
+                </div>
+              )}
 
-              <div className="pos__open-actions" style={{ marginTop: '8px' }}>
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--md"
-                  onClick={() => setRefillProduct(null)}
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--primary btn--md"
-                  disabled={isSavingRefill}
-                  onClick={handleRefillAndAdd}
-                  style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
-                >
-                  {isSavingRefill ? 'جاري التغذية...' : `تغذية ${refillQty || 0} قطعة وإضافة للأوردر 📦`}
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {isRecipe && refillMode === 'GRAMS' ? (
+                  /* Grams Input Section */
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>
+                      الكمية بالجرام ({ingredientUnit} بن جديدة وصلت)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="input"
+                      value={refillGrams}
+                      onChange={(e) => setRefillGrams(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      autoFocus
+                      placeholder="مثلاً 250"
+                      style={{ width: '100%', height: '42px', fontSize: '18px', fontWeight: 'bold', textAlign: 'center' }}
+                    />
+
+                    {/* Quick Presets for Grams */}
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginTop: '8px' }}>
+                      {[100, 250, 500, 1000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          style={{
+                            flex: 1,
+                            padding: '6px 8px',
+                            fontSize: '12px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)',
+                            background: parseFloat(refillGrams) === amt ? '#10b981' : 'var(--bg-surface)',
+                            color: parseFloat(refillGrams) === amt ? '#fff' : 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontWeight: '700',
+                          }}
+                          onClick={() => setRefillGrams(String(amt))}
+                        >
+                          {amt} ج
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Calculation Preview */}
+                    <div style={{
+                      marginTop: '8px',
+                      fontSize: '12px',
+                      textAlign: 'center',
+                      color: '#10b981',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      fontWeight: 600
+                    }}>
+                      💡 {refillGrams || 0} {ingredientUnit} = تكفي لعمل حوالي <strong>{calculatedCupsFromGrams} فنجان قهوة</strong>
+                    </div>
+                  </div>
+                ) : (
+                  /* Pieces / Cups Input Section */
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>
+                      {isRecipe ? 'عدد الفناجين / الأكواب الجديدة' : 'كمية التغذية (عدد القطع الجديدة)'}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="input"
+                      value={refillQty}
+                      onChange={(e) => setRefillQty(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      autoFocus
+                      style={{ width: '100%', height: '42px', fontSize: '18px', fontWeight: 'bold', textAlign: 'center' }}
+                    />
+
+                    {/* Quick Presets */}
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginTop: '8px' }}>
+                      {[5, 10, 15, 20, 25, 30, 50].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)',
+                            background: parseInt(refillQty) === amt ? '#10b981' : 'var(--bg-surface)',
+                            color: parseInt(refillQty) === amt ? '#fff' : 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontWeight: '700',
+                          }}
+                          onClick={() => setRefillQty(String(amt))}
+                        >
+                          {amt}
+                        </button>
+                      ))}
+                    </div>
+
+                    {isRecipe && (
+                      <div style={{
+                        marginTop: '8px',
+                        fontSize: '12px',
+                        textAlign: 'center',
+                        color: '#10b981',
+                        background: 'rgba(16, 185, 129, 0.08)',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        fontWeight: 600
+                      }}>
+                        💡 {refillQty || 0} فنجان = يستهلك <strong>{calculatedGramsFromCups} {ingredientUnit} {ingredientName}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pos__open-actions" style={{ marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--md"
+                    onClick={() => setRefillProduct(null)}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--md"
+                    disabled={isSavingRefill}
+                    onClick={handleRefillAndAdd}
+                    style={{ backgroundColor: '#10b981', borderColor: '#10b981', flex: 2 }}
+                  >
+                    {isSavingRefill
+                      ? 'جاري التغذية...'
+                      : (isRecipe && refillMode === 'GRAMS'
+                          ? `تغذية ${refillGrams || 0} ${ingredientUnit} وإضافة للأوردر 📦`
+                          : `تغذية ${refillQty || 0} قطعة وإضافة للأوردر 📦`)}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

@@ -20,7 +20,13 @@ export const menuApi = {
   activateProduct:   (id)    => client.put(`/products/${id}/activate`).then((r) => r.data),
   setAvailability: (id, available) =>
     client.put(`/products/${id}/availability`, { available }).then((r) => r.data),
-  addStock: (id, quantity) => client.put(`/products/${id}/stock`, null, { params: { quantity } }).then((r) => r.data),
+  addStock: (id, params) => {
+    const queryParams = typeof params === 'object' && params !== null ? params : { quantity: params };
+    return client.put(`/products/${id}/stock`, null, { params: queryParams }).then((r) => {
+      const p = r.data;
+      return { ...p, name: p.nameAr || p.nameEn };
+    });
+  },
 
   /* Product Options */
   getOptions:    (productId)         => client.get(`/products/${productId}/options`).then((r) => r.data),

@@ -66,7 +66,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public ProductResponse findById(Long id) {
         Product product = getOrThrow(id);
-        return ProductResponse.from(product, shiftAuditService.getRecipeAvailableQuantity(product));
+        return toResponse(product);
     }
 
     public ProductResponse update(Long id, ProductRequest request) {
@@ -101,18 +101,17 @@ public class ProductService {
         return toResponse(product);
     }
 
-    public ProductResponse addStock(Long id, int quantity) {
+    public ProductResponse addStock(Long id, Integer quantity, Double rawQuantity) {
         Product product = getOrThrow(id);
-        if (shiftAuditService.getRecipeAvailableQuantity(product) != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Recipe products must be replenished from raw-material inventory");
+        boolean isRecipe = shiftAuditService.replenishRecipeStock(product, quantity, rawQuantity);
+        if (!isRecipe) {
+            int qtyToAdd = quantity != null ? quantity : (rawQuantity != null ? (int) Math.round(rawQuantity) : 0);
+            product.setStockQuantity(product.getStockQuantity() + qtyToAdd);
+            product.setTrackInventory(true);
         }
-        product.setStockQuantity(product.getStockQuantity() + quantity);
-        product.setTrackInventory(true);
-        if (product.getStockQuantity() > 0) {
-            product.setAvailable(true);
-        }
-        return toResponse(productRepository.save(product));
+        product.setAvailable(true);
+        Product saved = productRepository.save(product);
+        return toResponse(saved);
     }
 
     Product getOrThrow(Long id) {
@@ -122,13 +121,23 @@ public class ProductService {
 
     private List<ProductResponse> toResponses(List<Product> products) {
         Map<Long, Integer> recipeAvailability = shiftAuditService.getRecipeAvailableQuantities(products);
+        Map<Long, com.example.cafemangmentsystem.inventory.ShiftAuditService.PrimaryIngredientInfo> ingredientsMap =
+                shiftAuditService.getPrimaryIngredientsMap(products);
         return products.stream()
-                .map(product -> ProductResponse.from(product, recipeAvailability.get(product.getId())))
+                .map(product -> ProductResponse.from(
+                        product,
+                        recipeAvailability.get(product.getId()),
+                        ingredientsMap.get(product.getId())
+                ))
                 .toList();
     }
 
     private ProductResponse toResponse(Product product) {
-        return ProductResponse.from(product, shiftAuditService.getRecipeAvailableQuantity(product));
+        return ProductResponse.from(
+                product,
+                shiftAuditService.getRecipeAvailableQuantity(product),
+                shiftAuditService.getPrimaryIngredientInfo(product)
+        );
     }
 
     private Category getCategoryOrThrow(Long categoryId) {

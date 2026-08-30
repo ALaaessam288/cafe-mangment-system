@@ -310,6 +310,69 @@ public class ShiftAuditService {
         return (int) Math.min(Integer.MAX_VALUE, availability.availableToAdd());
     }
 
+    public record PrimaryIngredientInfo(
+            Long id,
+            String name,
+            String unit,
+            Double stockQuantity,
+            Double deductionQuantity
+    ) {}
+
+    @Transactional(readOnly = true)
+    public PrimaryIngredientInfo getPrimaryIngredientInfo(Product product) {
+        if (product == null) return null;
+        List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(product.getId());
+        if (recipes.isEmpty()) return null;
+        ProductRecipe primary = recipes.get(0);
+        ShiftAuditItem item = primary.getAuditItem();
+        if (item == null) return null;
+        return new PrimaryIngredientInfo(
+                item.getId(),
+                item.getName(),
+                item.getUnit(),
+                item.getStockQuantity() != null ? item.getStockQuantity() : 0.0,
+                primary.getDeductionQuantity()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, PrimaryIngredientInfo> getPrimaryIngredientsMap(List<Product> products) {
+        Map<Long, PrimaryIngredientInfo> map = new HashMap<>();
+        if (products == null) return map;
+        for (Product product : products) {
+            PrimaryIngredientInfo info = getPrimaryIngredientInfo(product);
+            if (info != null) {
+                map.put(product.getId(), info);
+            }
+        }
+        return map;
+    }
+
+    public boolean replenishRecipeStock(Product product, Integer pieceQuantity, Double rawQuantity) {
+        if (product == null) return false;
+        List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(product.getId());
+        if (recipes.isEmpty()) return false;
+
+        for (ProductRecipe recipe : recipes) {
+            ShiftAuditItem ingredient = recipe.getAuditItem();
+            if (ingredient == null) continue;
+
+            double addAmount = 0.0;
+            if (rawQuantity != null && rawQuantity > 0) {
+                addAmount = rawQuantity;
+            } else if (pieceQuantity != null && pieceQuantity > 0) {
+                addAmount = pieceQuantity * recipe.getDeductionQuantity();
+            }
+
+            if (addAmount > 0) {
+                double current = ingredient.getStockQuantity() != null ? ingredient.getStockQuantity() : 0.0;
+                ingredient.setStockQuantity(current + addAmount);
+                shiftAuditItemRepository.save(ingredient);
+            }
+        }
+        return true;
+    }
+
     @Transactional(readOnly = true)
     public Map<Long, Integer> getRecipeAvailableQuantities(List<Product> products) {
         Map<Long, Integer> result = new HashMap<>();

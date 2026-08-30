@@ -24,13 +24,25 @@ public record ProductResponse(
         Integer availableQuantity,
         Boolean trackInventory,
         Boolean recipeInventory,
-        Integer minStockThreshold
+        Integer minStockThreshold,
+        Long primaryIngredientId,
+        String primaryIngredientName,
+        String primaryIngredientUnit,
+        Double primaryIngredientStock,
+        Double deductionQuantity
 ) {
     public static ProductResponse from(Product product) {
-        return from(product, null);
+        return from(product, null, null);
     }
 
     public static ProductResponse from(Product product, Integer recipeAvailableQuantity) {
+        return from(product, recipeAvailableQuantity, null);
+    }
+
+    public static ProductResponse from(
+            Product product,
+            Integer recipeAvailableQuantity,
+            com.example.cafemangmentsystem.inventory.ShiftAuditService.PrimaryIngredientInfo ingredientInfo) {
         int directAvailable = Math.max(0, product.getStockQuantity() - product.getReservedQuantity());
         int effectiveAvailable = recipeAvailableQuantity == null
                 ? directAvailable
@@ -58,6 +70,12 @@ public record ProductResponse(
                 effectiveAvailable,
                 product.isTrackInventory(),
                 recipeAvailableQuantity != null,
-                product.getMinStockThreshold());
+                product.getMinStockThreshold(),
+                ingredientInfo != null ? ingredientInfo.id() : null,
+                ingredientInfo != null ? ingredientInfo.name() : null,
+                ingredientInfo != null ? ingredientInfo.unit() : null,
+                ingredientInfo != null ? ingredientInfo.stockQuantity() : null,
+                ingredientInfo != null ? ingredientInfo.deductionQuantity() : null
+        );
     }
 }

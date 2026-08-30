@@ -77,7 +77,10 @@ public class ProductController {
 
     @PutMapping("/{id}/stock")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR', 'CASHIER')")
-    public ProductResponse addStock(@PathVariable Long id, @RequestParam int quantity) {
-        return productService.addStock(id, quantity);
+    public ProductResponse addStock(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer quantity,
+            @RequestParam(required = false) Double rawQuantity) {
+        return productService.addStock(id, quantity, rawQuantity);
     }
 }
