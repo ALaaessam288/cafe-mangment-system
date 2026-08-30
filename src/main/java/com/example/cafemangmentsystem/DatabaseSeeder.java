@@ -121,6 +121,29 @@ public class DatabaseSeeder implements CommandLineRunner {
             }
         }
 
+        // Patch users.role CHECK constraint to allow SUPER_ADMIN
+        try {
+            Boolean needsUserRolePatch = jdbcTemplate.queryForObject(
+                "SELECT sql NOT LIKE '%SUPER_ADMIN%' FROM sqlite_master WHERE type='table' AND name='users'",
+                Boolean.class);
+            if (Boolean.TRUE.equals(needsUserRolePatch)) {
+                jdbcTemplate.execute("PRAGMA writable_schema = 1");
+                jdbcTemplate.update(
+                    "UPDATE sqlite_master SET sql = REPLACE(sql, ?, ?) WHERE type='table' AND name='users'",
+                    "'ADMIN')", "'ADMIN','SUPER_ADMIN')"
+                );
+                jdbcTemplate.update(
+                    "UPDATE sqlite_master SET sql = REPLACE(sql, ?, ?) WHERE type='table' AND name='users'",
+                    "'ADMIN']", "'ADMIN','SUPER_ADMIN']"
+                );
+                jdbcTemplate.execute("PRAGMA writable_schema = 0");
+                System.out.println("[SEEDER] Patched users.role CHECK constraint to allow SUPER_ADMIN.");
+            }
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Failed to patch users role constraint: " + e.getMessage());
+            try { jdbcTemplate.execute("PRAGMA writable_schema = 0"); } catch (Exception ignored) { }
+        }
+
         // Ensure paid_amount column exists on debts table
         try {
             jdbcTemplate.execute("ALTER TABLE debts ADD COLUMN paid_amount NUMERIC NOT NULL DEFAULT 0");
