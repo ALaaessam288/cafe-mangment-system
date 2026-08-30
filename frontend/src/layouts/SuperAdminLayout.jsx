@@ -39,6 +39,15 @@ export default function SuperAdminLayout({
     settings: 'إعدادات ومعلومات النظام',
   };
 
+  const SECTION_DESCRIPTIONS = {
+    dashboard: 'صورة لحظية لصحة المنصة وما يحتاج قرارك اليوم',
+    tenants: 'ابحث، راجع، فعّل أو أوقف أي منشأة من مكان واحد',
+    plans: 'صمّم قيمة كل باقة وحدود استخدامها بوضوح',
+    subscriptions: 'تابع التجديدات ومفاتيح التفعيل قبل انتهاء الخدمة',
+    'audit-logs': 'أثر كامل لكل تغيير حساس تم على المنصة',
+    settings: 'هوية المنصة وسياسات التشغيل والإعدادات العامة',
+  };
+
   function handleLogout() {
     logout();
     navigate(ROUTES.SUPER_ADMIN_LOGIN, { replace: true });
@@ -172,27 +181,19 @@ export default function SuperAdminLayout({
 
             {/* Breadcrumb & Section Title */}
             <div className="sa-header__title-area">
-              <nav aria-label="breadcrumb">
-                <ol className="breadcrumb mb-0 sa-breadcrumb">
-                  <li className="breadcrumb-item">
-                    <a href="#dashboard" onClick={(e) => { e.preventDefault(); handleNavClick('dashboard'); }}>
-                      <i className="bi bi-house-door me-1" />
-                      الرئيسية
-                    </a>
-                  </li>
-                  <li className="breadcrumb-item active" aria-current="page">
-                    {SECTION_TITLES[activeSection] || activeSection}
-                  </li>
-                </ol>
-              </nav>
+              <span className="sa-header__eyebrow">CAFFIO CONTROL CENTER</span>
+              <div className="sa-header__section-line">
+                <strong>{SECTION_TITLES[activeSection] || activeSection}</strong>
+                <span>{SECTION_DESCRIPTIONS[activeSection]}</span>
+              </div>
             </div>
           </div>
 
           <div className="sa-header__end">
             {/* Cloud Server Health */}
-            <div className="sa-server-badge d-none d-sm-flex">
+            <div className="sa-server-badge d-none d-sm-flex" title="جميع خدمات المنصة تعمل بصورة طبيعية">
               <span className="sa-server-badge__dot" />
-              <span>خوادم السحابة: متصلة 100%</span>
+              <span><strong>المنصة مستقرة</strong><small>كل الخدمات تعمل</small></span>
             </div>
 
             {/* Refresh Button */}

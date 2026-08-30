@@ -7,6 +7,34 @@
   overflow-y: visible !important;
 }
 
+/* ── Platform command center ── */
+.sa-command-hero{min-height:220px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,.8fr);gap:20px;position:relative;overflow:hidden;margin-bottom:12px;padding:24px 28px;border:1px solid rgba(245,158,11,.16);border-radius:22px;background:radial-gradient(circle at 8% 5%,rgba(245,158,11,.15),transparent 34%),radial-gradient(circle at 88% 100%,rgba(34,211,238,.1),transparent 34%),linear-gradient(125deg,#111b2f,#0b1220 60%,#0a1522);box-shadow:0 24px 60px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.035)}
+.sa-command-hero::after{content:'CAFFIO';position:absolute;bottom:-34px;left:20px;color:rgba(255,255,255,.018);font:900 116px/1 sans-serif;letter-spacing:-7px;pointer-events:none;direction:ltr}
+.sa-command-hero__copy{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+.sa-command-hero__live{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:#5eead4;font-size:9px;font-weight:900}
+.sa-command-hero__live i{width:7px;height:7px;border-radius:50%;background:#2dd4bf;box-shadow:0 0 12px #2dd4bf}
+.sa-command-hero h1{max-width:650px;margin:0;color:#fff;font-size:clamp(22px,2.25vw,36px);font-weight:900;letter-spacing:-1px}
+.sa-command-hero p{margin:7px 0 18px;color:#94a3b8;font-size:12px;font-weight:700}
+.sa-command-hero__actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sa-command-primary,.sa-command-secondary{border:0;cursor:pointer;font-family:inherit}
+.sa-command-primary{min-width:285px;display:grid;grid-template-columns:34px 1fr 20px;align-items:center;gap:9px;padding:8px 11px;border-radius:12px;color:#171006;background:linear-gradient(135deg,#fbbf24,#f59e0b);box-shadow:0 12px 28px rgba(245,158,11,.2);text-align:right}
+.sa-command-primary>i:first-child{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:rgba(255,255,255,.28);font-size:16px}
+.sa-command-primary span{display:flex;flex-direction:column;line-height:1.2}.sa-command-primary strong{font-size:12px;font-weight:950}.sa-command-primary small{font-size:8px;font-weight:800;opacity:.7}
+.sa-command-secondary{height:50px;padding-inline:16px;border:1px solid rgba(255,255,255,.11);border-radius:12px;color:#d9e1ed;background:rgba(255,255,255,.035);font-size:10px;font-weight:900}.sa-command-secondary:hover{border-color:rgba(245,158,11,.4);color:#fbbf24}
+.sa-command-hero__pulse{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:22px;direction:ltr}
+.sa-pulse-orbit{width:128px;height:128px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid rgba(45,212,191,.25);border-radius:50%;background:radial-gradient(circle,rgba(45,212,191,.11),transparent 68%);box-shadow:0 0 0 14px rgba(45,212,191,.025),0 0 0 28px rgba(45,212,191,.015)}
+.sa-pulse-orbit::after{content:'';position:absolute;inset:-15px;border:1px dashed rgba(45,212,191,.17);border-radius:50%;animation:saOrbit 18s linear infinite}@keyframes saOrbit{to{transform:rotate(360deg)}}
+.sa-pulse-orbit span{color:#fff;font:900 28px ui-monospace,monospace}.sa-pulse-orbit small{color:#5eead4;font-size:8px;font-weight:900}
+.sa-pulse-stats{display:flex;flex-direction:column;gap:7px;direction:rtl}.sa-pulse-stats span{display:flex;justify-content:space-between;gap:18px;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.06);color:#8290a6;font-size:8px;font-weight:800;white-space:nowrap}.sa-pulse-stats b{color:#ecfdf5;font:900 11px ui-monospace,monospace}.sa-pulse-stats .is-warning b{color:#fbbf24}
+.sa-workflow-rail{display:grid;grid-template-columns:1.15fr repeat(4,1fr);gap:7px;margin-bottom:16px;padding:7px;border:1px solid rgba(148,163,184,.1);border-radius:15px;background:rgba(8,14,25,.72)}
+.sa-workflow-rail__intro{display:flex;flex-direction:column;justify-content:center;padding:6px 10px}.sa-workflow-rail__intro span{color:#f59e0b;font-size:8px;font-weight:900}.sa-workflow-rail__intro strong{color:#e5e7eb;font-size:10px}
+.sa-workflow-step{min-width:0;display:grid;grid-template-columns:22px 25px 1fr 10px;align-items:center;gap:5px;padding:7px;border:1px solid rgba(255,255,255,.06);border-radius:10px;color:#dce4ee;background:rgba(255,255,255,.025);text-align:right;cursor:pointer;font-family:inherit}.sa-workflow-step:hover{transform:translateY(-1px);border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.055)}
+.sa-workflow-step__number{color:#566176;font:800 7px ui-monospace,monospace}.sa-workflow-step>i:not(.sa-workflow-step__arrow){width:25px;height:25px;display:grid;place-items:center;border-radius:7px;color:#fbbf24;background:rgba(245,158,11,.08)}.sa-workflow-step>span:nth-of-type(2){display:flex;flex-direction:column;min-width:0}.sa-workflow-step strong{font-size:9px;white-space:nowrap}.sa-workflow-step small{color:#68758a;font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sa-workflow-step__arrow{color:#3d485b;font-size:8px}
+.sa-kpi-card{position:relative;overflow:hidden;border-radius:16px!important;background:linear-gradient(135deg,rgba(19,29,49,.98),rgba(12,20,35,.98))!important}.sa-kpi-card::before{content:'';position:absolute;inset-inline-start:0;top:12px;bottom:12px;width:2px;border-radius:3px;background:#f59e0b;box-shadow:0 0 12px rgba(245,158,11,.55)}.sa-kpi-card:hover{transform:translateY(-4px)!important;border-color:rgba(245,158,11,.25)!important}.sa-kpi-val{font-family:ui-monospace,monospace}
+.sa-alert-attention{border-radius:15px!important;box-shadow:inset 0 1px rgba(255,255,255,.035),0 10px 30px rgba(0,0,0,.15)!important}.sa-card{border-radius:18px!important;background:linear-gradient(145deg,rgba(18,29,49,.98),rgba(11,18,31,.98))!important}.sa-card-header{background:rgba(255,255,255,.025)!important}.sa-table tbody tr{transition:background .15s ease,transform .15s ease}.sa-table tbody tr:hover{box-shadow:inset 3px 0 #f59e0b}
+@media(max-width:1100px){.sa-command-hero{grid-template-columns:1fr}.sa-command-hero__pulse{justify-content:flex-start}.sa-workflow-rail{grid-template-columns:repeat(2,1fr)}.sa-workflow-rail__intro{grid-column:1/-1}.sa-workflow-step__arrow{display:none}}
+@media(max-width:650px){.sa-command-hero{padding:18px}.sa-command-hero__pulse{display:none}.sa-command-primary{min-width:100%}.sa-command-secondary{width:100%}.sa-workflow-rail{grid-template-columns:1fr 1fr}.sa-workflow-step{grid-template-columns:18px 24px 1fr}.sa-command-hero h1{font-size:22px}}
+
 @keyframes saFadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }

@@ -474,6 +474,50 @@ export default function SuperAdminPage() {
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'dashboard' && (
         <div className="sa-section">
+          <section className="sa-command-hero">
+            <div className="sa-command-hero__copy">
+              <span className="sa-command-hero__live"><i /> بث مباشر للمنصة</span>
+              <h1>مساء الخير، جاهز تدير نمو كافيو؟</h1>
+              <p>ابدأ بما يحتاج تدخلك، ثم تابع الاشتراكات والنمو من نفس مساحة التحكم.</p>
+              <div className="sa-command-hero__actions">
+                <button type="button" className="sa-command-primary" onClick={() => setCreateModal(true)}>
+                  <i className="bi bi-building-add" />
+                  <span><strong>تأسيس منشأة</strong><small>حساب، باقة ومالك في خطوة واحدة</small></span>
+                  <i className="bi bi-arrow-left" />
+                </button>
+                <button type="button" className="sa-command-secondary" onClick={() => setActiveSection('tenants')}>
+                  إدارة العملاء <i className="bi bi-people" />
+                </button>
+              </div>
+            </div>
+
+            <div className="sa-command-hero__pulse" aria-label="ملخص صحة المنصة">
+              <div className="sa-pulse-orbit"><span>{totalTenants > 0 ? Math.round((activeTenants / totalTenants) * 100) : 0}%</span><small>نشاط المنصة</small></div>
+              <div className="sa-pulse-stats">
+                <span><b>{activeTenants}</b> منشأة تعمل</span>
+                <span className={expiringTenants.length ? 'is-warning' : ''}><b>{expiringTenants.length}</b> تحتاج متابعة</span>
+                <span><b>{estimatedMRR.toLocaleString()}</b> ج.م MRR</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="sa-workflow-rail" aria-label="دورة إدارة العميل">
+            <div className="sa-workflow-rail__intro"><span>مسار العميل</span><strong>من Lead إلى عميل نشط</strong></div>
+            {[
+              { n: '01', title: 'تأسيس', hint: 'بيانات المنشأة والمالك', icon: 'bi-building-add', action: () => setCreateModal(true) },
+              { n: '02', title: 'اختيار الباقة', hint: 'حدود وسعر مناسب', icon: 'bi-stars', action: () => setActiveSection('plans') },
+              { n: '03', title: 'تفعيل', hint: 'ترخيص ودخول آمن', icon: 'bi-key', action: () => setActiveSection('subscriptions') },
+              { n: '04', title: 'متابعة', hint: 'استخدام وتجديد ودعم', icon: 'bi-activity', action: () => setActiveSection('tenants') },
+            ].map((step, index) => (
+              <button type="button" key={step.n} className="sa-workflow-step" onClick={step.action}>
+                <span className="sa-workflow-step__number">{step.n}</span>
+                <i className={`bi ${step.icon}`} />
+                <span><strong>{step.title}</strong><small>{step.hint}</small></span>
+                {index < 3 && <i className="bi bi-chevron-left sa-workflow-step__arrow" />}
+              </button>
+            ))}
+          </section>
+
           {/* Attention Banner */}
           {expiringTenants.length > 0 && (
             <div className="alert alert-warning border-0 sa-alert-attention d-flex align-items-center justify-content-between mb-4 shadow-sm">
