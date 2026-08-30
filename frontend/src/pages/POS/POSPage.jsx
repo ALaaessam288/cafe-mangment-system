@@ -410,12 +410,26 @@ export default function POSPage() {
           if (activeReg.length === 0 && (reg || []).length > 0) activeReg = reg;
           setRegisters(activeReg);
           if (activeReg.length > 0) {
-            setStartShiftForm(prev => ({ ...prev, registerId: String(activeReg[0].id) }));
+            setStartShiftForm(prev => prev.registerId ? prev : ({ ...prev, registerId: String(activeReg[0].id) }));
           }
         }
       } catch (err) {
         setIsLoadingShift(false);
       }
+
+      // Ensure registers are loaded if not yet set
+      try {
+        const reg = await registersApi.findAll();
+        let activeReg = (reg || []).filter(r => r.active !== false);
+        if (activeReg.length === 0 && (reg || []).length > 0) activeReg = reg;
+        if (activeReg.length > 0) {
+          setRegisters(activeReg);
+          setStartShiftForm(prev => prev.registerId ? prev : ({ ...prev, registerId: String(activeReg[0].id) }));
+        }
+      } catch (e) {
+        console.error('Failed to load registers', e);
+      }
+
       await loadTables();
       await loadOrders();
       try {
@@ -1391,9 +1405,22 @@ export default function POSPage() {
           <form onSubmit={handleOpenShift} className="form-grid">
             <div className="field">
               <label className="field__label">الكاشير (الدرج)</label>
-              <select className="field-select__control" value={startShiftForm.registerId} onChange={e => setStartShiftForm({...startShiftForm, registerId: e.target.value})} required>
+              <select
+                className="field-select__control"
+                value={startShiftForm.registerId}
+                onChange={e => setStartShiftForm({...startShiftForm, registerId: e.target.value})}
+                required
+              >
                 <option value="">-- اختار الدرج --</option>
-                {registers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {registers.length === 0 ? (
+                  <option value="5">الدرج الرئيسي (كاشير 1)</option>
+                ) : (
+                  registers.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.name || `الدرج الرئيسي (كاشير ${r.id})`}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div className="field">
