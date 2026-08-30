@@ -7,68 +7,104 @@ export default function CategoryGrid({
   onSelectCategory,
   onViewAll,
 }) {
+  const totalProducts = categories.reduce((sum, c) => sum + (c.productCount || 0), 0);
+
   return (
-    <div className="pos-category-grid-container animate-fade-in-up">
-      {/* Category Section Header */}
-      <div className="pos-category-grid__header">
-        <div className="pos-category-grid__title">
-          <span className="pos-category-grid__icon">{groupIcon}</span>
-          <div>
-            <strong>أقسام {groupLabel}</strong>
-            <small>اختر القسم المطلوب لتصفح أصنافه</small>
+    <div className="pos-category-grid-container">
+      {/* Creative Category Section Hero Header */}
+      <div className="pos-category-hero">
+        <div className="pos-category-hero__main">
+          <div className="pos-category-hero__avatar">
+            <span className="pos-category-hero__icon">{groupIcon}</span>
+          </div>
+          <div className="pos-category-hero__text">
+            <div className="pos-category-hero__heading">
+              <strong>أقسام {groupLabel}</strong>
+              <span className="pos-category-hero__pill">{categories.length} أقسام • {totalProducts} صنف</span>
+            </div>
+            <small>اختر القسم المطلوب لتصفح منتجاته وطلباته</small>
           </div>
         </div>
 
         {categories.length > 1 && (
           <button
             type="button"
-            className="pos-category-grid__view-all-btn"
+            className="pos-category-hero__all-btn"
             onClick={() => {
               soundEffects.playTap();
               onViewAll();
             }}
           >
-            <span>عرض كل الأصناف معاً 📋</span>
+            <span className="pos-category-hero__spark">✨</span>
+            <span>عرض كل الأصناف ({totalProducts})</span>
           </button>
         )}
       </div>
 
-      {/* Category Cards Grid */}
+      {/* Interactive Category Cards Grid */}
       <div className="pos-category-grid">
-        {categories.map((cat) => {
+        {categories.map((cat, index) => {
           const visual = cat.visual || {};
           const catName = cat.displayName || cat.nameAr || cat.name || cat.nameEn || 'قسم';
           const count = cat.productCount || 0;
+          const themeColor = visual.color || '#f59e0b';
 
           return (
             <button
               key={cat.id}
               type="button"
               className="pos-category-card"
+              style={{
+                '--cat-color': themeColor,
+                animationDelay: `${index * 35}ms`,
+              }}
               onClick={() => {
                 soundEffects.playTap();
                 onSelectCategory(cat.id);
               }}
             >
+              {/* Ambient Glow Aura */}
+              <div
+                className="pos-category-card__aura"
+                style={{
+                  background: `radial-gradient(circle, ${themeColor}28 0%, transparent 70%)`,
+                }}
+              />
+
+              {/* Glowing Icon Container */}
               <div
                 className="pos-category-card__icon-wrap"
                 style={{
-                  background: visual.color
-                    ? `radial-gradient(circle, ${visual.color}33 0%, rgba(255,255,255,0.02) 80%)`
-                    : 'var(--bg-secondary)',
-                  borderColor: visual.color ? `${visual.color}55` : 'var(--border-subtle)',
+                  background: `linear-gradient(135deg, ${themeColor}22 0%, rgba(255,255,255,0.03) 100%)`,
+                  borderColor: `${themeColor}44`,
+                  boxShadow: `0 4px 16px ${themeColor}22`,
                 }}
               >
                 <span className="pos-category-card__icon">{visual.icon || '☕'}</span>
               </div>
 
-              <span className="pos-category-card__name" title={catName}>
-                {catName}
-              </span>
+              {/* Category Info */}
+              <div className="pos-category-card__info">
+                <span className="pos-category-card__name" title={catName}>
+                  {catName}
+                </span>
+                {visual.tag && (
+                  <span className="pos-category-card__tag">
+                    {visual.tag}
+                  </span>
+                )}
+              </div>
 
-              <span className="pos-category-card__count">
-                {count} {count === 1 ? 'صنف' : count === 2 ? 'صنفان' : 'أصناف'}
-              </span>
+              {/* Footer with Count and Arrow */}
+              <div className="pos-category-card__footer">
+                <span className="pos-category-card__count">
+                  <span className="pos-category-card__dot" style={{ background: themeColor }} />
+                  {count} {count === 1 ? 'صنف' : count === 2 ? 'صنفان' : 'أصناف'}
+                </span>
+                <span className="pos-category-card__action">
+                  تصفح ←
+                </span>
+              </div>
             </button>
           );
         })}
@@ -76,4 +112,5 @@ export default function CategoryGrid({
     </div>
   );
 }
+
 
