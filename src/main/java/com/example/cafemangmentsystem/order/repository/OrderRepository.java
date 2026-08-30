@@ -29,4 +29,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByStatus(OrderStatus status);
 
     List<Order> findAllByShiftId(Long shiftId);
+
+    List<Order> findAllByShiftIdAndStatusIn(Long shiftId, Collection<OrderStatus> statuses);
+
+    boolean existsByShiftIdAndStatusIn(Long shiftId, Collection<OrderStatus> statuses);
+
+    @Query("SELECT EXTRACT(HOUR FROM o.createdAt), COUNT(o.id), " +
+           "COALESCE(SUM(CASE WHEN o.status != com.example.cafemangmentsystem.order.entity.OrderStatus.VOIDED THEN o.total ELSE 0 END), 0) " +
+           "FROM Order o " +
+           "WHERE o.status != com.example.cafemangmentsystem.order.entity.OrderStatus.VOIDED " +
+           "AND (:start IS NULL OR o.createdAt >= :start) " +
+           "AND (:end IS NULL OR o.createdAt < :end) " +
+           "GROUP BY EXTRACT(HOUR FROM o.createdAt) " +
+           "ORDER BY EXTRACT(HOUR FROM o.createdAt)")
+    List<Object[]> findHourlySales(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("SELECT o.createdAt, COUNT(o.id) FROM Order o " +
+           "WHERE o.status != com.example.cafemangmentsystem.order.entity.OrderStatus.VOIDED " +
+           "AND (:start IS NULL OR o.createdAt >= :start) " +
+           "AND (:end IS NULL OR o.createdAt < :end) " +
+           "GROUP BY FUNCTION('date_trunc', 'day', o.createdAt) " +
+           "ORDER BY o.createdAt")
+    List<Object[]> findDailyCounts(@Param("start") Instant start, @Param("end") Instant end);
 }

@@ -24,8 +24,9 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final com.example.cafemangmentsystem.debt.repository.DebtRepository debtRepository;
     private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
+    private final com.example.cafemangmentsystem.inventory.ShiftAuditService shiftAuditService;
 
-    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService, JdbcTemplate jdbcTemplate, WanasMenuSeeder wanasMenuSeeder, org.springframework.security.crypto.password.PasswordEncoder passwordEncoder, com.example.cafemangmentsystem.debt.repository.DebtRepository debtRepository, com.example.cafemangmentsystem.user.repository.UserRepository userRepository) {
+    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService, JdbcTemplate jdbcTemplate, WanasMenuSeeder wanasMenuSeeder, org.springframework.security.crypto.password.PasswordEncoder passwordEncoder, com.example.cafemangmentsystem.debt.repository.DebtRepository debtRepository, com.example.cafemangmentsystem.user.repository.UserRepository userRepository, com.example.cafemangmentsystem.inventory.ShiftAuditService shiftAuditService) {
         this.tenantRepository = tenantRepository;
         this.tenantService = tenantService;
         this.jdbcTemplate = jdbcTemplate;
@@ -33,6 +34,7 @@ public class DatabaseSeeder implements CommandLineRunner {
         this.passwordEncoder = passwordEncoder;
         this.debtRepository = debtRepository;
         this.userRepository = userRepository;
+        this.shiftAuditService = shiftAuditService;
     }
 
     @Override
@@ -273,10 +275,14 @@ public class DatabaseSeeder implements CommandLineRunner {
                                 .username("alaaHarb")
                                 .passwordHash(passwordEncoder.encode("alaa@12345"))
                                 .fullName("Alaa Harb")
-                                .role(Role.ADMIN)
+                                .role(Role.SUPER_ADMIN)
                                 .build();
                         userRepository.save(adminUser);
                         System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
+                    } else if (adminUser.getRole() != Role.SUPER_ADMIN) {
+                        adminUser.setRole(Role.SUPER_ADMIN);
+                        userRepository.save(adminUser);
+                        System.out.println("[SEEDER] Existing platform admin promoted to SUPER_ADMIN.");
                     }
                 } finally {
                     TenantContext.clear();
@@ -336,6 +342,19 @@ public class DatabaseSeeder implements CommandLineRunner {
             }
         } catch (Exception e) {
             System.err.println("[SEEDER] Wanas bootstrap check: " + e.getMessage());
+        }
+
+        // Repair the standard coffee recipe for existing tenant databases. This is idempotent
+        // and only touches the two exact seeded Turkish-coffee product names.
+        for (Tenant tenant : tenantRepository.findAll()) {
+            try {
+                TenantContext.set(tenant.getId());
+                shiftAuditService.ensureDefaultCoffeeRecipes();
+            } catch (Exception e) {
+                System.err.println("[SEEDER] Coffee recipe repair skipped for " + tenant.getSlug() + ": " + e.getMessage());
+            } finally {
+                TenantContext.clear();
+            }
         }
     }
 }

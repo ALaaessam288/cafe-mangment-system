@@ -7,6 +7,8 @@ import { auditApi } from '../../api/auditApi';
 import { useToast } from '../../context/ToastContext';
 import './ShiftAuditModal.css';
 
+const MAX_AUDIT_QUANTITY = 1_000_000;
+
 export default function ShiftAuditModal({ isOpen, onClose, shiftId, mode = 'OPENING', onComplete }) {
   const toast = useToast();
   const [auditItems, setAuditItems] = useState([]);
@@ -42,13 +44,18 @@ export default function ShiftAuditModal({ isOpen, onClose, shiftId, mode = 'OPEN
     e.preventDefault();
     if (!shiftId) return;
 
-    setIsSubmitting(true);
     try {
       const payloadCounts = {};
       Object.keys(counts).forEach(k => {
-        payloadCounts[k] = parseFloat(counts[k]) || 0;
+        const value = Number(counts[k]);
+        if (!Number.isFinite(value) || value < 0 || value > MAX_AUDIT_QUANTITY) {
+          const item = auditItems.find(i => String(i.id) === String(k));
+          throw new Error(`كمية ${item?.name || 'الخامة'} يجب أن تكون بين 0 و ${MAX_AUDIT_QUANTITY.toLocaleString('ar-EG')} ${item?.unit || ''}`);
+        }
+        payloadCounts[k] = value;
       });
 
+      setIsSubmitting(true);
       if (mode === 'OPENING') {
         await auditApi.recordShiftOpening(shiftId, payloadCounts);
         toast.success('تم تسجيل جرد بداية الشيفت بنجاح 🚀');
@@ -134,11 +141,15 @@ export default function ShiftAuditModal({ isOpen, onClose, shiftId, mode = 'OPEN
                     type="number"
                     step="0.01"
                     min="0"
+                    max={MAX_AUDIT_QUANTITY}
                     placeholder={`أدخل الكمية بـ (${item.unit})`}
                     value={counts[item.id] || ''}
                     onChange={(e) => handleCountChange(item.id, e.target.value)}
                     required
                   />
+                  <small className="audit-item-limit">
+                    الحد الأقصى: {MAX_AUDIT_QUANTITY.toLocaleString('ar-EG')} {item.unit}
+                  </small>
                 </div>
               ))}
             </div>

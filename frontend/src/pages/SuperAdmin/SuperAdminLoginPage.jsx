@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Crown, Lock, User, Eye, EyeOff, ShieldCheck, ArrowRight, Activity, Terminal } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ShieldCheck, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../utils/constants';
 import Button from '../../components/Button/Button';
@@ -11,7 +11,7 @@ export default function SuperAdminLoginPage() {
   const navigate = useNavigate();
   const passwordRef = useRef(null);
 
-  const [username, setUsername] = useState('alaaHarb');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -67,7 +67,7 @@ export default function SuperAdminLoginPage() {
           </div>
 
           {error && (
-            <div className="super-login-alert animate-shake">
+            <div className="super-login-alert animate-shake" role="alert" id="super-login-error">
               <span>⚠</span>
               <span>{error}</span>
             </div>
@@ -75,39 +75,45 @@ export default function SuperAdminLoginPage() {
 
           <form onSubmit={handleSubmit} className="super-login-form">
             <div className="super-login-group">
-              <label className="super-login-label">اسم مستخدم مالك المنصة</label>
+              <label className="super-login-label" htmlFor="super-login-username">اسم مستخدم مالك المنصة</label>
               <div className="super-login-input-wrap">
                 <User size={16} className="super-login-input-icon" />
                 <input
                   type="text"
+                  id="super-login-username"
                   className="super-login-input"
                   placeholder="Root / Master Username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoFocus
                   required
+                  autoComplete="username"
+                  aria-describedby={error ? 'super-login-error' : undefined}
                 />
               </div>
             </div>
 
             <div className="super-login-group">
-              <label className="super-login-label">مفتاح المرور الرئيسي (Master Password)</label>
+              <label className="super-login-label" htmlFor="super-login-password">مفتاح المرور الرئيسي (Master Password)</label>
               <div className="super-login-input-wrap">
                 <Lock size={16} className="super-login-input-icon" />
                 <input
                   ref={passwordRef}
+                  id="super-login-password"
                   type={showPassword ? 'text' : 'password'}
                   className="super-login-input"
                   placeholder="Master Security Key"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
+                  aria-describedby={error ? 'super-login-error' : undefined}
                 />
                 <button
                   type="button"
                   className="super-login-eye-btn"
                   onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
+                  aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>

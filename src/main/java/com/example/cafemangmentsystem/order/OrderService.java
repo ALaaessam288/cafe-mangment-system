@@ -218,6 +218,7 @@ public class OrderService {
 
         int quantity = request.quantity() == null ? 1 : request.quantity();
 
+        shiftAuditService.validateRecipeAvailability(product, quantity);
         reserveStock(product, quantity);
 
         User addedBy = userRepository.findById(userId).orElseThrow();
@@ -318,6 +319,7 @@ public class OrderService {
         // (see reserveStock() in addItem), which gets released here regardless of wasSent.
         if (wasSent) {
             releaseStock(item);
+            shiftAuditService.restoreRecipeInventoryForItem(order, item);
         } else if (item.getProduct() != null) {
             releaseReservation(item.getProduct(), item.getQuantity());
         }
@@ -391,7 +393,10 @@ public class OrderService {
             consumeStock(item);
         }
 
-        shiftAuditService.deductRecipeInventoryOnOrder(order);
+        // Only the lines transitioning from NEW to SENT are consumed. Passing the whole order
+        // caused every previously sent line (and even cancelled lines) to be deducted again on
+        // each subsequent send.
+        shiftAuditService.deductRecipeInventoryOnItems(order, itemsToSend);
 
         printJobService.createKitchenTickets(order, itemsToSend, isFirstSend);
 
@@ -409,8 +414,16 @@ public class OrderService {
      * cancelItem(), releaseStockForOrder(), and consumeStock() below.
      */
     private void reserveStock(Product product, int quantity) {
-        if (!product.isTrackInventory() && product.getStockQuantity() <= 0) {
+        if (!product.isTrackInventory()) {
             return;
+        }
+        if (quantity < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be at least 1");
+        }
+        int availableQuantity = product.getStockQuantity() - product.getReservedQuantity();
+        if (availableQuantity < quantity) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Insufficient stock for " + product.getNameAr() + " (available: " + Math.max(0, availableQuantity) + ")");
         }
         product.setReservedQuantity(product.getReservedQuantity() + quantity);
         productRepository.save(product);
@@ -418,7 +431,7 @@ public class OrderService {
 
     /** Releases a quantity previously held by {@link #reserveStock} without ever having been sent. */
     private void releaseReservation(Product product, int quantity) {
-        if (!product.isTrackInventory() && product.getStockQuantity() <= 0 && product.getReservedQuantity() <= 0) {
+        if (!product.isTrackInventory()) {
             return;
         }
         product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - quantity));
@@ -432,12 +445,18 @@ public class OrderService {
      */
     private void consumeStock(OrderItem item) {
         Product product = item.getProduct();
-        if (product == null || (!product.isTrackInventory() && product.getStockQuantity() <= 0)) {
+        if (product == null || !product.isTrackInventory()) {
             return;
         }
-        product.setStockQuantity(Math.max(0, product.getStockQuantity() - item.getQuantity()));
+        if (product.getStockQuantity() < item.getQuantity()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Insufficient stock for " + product.getNameAr() + " at send time");
+        }
+        product.setStockQuantity(product.getStockQuantity() - item.getQuantity());
         product.setReservedQuantity(Math.max(0, product.getReservedQuantity() - item.getQuantity()));
-        product.setAvailable(true);
+        if (product.getStockQuantity() == 0) {
+            product.setAvailable(false);
+        }
         productRepository.save(product);
     }
 
@@ -570,6 +589,7 @@ public class OrderService {
         // Nothing on a voided order was ever served, so anything already deducted for the
         // kitchen goes back on the shelf.
         releaseStockForOrder(order);
+        shiftAuditService.restoreRecipeInventoryForOrder(order);
 
         order.setStatus(OrderStatus.VOIDED);
         order.setClosedBy(closedBy);
@@ -809,6 +829,7 @@ public class OrderService {
         int delta = newQuantity - item.getQuantity();
         if (item.getProduct() != null && delta != 0) {
             if (delta > 0) {
+                shiftAuditService.validateRecipeAvailability(item.getProduct(), delta);
                 reserveStock(item.getProduct(), delta);
             } else {
                 releaseReservation(item.getProduct(), -delta);
@@ -882,6 +903,7 @@ public class OrderService {
         if (amountRefunded.add(amount).compareTo(amountPaid.max(maxRefundable)) >= 0) {
             // A fully refunded order was never consumed, so return whatever it took out of stock.
             releaseStockForOrder(order);
+            shiftAuditService.restoreRecipeInventoryForOrder(order);
             order.setStatus(OrderStatus.REFUNDED);
             orderRepository.save(order);
         }

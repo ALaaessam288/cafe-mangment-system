@@ -120,6 +120,13 @@ export default function InventoryPage() {
     });
   }, [recipesByProduct, searchTerm]);
 
+  // ── Low-stock products alert ───────────────────────────────────────────
+  const lowStockProducts = useMemo(
+    () => allProducts.filter(p => p.trackInventory && (p.stockQuantity || 0) <= (p.minStockThreshold ?? 5)),
+    [allProducts]
+  );
+
+
   const filteredProducts = useMemo(() => {
     if (!searchTerm.trim()) return products;
     const term = searchTerm.toLowerCase();
@@ -319,6 +326,51 @@ export default function InventoryPage() {
   return (
     <div className="page inventory-page">
       <ObserverBanner />
+
+      {/* ── Low-stock alert banner ── */}
+      {!productsLoading && lowStockProducts.length > 0 && (
+        <div
+          style={{
+            background: 'linear-gradient(90deg, rgba(245,158,11,0.15) 0%, rgba(239,68,68,0.12) 100%)',
+            border: '1px solid rgba(245,158,11,0.5)',
+            borderRadius: '10px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}
+        >
+          <AlertTriangle size={20} style={{ color: '#f59e0b', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 'bold', color: '#f59e0b', marginBottom: '6px', fontSize: '0.95rem' }}>
+              تحذير: {lowStockProducts.length} صنف بمخزون منخفض أو منعدم
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {lowStockProducts.map(p => (
+                <span
+                  key={p.id}
+                  style={{
+                    background: (p.stockQuantity || 0) <= 0 ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)',
+                    border: `1px solid ${(p.stockQuantity || 0) <= 0 ? 'rgba(239,68,68,0.5)' : 'rgba(245,158,11,0.4)'}`,
+                    borderRadius: '20px',
+                    padding: '2px 10px',
+                    fontSize: '0.8rem',
+                    color: (p.stockQuantity || 0) <= 0 ? '#ef4444' : '#f59e0b',
+                    fontWeight: '600',
+                  }}
+                >
+                  {p.name}
+                  <span style={{ opacity: 0.75, marginRight: '4px' }}>
+                    ({(p.stockQuantity || 0) <= 0 ? 'نفد المخزون' : `${p.stockQuantity} متبقي`})
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="page__header">
         <div>
           <h1 className="page__title">الجرد، الوصفات والمخزون</h1>

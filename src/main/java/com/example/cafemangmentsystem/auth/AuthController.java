@@ -40,63 +40,18 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final TenantService tenantService;
     private final TenantRepository tenantRepository;
-    private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
 
     @GetMapping("/tenants")
     public List<PublicTenantDto> listTenants() {
         return tenantService.findAllPublic();
     }
 
-    @GetMapping("/tenant-users")
-    public List<Map<String, Object>> listTenantUsers(@org.springframework.web.bind.annotation.RequestParam String tenantSlug) {
-        Tenant tenant = tenantService.resolveLoginableTenant(tenantSlug);
-        TenantContext.set(tenant.getId());
-        try {
-            return userRepository.findAll().stream()
-                    .filter(u -> u.isActive())
-                    .map(u -> Map.<String, Object>of(
-                            "id", u.getId(),
-                            "username", u.getUsername(),
-                            "fullName", u.getFullName(),
-                            "role", u.getRole().name()
-                    ))
-                    .toList();
-        } finally {
-            TenantContext.clear();
-        }
-    }
-
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        Tenant tenant;
-        if (request.tenantSlug() != null && !request.tenantSlug().trim().isEmpty()) {
-            tenant = tenantService.resolveLoginableTenant(request.tenantSlug());
-        } else {
-            String uname = request.username() != null ? request.username().trim() : "";
-            var customerUserOpt = userRepository.findAll().stream()
-                    .filter(u -> u.getUsername().equalsIgnoreCase(uname) && u.isActive())
-                    .filter(u -> {
-                        return tenantRepository.findById(u.getTenantId())
-                                .map(t -> !"platform".equalsIgnoreCase(t.getSlug()))
-                                .orElse(false);
-                    })
-                    .findFirst();
-
-            if (customerUserOpt.isPresent()) {
-                tenant = tenantRepository.findById(customerUserOpt.get().getTenantId())
-                        .orElseGet(() -> tenantService.resolveLoginableTenant(null));
-            } else {
-                var anyUserOpt = userRepository.findAll().stream()
-                        .filter(u -> u.getUsername().equalsIgnoreCase(uname) && u.isActive())
-                        .findFirst();
-                if (anyUserOpt.isPresent() && anyUserOpt.get().getTenantId() != null) {
-                    tenant = tenantRepository.findById(anyUserOpt.get().getTenantId())
-                            .orElseGet(() -> tenantService.resolveLoginableTenant(null));
-                } else {
-                    tenant = tenantService.resolveLoginableTenant(null);
-                }
-            }
+        if (request.tenantSlug() == null || request.tenantSlug().isBlank()) {
+            throw new BadCredentialsException("Tenant is required");
         }
+        Tenant tenant = tenantService.resolveLoginableTenant(request.tenantSlug().trim().toLowerCase());
 
         if (tenant == null) {
             throw new BadCredentialsException("Unknown tenant");
@@ -143,16 +98,22 @@ public class AuthController {
 
     @PostMapping("/super-admin/login")
     public LoginResponse superAdminLogin(@Valid @RequestBody SuperAdminLoginRequest request) {
-        // Look in platform tenant first, or fallback to caffio
+        // Platform access must never fall back to a customer tenant. A fallback allowed a
+        // customer administrator to authenticate through this endpoint when the platform tenant
+        // was missing or misconfigured.
         Tenant platformTenant = tenantRepository.findBySlug("platform")
-                .or(() -> tenantRepository.findBySlug("caffio"))
-                .or(() -> tenantRepository.findAll().stream().findFirst())
-                .orElseThrow(() -> new BadCredentialsException("No tenant found"));
+                .orElseThrow(() -> new BadCredentialsException("Platform tenant is not configured"));
 
         TenantContext.set(platformTenant.getId());
         try {
             var authentication = tenantAwareAuthenticator.authenticate(request.username().trim(), request.password());
             UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+
+            boolean isSuperAdmin = principal.getAuthorities().stream()
+                    .anyMatch(authority -> "ROLE_SUPER_ADMIN".equals(authority.getAuthority()));
+            if (!isSuperAdmin) {
+                throw new BadCredentialsException("Platform owner role is required");
+            }
 
             String token = jwtService.generateToken(principal);
             String refreshToken = refreshTokenService.issue(principal.getId());

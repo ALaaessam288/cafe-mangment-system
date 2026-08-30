@@ -24,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.cafemangmentsystem.report.dto.BestSellerDto;
+import com.example.cafemangmentsystem.report.dto.HourlySlotDto;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -35,6 +37,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -302,5 +305,44 @@ public class ReportService {
                 unsettledDebts.size(),
                 totalSnacksNet
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<BestSellerDto> getBestSellers(String startDate, String endDate, int limit) {
+        Instant[] range = resolveDateRange(startDate, endDate);
+        List<Object[]> rows = orderItemRepository.findTopProductsByQuantity(
+                range[0], range[1], PageRequest.of(0, limit));
+        return rows.stream()
+                .map(r -> new BestSellerDto(
+                        (String) r[0],
+                        ((Number) r[1]).longValue(),
+                        (BigDecimal) r[2]))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<HourlySlotDto> getHourlySales(String startDate, String endDate) {
+        Instant[] range = resolveDateRange(startDate, endDate);
+        // Hourly data is in UTC; frontend shifts by +2 for Egypt display
+        List<Object[]> rows = orderRepository.findHourlySales(range[0], range[1]);
+        return rows.stream()
+                .map(r -> new HourlySlotDto(
+                        ((Number) r[0]).intValue(),
+                        ((Number) r[1]).longValue(),
+                        (BigDecimal) r[2]))
+                .toList();
+    }
+
+    private Instant[] resolveDateRange(String startDate, String endDate) {
+        Instant start = null, end = null;
+        if (startDate != null && !startDate.isBlank()) {
+            try { start = LocalDate.parse(startDate.trim())
+                    .atStartOfDay(ZoneId.of("Africa/Cairo")).toInstant(); } catch (Exception ignored) {}
+        }
+        if (endDate != null && !endDate.isBlank()) {
+            try { end = LocalDate.parse(endDate.trim())
+                    .atTime(LocalTime.MAX).atZone(ZoneId.of("Africa/Cairo")).toInstant(); } catch (Exception ignored) {}
+        }
+        return new Instant[]{ start, end };
     }
 }

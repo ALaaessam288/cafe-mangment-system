@@ -39,7 +39,7 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
       {/* Stock Progress Bar Indicator */}
       {(() => {
         const currentStock = product.availableQuantity !== undefined ? product.availableQuantity : (product.stockQuantity ?? 0);
-        const hasStock = product.trackInventory || product.availableQuantity !== undefined || (product.stockQuantity !== undefined && product.stockQuantity !== null);
+        const hasStock = product.trackInventory || product.recipeInventory;
         if (!hasStock) return null;
         const threshold = product.minStockThreshold ? product.minStockThreshold * 3 : 20;
         const percent = Math.min(100, Math.max(0, (currentStock / threshold) * 100));
@@ -47,7 +47,7 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
           <>
             <div
               className="menu-product__stock-track"
-              title={`المتاح للبيع الآن: ${currentStock}`}
+              title={product.recipeInventory ? `المتاح إنتاجه من الخامات: ${currentStock}` : `المتاح للبيع الآن: ${currentStock}`}
               style={{
                 width: '100%',
                 height: '4px',

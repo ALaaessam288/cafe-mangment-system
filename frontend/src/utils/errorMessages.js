@@ -48,7 +48,8 @@ export const RULES = [
   [/(There is already an open shift for this register|Register already has an open shift)/i,
     'الخزينة/الدرج مفتوح بالفعل من شيفت سابق. يجب إغلاقه أولاً قبل فتح شيفت جديد.'],
   [/Shift is already closed/i, 'هذا الشيفت مغلق بالفعل.'],
-  [/You can only close your own shift/i, 'لا يمكنك إغلاق شيفت مستخدم آخر. كل مستخدم يغلق شيفته بنفسه.'],
+  [/You can only close your own shift/i, 'هذا الشيفت باسم مستخدم آخر. سجّل الدخول بصاحب الشيفت، أو اطلب من المشرف/المدير إغلاقه.'],
+  [/Shift has open or unpaid orders/i, 'لا يمكن قفل الشيفت قبل تسوية كل الطلبات المفتوحة: ادفعها، أغلقها، أو ألغها أولاً.'],
   [/You can only view your own shift/i, 'يمكنك فقط عرض تفاصيل شيفك الخاص.'],
   [/Register is not active/i, 'هذه الخزينة متوقفة حالياً. تواصل مع الإدارة لتفعيلها.'],
 
@@ -64,6 +65,10 @@ export const RULES = [
   [/pickupAt must be in the future/i, 'موعد الاستلام يجب أن يكون وقتاً مستقبلياً.'],
 
   /* ── Items ── */
+  [/Only (\d+) unit\(s\) of (.+?) can be added with the available (.+)/i,
+    (m) => m[1] === '0'
+      ? `لا يمكن إضافة «${m[2].trim()}» — المخزون المتاح من «${m[3].trim()}» غير كافٍ لهذا الطلب.`
+      : `المخزون يكفي لـ ${m[1]} وحدة فقط من «${m[2].trim()}» — بسبب نقص «${m[3].trim()}». خفّف الكمية أو راجع المخزون.`],
   [/Product is not available:?\\s*(.*)/i, (m) => `الصنف «${(m[1] || '').trim()}» نفد أو غير متاح حالياً.`],
   [/Product not found/i, 'الصنف المطلوب غير موجود. يرجى تحديث القائمة.'],
   [/Item is already cancelled/i, 'هذا الصنف تم إلغاؤه بالفعل.'],

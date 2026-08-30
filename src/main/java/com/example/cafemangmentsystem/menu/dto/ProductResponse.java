@@ -23,9 +23,20 @@ public record ProductResponse(
         Integer reservedQuantity,
         Integer availableQuantity,
         Boolean trackInventory,
+        Boolean recipeInventory,
         Integer minStockThreshold
 ) {
     public static ProductResponse from(Product product) {
+        return from(product, null);
+    }
+
+    public static ProductResponse from(Product product, Integer recipeAvailableQuantity) {
+        int directAvailable = Math.max(0, product.getStockQuantity() - product.getReservedQuantity());
+        int effectiveAvailable = recipeAvailableQuantity == null
+                ? directAvailable
+                : (product.isTrackInventory()
+                    ? Math.min(directAvailable, recipeAvailableQuantity)
+                    : recipeAvailableQuantity);
         return new ProductResponse(
                 product.getId(),
                 product.getCategory() != null ? product.getCategory().getId() : null,
@@ -44,8 +55,9 @@ public record ProductResponse(
                 // What's actually left to sell right now, accounting for items already sitting
                 // in someone's cart. Only meaningful for tracked products; untracked ones never
                 // touch stock_quantity/reserved_quantity at all so this just mirrors stockQuantity.
-                Math.max(0, product.getStockQuantity() - product.getReservedQuantity()),
+                effectiveAvailable,
                 product.isTrackInventory(),
+                recipeAvailableQuantity != null,
                 product.getMinStockThreshold());
     }
 }

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Lock, User, Eye, EyeOff, Coffee, HelpCircle, MessageSquare } from 'lucide-react';
+import { useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Building2, Lock, User, Eye, EyeOff, Coffee, HelpCircle, Hash } from 'lucide-react';
+import { authApi } from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../utils/constants';
 import Button from '../../components/Button/Button';
@@ -9,22 +10,32 @@ import './LoginPage.css';
 export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const [searchParams] = useSearchParams();
 
   // Detect tenant slug from route parameter /:tenantSlug/login or query ?tenant=slug / ?slug=slug
   const routeSlug = params.tenantSlug || searchParams.get('tenant') || searchParams.get('slug') || '';
+  const [tenantSlug, setTenantSlug] = useState(routeSlug);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [forgotModal, setForgotModal] = useState(false);
+  const [pinMode, setPinMode] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
+    const cleanSlug = (routeSlug || tenantSlug).trim().toLowerCase();
     const trimmedUsername = username.trim();
+    if (!cleanSlug) {
+      setError('يرجى إدخال كود الكافيه');
+      return;
+    }
     if (!trimmedUsername) {
       setError('يرجى إدخال اسم المستخدم');
       return;
@@ -34,14 +45,41 @@ export default function LoginPage() {
       return;
     }
 
-    const cleanSlug = routeSlug ? routeSlug.trim().toLowerCase() : null;
     const result = await login(cleanSlug, trimmedUsername, password);
     if (result.success) {
-      navigate(result.defaultRoute || ROUTES.POS, { replace: true });
+      const requestedPath = location.state?.from?.pathname;
+      navigate(requestedPath || result.defaultRoute || ROUTES.POS, { replace: true });
     } else {
       setError(result.message || 'بيانات الدخول غير صحيحة');
     }
   }
+
+  async function handlePinSubmit(e) {
+    e.preventDefault();
+    setError('');
+    const cleanSlug = (routeSlug || tenantSlug).trim().toLowerCase();
+    if (!cleanSlug) { setError('يرجى إدخال كود الكافيه'); return; }
+    if (!pin || pin.length < 4) { setError('يرجى إدخال رمز PIN (4 أرقام على الأقل)'); return; }
+    setPinLoading(true);
+    try {
+      const result = await authApi.loginPin(cleanSlug, pin);
+      if (result?.token) {
+        // Store token via existing auth context – call login with token payload
+        // authApi.loginPin returns the token; we rely on AuthContext login to handle it
+        // Since AuthContext.login expects (slug, user, pass), we do manual token store
+        localStorage.setItem('authToken', result.token);
+        if (result.refreshToken) localStorage.setItem('refreshToken', result.refreshToken);
+        window.location.replace(location.state?.from?.pathname || '/pos');
+      } else {
+        setError('رمز PIN غير صحيح أو انتهت صلاحيته');
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || 'رمز PIN غير صحيح');
+    } finally {
+      setPinLoading(false);
+    }
+  }
+
 
   return (
     <div className="login-page">
@@ -55,6 +93,25 @@ export default function LoginPage() {
             <img src="/caffio-logo.png" alt="Caffio - Café Business Simplified" className="login-card__logo-img" />
           </div>
           <p className="login-card__subtitle">نظام إدارة نقاط البيع والعمليات السحابية</p>
+        </div>
+
+
+        {/* Mode toggle */}
+        <div className="d-flex gap-2 mb-3">
+          <button
+            type="button"
+            className={`btn btn-sm flex-fill ${!pinMode ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-white opacity-75'}`}
+            onClick={() => { setPinMode(false); setError(''); setPin(''); }}
+          >
+            <User size={14} className="me-1" /> دخول بكلمة مرور
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm flex-fill ${pinMode ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-white opacity-75'}`}
+            onClick={() => { setPinMode(true); setError(''); setPassword(''); }}
+          >
+            <Hash size={14} className="me-1" /> دخول برمز PIN
+          </button>
         </div>
 
         {/* Error Alert */}
@@ -75,7 +132,26 @@ export default function LoginPage() {
         )}
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} className="login-form">
+        {!pinMode && <form onSubmit={handleSubmit} className="login-form">
+          {!routeSlug && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-tenant">كود الكافيه</label>
+              <div className="input-wrapper">
+                <span className="input-icon"><Building2 size={18} /></span>
+                <input
+                  id="login-tenant"
+                  type="text"
+                  className="form-input"
+                  placeholder="مثال: caffio-downtown"
+                  value={tenantSlug}
+                  onChange={(e) => { setTenantSlug(e.target.value); setError(''); }}
+                  autoComplete="organization"
+                  autoFocus
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
           {/* Username Input */}
           <div className="form-group">
             <label className="form-label" htmlFor="login-username">اسم المستخدم</label>
@@ -91,7 +167,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => { setUsername(e.target.value); setError(''); }}
                 autoComplete="username"
-                autoFocus
+                autoFocus={Boolean(routeSlug)}
                 disabled={isLoading}
               />
             </div>
@@ -118,7 +194,7 @@ export default function LoginPage() {
                 type="button"
                 className="password-toggle-btn"
                 onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
+                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -149,7 +225,65 @@ export default function LoginPage() {
           >
             تسجيل الدخول
           </Button>
-        </form>
+        </form>}
+
+        {/* PIN Form */}
+        {pinMode && (
+          <form onSubmit={handlePinSubmit} className="login-form">
+            {!routeSlug && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="pin-tenant">كود الكافيه</label>
+                <div className="input-wrapper">
+                  <span className="input-icon"><Building2 size={18} /></span>
+                  <input
+                    id="pin-tenant"
+                    type="text"
+                    className="form-input"
+                    placeholder="مثال: caffio-downtown"
+                    value={tenantSlug}
+                    onChange={(e) => { setTenantSlug(e.target.value); setError(''); }}
+                    autoComplete="organization"
+                    disabled={pinLoading}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-pin">رمز PIN</label>
+              <div className="input-wrapper">
+                <span className="input-icon"><Hash size={18} /></span>
+                <input
+                  id="login-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={8}
+                  className="form-input"
+                  placeholder="••••"
+                  value={pin}
+                  onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
+                  autoFocus
+                  autoComplete="one-time-code"
+                  disabled={pinLoading}
+                  style={{ letterSpacing: '0.4em', fontSize: '1.4rem', textAlign: 'center' }}
+                />
+              </div>
+              <p className="small text-white opacity-50 mt-1 mb-0" style={{ fontSize: '0.78rem' }}>
+                رمز PIN مكوّن من 4-8 أرقام يُحدده المشرف من إدارة المستخدمين.
+              </p>
+            </div>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="login-submit-btn"
+              loading={pinLoading}
+              disabled={pinLoading}
+            >
+              دخول برمز PIN
+            </Button>
+          </form>
+        )}
       </div>
 
       {/* ── FORGOT PASSWORD MODAL ── */}

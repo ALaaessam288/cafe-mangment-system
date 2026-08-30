@@ -242,7 +242,7 @@ export default function OrderPanel({
                         const isMed = currentStock <= 10;
                         const threshold = product.minStockThreshold ? product.minStockThreshold * 3 : 20;
                         const percent = Math.min(100, Math.max(0, (currentStock / threshold) * 100));
-                        return (product.trackInventory || product.availableQuantity !== undefined || (product.stockQuantity !== undefined && product.stockQuantity !== null)) && (
+                        return (product.trackInventory || product.recipeInventory) && (
                           <div style={{ marginTop: '6px', width: '100%' }}>
                             <div 
                               style={{
@@ -252,7 +252,7 @@ export default function OrderPanel({
                                 borderRadius: '1.5px',
                                 overflow: 'hidden'
                               }}
-                              title={`المخزون المتاح: ${currentStock}`}
+                              title={product.recipeInventory ? `المتاح إنتاجه من الخامات: ${currentStock}` : `المخزون المتاح: ${currentStock}`}
                             >
                               <div 
                                 style={{
@@ -268,7 +268,7 @@ export default function OrderPanel({
                               />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              <span>المخزون المتاح: {currentStock}</span>
+                              <span>{product.recipeInventory ? 'المتاح من الخامات' : 'المخزون المتاح'}: {currentStock}</span>
                               {isLow && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️ مخزون حرج!</span>}
                             </div>
                           </div>

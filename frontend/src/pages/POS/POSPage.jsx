@@ -464,9 +464,27 @@ export default function POSPage() {
   async function handleCloseShift(e) {
     e.preventDefault();
     if (closeShiftForm.countedCash === '' || closeShiftForm.countedCash === undefined || isNaN(parseFloat(closeShiftForm.countedCash))) {
-      toast.warning('يرجى إدخال مبلغ الكاش الفعلي في الدرج');
+      toast.warning('يرجى إدخال مبلغ الكاش الفعلي الموجود في الدرج بدقة');
       return;
     }
+    const counted = parseFloat(closeShiftForm.countedCash);
+    if (counted < 0) {
+      toast.warning('لا يمكن إدخال مبلغ كاش سالب في الدرج');
+      return;
+    }
+
+    // Check for open active orders on tables or takeaway
+    const activeUnsettledOrders = (state.activeOrders || []).filter(
+      o => o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED' || o.status === 'READY_FOR_PICKUP'
+    );
+    if (activeUnsettledOrders.length > 0) {
+      toast.error(
+        `لا يمكن إغلاق الشيفت: يوجد ${activeUnsettledOrders.length} طلب مفتوح أو غير مدفوع على الطاولات/التيك أواي. يرجى محاسبة الطلبات أو إلغاؤها أولاً قبل القفل.`,
+        'طلبات معلقة'
+      );
+      return;
+    }
+
     try {
       let closedShiftId = state.activeShift?.id;
       if (!closedShiftId) {
@@ -480,10 +498,10 @@ export default function POSPage() {
         return;
       }
       await shiftsApi.close(closedShiftId, {
-        countedCash: parseFloat(closeShiftForm.countedCash) || 0,
+        countedCash: counted,
         snacksNet: closeShiftForm.snacksNet ? (parseFloat(closeShiftForm.snacksNet) || 0) : 0
       });
-      toast.success('تم قفل الشيفت بنجاح!');
+      toast.success('تم قفل الشيفت بنجاح! جاري عرض تقرير جرد الهدر...');
       setShowCloseShift(false);
       setCloseShiftForm({ countedCash: '', snacksNet: '' });
       dispatch({ type: 'SET_SHIFT', payload: null });
@@ -1660,44 +1678,90 @@ export default function POSPage() {
       )}
 
       {/* Close Shift Modal */}
-      {showCloseShift && state.activeShift && (
-        <div className="pos__open-modal-overlay" onClick={() => setShowCloseShift(false)}>
-          <div className="pos__open-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>قفل الشيفت</h3>
-            <form onSubmit={handleCloseShift} className="form-grid">
-              <div className="field" style={{ gridColumn: '1/-1' }}>
-                <label className="field__label">الكاش الفعلي في الدرج</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  className="field__input field__wrapper"
-                  value={closeShiftForm.countedCash}
-                  onChange={e => setCloseShiftForm(prev => ({ ...prev, countedCash: e.target.value }))}
-                  autoFocus
-                />
+      {showCloseShift && state.activeShift && (() => {
+        const activeUnsettled = (state.activeOrders || []).filter(
+          o => o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED' || o.status === 'READY_FOR_PICKUP'
+        );
+        return (
+          <div className="pos__open-modal-overlay" onClick={() => setShowCloseShift(false)}>
+            <div className="pos__open-modal" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+              <h3 style={{ textAlign: 'center', marginBottom: 'var(--space-2)' }}>🔒 قفل الشيفت والخزينة</h3>
+              <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                يرجى جرد النقدية الفعلية داخل الدرج قبل إتمام الإغلاق
+              </p>
+
+              {activeUnsettled.length > 0 && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#ef4444',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  marginBottom: '14px',
+                  lineHeight: '1.5'
+                }}>
+                  ⚠️ <b>تنبيه هام:</b> يوجد عدد ({activeUnsettled.length}) طلب مفتوح أو غير مدفوع على الطاولات/التيك أواي. يجب محاسبة جميع الطلبات أو إلغاؤها أولاً لتتمكن من قفل الشيفت.
+                </div>
+              )}
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid var(--border-color)',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                marginBottom: '14px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '12.5px'
+              }}>
+                <span>العهدة الافتتاحية للدرج:</span>
+                <strong style={{ color: 'var(--accent)' }}>{formatCurrency(state.activeShift.openingFloat || 0)}</strong>
               </div>
-              <div className="field" style={{ gridColumn: '1/-1' }}>
-                <label className="field__label">🍿 صافي السناكس اليومي (اختياري)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="أدخل مبلغ صافي السناكس"
-                  className="field__input field__wrapper"
-                  value={closeShiftForm.snacksNet}
-                  onChange={e => setCloseShiftForm(prev => ({ ...prev, snacksNet: e.target.value }))}
-                />
-              </div>
-              <div className="pos__open-actions" style={{ gridColumn: '1/-1' }}>
-                <button type="button" className="btn btn--secondary btn--md" onClick={() => setShowCloseShift(false)}>إلغاء</button>
-                <button type="submit" className="btn btn--primary btn--md" style={{ background: 'var(--danger)' }}>تأكيد القفل</button>
-              </div>
-            </form>
+
+              <form onSubmit={handleCloseShift} className="form-grid">
+                <div className="field" style={{ gridColumn: '1/-1' }}>
+                  <label className="field__label">الكاش الفعلي في الدرج (المعدود يدوياً) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="أدخل مبلغ النقدية الموجود بالدرج"
+                    className="field__input field__wrapper"
+                    value={closeShiftForm.countedCash}
+                    onChange={e => setCloseShiftForm(prev => ({ ...prev, countedCash: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                <div className="field" style={{ gridColumn: '1/-1' }}>
+                  <label className="field__label">🍿 صافي السناكس اليومي (اختياري)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="أدخل مبلغ صافي السناكس إن وجد"
+                    className="field__input field__wrapper"
+                    value={closeShiftForm.snacksNet}
+                    onChange={e => setCloseShiftForm(prev => ({ ...prev, snacksNet: e.target.value }))}
+                  />
+                </div>
+                <div className="pos__open-actions" style={{ gridColumn: '1/-1', display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                  <button type="button" className="btn btn--secondary btn--md" onClick={() => setShowCloseShift(false)}>إلغاء</button>
+                  <button
+                    type="submit"
+                    className="btn btn--primary btn--md"
+                    style={{ background: activeUnsettled.length > 0 ? '#9ca3af' : 'var(--danger)', cursor: activeUnsettled.length > 0 ? 'not-allowed' : 'pointer' }}
+                  >
+                    تأكيد قفل الشيفت 🔒
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {/* Opening Shift Inventory Audit Modal */}
       {showOpeningAudit && state.activeShift && (
         <ShiftAuditModal

@@ -7,9 +7,6 @@ export const authApi = {
   loginPin: (tenantSlug, pin) =>
     client.post('/auth/login-pin', { tenantSlug, pin }).then((r) => r.data),
 
-  getTenantUsers: (tenantSlug) =>
-    client.get('/auth/tenant-users', { params: { tenantSlug } }).then((r) => r.data),
-
   refresh: (refreshToken) =>
     client.post('/auth/refresh', { refreshToken }).then((r) => r.data),
 

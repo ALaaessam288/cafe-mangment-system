@@ -9,6 +9,7 @@ import com.example.cafemangmentsystem.menu.repository.ProductRepository;
 import com.example.cafemangmentsystem.station.entity.Station;
 import com.example.cafemangmentsystem.station.repository.StationRepository;
 import com.example.cafemangmentsystem.tenant.QuotaService;
+import com.example.cafemangmentsystem.inventory.ShiftAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final StationRepository stationRepository;
     private final QuotaService quotaService;
+    private final ShiftAuditService shiftAuditService;
 
     public ProductResponse create(ProductRequest request) {
         quotaService.checkProductQuota(productRepository.count());
@@ -42,7 +45,7 @@ public class ProductService {
                 .minStockThreshold(request.minStockThreshold())
                 .build();
 
-        return ProductResponse.from(productRepository.save(product));
+        return toResponse(productRepository.save(product));
     }
 
     @Transactional(readOnly = true)
@@ -50,18 +53,18 @@ public class ProductService {
         List<Product> products = categoryId == null
                 ? productRepository.findAll()
                 : productRepository.findAllByCategoryId(categoryId);
-        return products.stream().map(ProductResponse::from).toList();
+        return toResponses(products);
     }
     
     @Transactional(readOnly = true)
     public List<ProductResponse> getTopSellers(int limit) {
-        return productRepository.findTopSellers(org.springframework.data.domain.PageRequest.of(0, limit))
-                .stream().map(ProductResponse::from).toList();
+        return toResponses(productRepository.findTopSellers(org.springframework.data.domain.PageRequest.of(0, limit)));
     }
 
     @Transactional(readOnly = true)
     public ProductResponse findById(Long id) {
-        return ProductResponse.from(getOrThrow(id));
+        Product product = getOrThrow(id);
+        return ProductResponse.from(product, shiftAuditService.getRecipeAvailableQuantity(product));
     }
 
     public ProductResponse update(Long id, ProductRequest request) {
@@ -75,40 +78,55 @@ public class ProductService {
         product.setPrepNote(request.prepNote());
         product.setTrackInventory(request.trackInventory() != null && request.trackInventory());
         product.setMinStockThreshold(request.minStockThreshold());
-        return ProductResponse.from(product);
+        return toResponse(product);
     }
 
     public ProductResponse setAvailability(Long id, boolean available) {
         Product product = getOrThrow(id);
         product.setAvailable(available);
-        return ProductResponse.from(product);
+        return toResponse(product);
     }
 
     public ProductResponse deactivate(Long id, Long deactivatedByUserId) {
         Product product = getOrThrow(id);
         product.deactivate(deactivatedByUserId);
-        return ProductResponse.from(product);
+        return toResponse(product);
     }
 
     public ProductResponse activate(Long id) {
         Product product = getOrThrow(id);
         product.activate();
-        return ProductResponse.from(product);
+        return toResponse(product);
     }
 
     public ProductResponse addStock(Long id, int quantity) {
         Product product = getOrThrow(id);
+        if (shiftAuditService.getRecipeAvailableQuantity(product) != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Recipe products must be replenished from raw-material inventory");
+        }
         product.setStockQuantity(product.getStockQuantity() + quantity);
         product.setTrackInventory(true);
         if (product.getStockQuantity() > 0) {
             product.setAvailable(true);
         }
-        return ProductResponse.from(productRepository.save(product));
+        return toResponse(productRepository.save(product));
     }
 
     Product getOrThrow(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id));
+    }
+
+    private List<ProductResponse> toResponses(List<Product> products) {
+        Map<Long, Integer> recipeAvailability = shiftAuditService.getRecipeAvailableQuantities(products);
+        return products.stream()
+                .map(product -> ProductResponse.from(product, recipeAvailability.get(product.getId())))
+                .toList();
+    }
+
+    private ProductResponse toResponse(Product product) {
+        return ProductResponse.from(product, shiftAuditService.getRecipeAvailableQuantity(product));
     }
 
     private Category getCategoryOrThrow(Long categoryId) {

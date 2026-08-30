@@ -3,7 +3,7 @@ import {
   Calendar, DollarSign, Clock, RefreshCw, Printer, Award, 
   CreditCard, ShoppingBag, Trash2, Download, Filter, 
   TrendingUp, TrendingDown, Layers, Search, ChevronLeft, 
-  CheckCircle2, FileText
+  CheckCircle2, FileText, BarChart2, Activity
 } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { reportsApi } from '../../api/reportsApi';
@@ -39,6 +39,9 @@ export default function ReportsPage() {
   const [shifts, setShifts] = useState([]);
   const [financialData, setFinancialData] = useState(null);
   const [payrollData, setPayrollData] = useState(null);
+  const [bestSellers, setBestSellers] = useState([]);
+  const [hourlySales, setHourlySales] = useState([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('FINANCIAL');
 
@@ -416,6 +419,18 @@ export default function ReportsPage() {
             onClick={() => { sounds.playTap(); setActiveTab('PAYROLL'); }}
           >
             <DollarSign size={16} /> مسير رواتب الموظفين (أسبوعياً)
+          </button>
+          <button
+            className={`reports-tab-btn ${activeTab === 'BESTSELLERS' ? 'reports-tab-btn--active' : ''}`}
+            onClick={() => { sounds.playTap(); setActiveTab('BESTSELLERS'); loadAnalytics(); }}
+          >
+            <BarChart2 size={16} /> الأصناف الأكثر مبيعاً
+          </button>
+          <button
+            className={`reports-tab-btn ${activeTab === 'HOURLY' ? 'reports-tab-btn--active' : ''}`}
+            onClick={() => { sounds.playTap(); setActiveTab('HOURLY'); loadAnalytics(); }}
+          >
+            <Activity size={16} /> خريطة المبيعات بالساعة
           </button>
         </div>
       )}
@@ -1078,6 +1093,158 @@ export default function ReportsPage() {
         shiftId={dailyModalShiftId}
         cafeName={user?.tenantName}
       />
+
+      {/* ── BEST SELLERS TAB ── */}
+      {canViewReports && activeTab === 'BESTSELLERS' && (
+        <div className="animate-fade-in-up" style={{ padding: '0 1rem 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart2 size={20} /> الأصناف الأكثر مبيعاً
+            </h3>
+            <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={14} />} onClick={loadAnalytics} loading={analyticsLoading}>
+              تحديث
+            </Button>
+          </div>
+
+          {analyticsLoading ? (
+            <div className="data-table-empty"><Spinner /></div>
+          ) : bestSellers.length === 0 ? (
+            <div className="data-table-empty">لا توجد بيانات — جرّب تغيير نطاق التاريخ وأعد التحديث.</div>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>الصنف</th>
+                    <th>الكمية المباعة</th>
+                    <th>إجمالي الإيراد</th>
+                    <th>نسبة من الكل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const totalQty = bestSellers.reduce((s, r) => s + r.totalQuantity, 0);
+                    const maxRev = Math.max(...bestSellers.map(r => Number(r.totalRevenue) || 0), 1);
+                    return bestSellers.map((row, idx) => {
+                      const pct = totalQty > 0 ? Math.round((row.totalQuantity / totalQty) * 100) : 0;
+                      const barW = Math.round(((Number(row.totalRevenue) || 0) / maxRev) * 100);
+                      return (
+                        <tr key={idx}>
+                          <td style={{ color: idx < 3 ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: idx < 3 ? 'bold' : 'normal' }}>
+                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                          </td>
+                          <td style={{ fontWeight: 'bold' }}>{row.productName}</td>
+                          <td className="data-table__number">{row.totalQuantity.toLocaleString()}</td>
+                          <td className="data-table__number" style={{ color: 'var(--success)' }}>
+                            {formatCurrency(row.totalRevenue)}
+                          </td>
+                          <td style={{ minWidth: '160px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+                                <div style={{ width: `${barW}%`, height: '100%', background: 'var(--accent)', borderRadius: '4px', transition: 'width 0.4s ease' }} />
+                              </div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', minWidth: '32px' }}>{pct}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── HOURLY HEATMAP TAB ── */}
+      {canViewReports && activeTab === 'HOURLY' && (
+        <div className="animate-fade-in-up" style={{ padding: '0 1rem 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Activity size={20} /> خريطة المبيعات بالساعة
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(توقيت القاهرة UTC+2)</span>
+            </h3>
+            <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={14} />} onClick={loadAnalytics} loading={analyticsLoading}>
+              تحديث
+            </Button>
+          </div>
+
+          {analyticsLoading ? (
+            <div className="data-table-empty"><Spinner /></div>
+          ) : hourlySales.length === 0 ? (
+            <div className="data-table-empty">لا توجد بيانات — جرّب تغيير نطاق التاريخ وأعد التحديث.</div>
+          ) : (
+            (() => {
+              // Build a full 0-23 grid, offsetting +2 for Cairo
+              const map = {};
+              hourlySales.forEach(s => { map[(s.hour + 2) % 24] = s; });
+              const maxRev = Math.max(...hourlySales.map(s => Number(s.revenue) || 0), 1);
+              const hours = Array.from({ length: 24 }, (_, h) => {
+                const cairoH = h;
+                const slot = map[cairoH] || { orderCount: 0, revenue: 0 };
+                return { hour: cairoH, ...slot };
+              });
+              return (
+                <div>
+                  {/* Bar chart */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '6px', marginBottom: '1rem' }}>
+                    {hours.map(s => {
+                      const rev = Number(s.revenue) || 0;
+                      const heightPct = Math.round((rev / maxRev) * 100);
+                      const ampm = s.hour < 12 ? 'ص' : 'م';
+                      const label = `${s.hour === 0 ? 12 : s.hour > 12 ? s.hour - 12 : s.hour}${ampm}`;
+                      return (
+                        <div key={s.hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                            {s.orderCount > 0 ? s.orderCount : ''}
+                          </div>
+                          <div style={{ width: '100%', height: '80px', background: 'var(--bg-secondary)', borderRadius: '4px', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
+                            <div style={{
+                              width: '100%',
+                              height: `${heightPct}%`,
+                              background: heightPct > 70 ? 'var(--danger)' : heightPct > 40 ? 'var(--accent)' : heightPct > 10 ? '#3b82f6' : 'var(--bg-tertiary, #333)',
+                              borderRadius: '4px 4px 0 0',
+                              transition: 'height 0.4s ease'
+                            }} />
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Table */}
+                  <div className="data-table-wrap" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>الساعة (القاهرة)</th>
+                          <th>عدد الطلبات</th>
+                          <th>الإيراد</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hours.filter(s => s.orderCount > 0).sort((a, b) => b.revenue - a.revenue).map(s => {
+                          const ampm = s.hour < 12 ? 'صباحاً' : 'مساءً';
+                          const h12 = s.hour === 0 ? 12 : s.hour > 12 ? s.hour - 12 : s.hour;
+                          return (
+                            <tr key={s.hour}>
+                              <td style={{ fontWeight: 'bold' }}>{`${h12}:00 ${ampm}`}</td>
+                              <td className="data-table__number">{s.orderCount}</td>
+                              <td className="data-table__number" style={{ color: 'var(--success)' }}>{formatCurrency(s.revenue)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
 
     </div>
   );

@@ -40,11 +40,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.EnumSet;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ShiftService {
+
+    private static final java.util.Set<OrderStatus> UNSETTLED_ORDER_STATUSES = EnumSet.of(
+            OrderStatus.OPEN, OrderStatus.SENT, OrderStatus.SERVED, OrderStatus.READY_FOR_PICKUP);
+
+    private final ShiftRepository shiftRepository;
+    private final UserRepository userRepository;
+    private final RegisterRepository registerRepository;
+    private final PaymentRepository paymentRepository;
 
     private final ShiftRepository shiftRepository;
     private final UserRepository userRepository;
@@ -58,27 +67,31 @@ public class ShiftService {
 
     @Transactional
     public ShiftResponse open(Long userId, OpenShiftRequest request) {
+        if (request.openingFloat() != null && request.openingFloat().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "مبلغ العهدة الافتتاحية لا يمكن أن يكون سالباً");
+        }
+
         Long currentTenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
         if (shiftRepository.existsByTenantIdAndRegisterIdAndClosedAtIsNull(currentTenantId, request.registerId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "There is already an open shift for this register. Please close it first.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "يوجد شيفت مفتوح بالفعل على نقطة البيع (الكاشير) المحددة. يرجى إغلاقه أولاً.");
         }
 
         Register register = registerRepository.findById(request.registerId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Register not found: " + request.registerId()));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "نقطة البيع (الكاشير) غير موجودة: " + request.registerId()));
         if (!register.isActive()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Register is not active: " + request.registerId());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "نقطة البيع (الكاشير) غير مفعلة حالياً");
         }
         if (shiftRepository.existsByRegisterIdAndClosedAtIsNull(register.getId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Register already has an open shift");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "يوجد شيفت مفتوح بالفعل لنقطة البيع هذه");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + userId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "المستخدم غير موجود: " + userId));
 
         Shift shift = Shift.builder()
                 .user(user)
                 .register(register)
-                .openingFloat(request.openingFloat())
+                .openingFloat(request.openingFloat() != null ? request.openingFloat() : BigDecimal.ZERO)
                 .openedAt(Instant.now())
                 .build();
 
@@ -90,27 +103,60 @@ public class ShiftService {
         Shift shift = getOrThrow(shiftId);
 
         User reqUser = userRepository.findById(requestingUserId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "المستخدم غير موجود"));
 
         boolean isAdminOrSupervisor = reqUser.getRole() == com.example.cafemangmentsystem.user.entity.Role.ADMIN ||
                                       reqUser.getRole() == com.example.cafemangmentsystem.user.entity.Role.SUPERVISOR;
 
         if (!shift.getUser().getId().equals(requestingUserId) && !isAdminOrSupervisor) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only close your own shift");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "غير مسموح بقفل شيفت مستخدم آخر إلا بصلاحية مدير أو مشرف");
         }
 
-        return closeInternal(shift, request);
+        return closeInternal(shift, request, true);
     }
 
     @Transactional
     public ShiftResponse forceClose(Long shiftId, CloseShiftRequest request) {
         Shift shift = getOrThrow(shiftId);
-        return closeInternal(shift, request);
+        return closeInternal(shift, request, false);
     }
 
-    private ShiftResponse closeInternal(Shift shift, CloseShiftRequest request) {
+    private ShiftResponse closeInternal(Shift shift, CloseShiftRequest request, boolean requireSettledOrders) {
         if (shift.getClosedAt() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Shift is already closed");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "تم إغلاق هذا الشيفت بالفعل سابقاً");
+        }
+
+        if (request != null && request.countedCash() != null && request.countedCash().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "مبلغ الكاش الفعلي في الدرج لا يمكن أن يكون سالباً");
+        }
+
+        if (requireSettledOrders) {
+            List<Order> unsettledOrders = orderRepository.findAllByShiftIdAndStatusIn(shift.getId(), UNSETTLED_ORDER_STATUSES);
+            if (unsettledOrders != null && !unsettledOrders.isEmpty()) {
+                long tableCount = unsettledOrders.stream().filter(o -> o.getTable() != null).count();
+                long takeawayCount = unsettledOrders.size() - tableCount;
+                StringBuilder sb = new StringBuilder("لا يمكن إغلاق الشيفت لوجود ");
+                sb.append(unsettledOrders.size()).append(" طلب مفتوح أو معلق");
+                if (tableCount > 0 && takeawayCount > 0) {
+                    sb.append(" (").append(tableCount).append(" طاولة، ").append(takeawayCount).append(" تيك أواي/دليفري)");
+                } else if (tableCount > 0) {
+                    sb.append(" (").append(tableCount).append(" طاولة صالة)");
+                } else if (takeawayCount > 0) {
+                    sb.append(" (").append(takeawayCount).append(" تيك أواي/دليفري)");
+                }
+                sb.append(". يرجى إنهاء حساب جميع الطلبات أو إلغاؤها أولاً قبل قفل الشيفت.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, sb.toString());
+            }
+
+            // Check for pending unsettled advances/expenses from drawer
+            List<Expense> shiftExpenses = expenseRepository.findAllByShiftId(shift.getId());
+            long pendingAdvancesCount = shiftExpenses != null ? shiftExpenses.stream()
+                    .filter(e -> e.getStatus() == com.example.cafemangmentsystem.expense.entity.ExpenseStatus.PENDING_SETTLEMENT)
+                    .count() : 0;
+            if (pendingAdvancesCount > 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "يوجد عدد (" + pendingAdvancesCount + ") عُهدة مؤقتة معلقة بانتظار التسوية في هذا الشيفت. يرجى تسوية العُهد وإرجاع المتبقي للدرج قبل قفل الشيفت.");
+            }
         }
 
         BigDecimal openFloat = shift.getOpeningFloat() != null ? shift.getOpeningFloat() : BigDecimal.ZERO;
@@ -162,16 +208,11 @@ public class ShiftService {
 
     @Transactional(readOnly = true)
     public Optional<ShiftResponse> findCurrentForUser(Long userId) {
-        Optional<Shift> userShift = shiftRepository.findByUserIdAndClosedAtIsNull(userId);
-        if (userShift.isPresent()) {
-            return userShift.map(ShiftResponse::from);
-        }
-        // Fallback: if any open shift exists on the register/tenant, resume it seamlessly
-        List<Shift> openShifts = shiftRepository.findAllByClosedAtIsNull();
-        if (!openShifts.isEmpty()) {
-            return Optional.of(ShiftResponse.from(openShifts.get(0)));
-        }
-        return Optional.empty();
+        // A cashier shift is an accountable cash session, not a tenant-wide session. Returning
+        // another user's shift here made the POS operate under one cashier and then correctly
+        // reject closure by the logged-in cashier. Privileged users can inspect/force-close
+        // other shifts through the dedicated endpoints instead.
+        return shiftRepository.findByUserIdAndClosedAtIsNull(userId).map(ShiftResponse::from);
     }
 
     @Transactional(readOnly = true)

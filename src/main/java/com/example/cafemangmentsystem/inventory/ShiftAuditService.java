@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +33,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Transactional
 public class ShiftAuditService {
+
+    /** Safety ceiling for a single cafe stock count (for example, one metric ton in grams). */
+    public static final double MAX_AUDIT_QUANTITY = 1_000_000.0;
 
     private final ShiftAuditItemRepository shiftAuditItemRepository;
     private final ProductRecipeRepository productRecipeRepository;
@@ -68,7 +72,45 @@ public class ShiftAuditService {
                     .build();
             list = shiftAuditItemRepository.saveAll(List.of(coffee, milk, cups));
         }
+        ensureDefaultCoffeeRecipes();
         return list.stream().map(ShiftAuditItemDto::from).toList();
+    }
+
+    /**
+     * Repairs the standard Wanas Turkish-coffee recipes for existing tenants. These two menu
+     * products are recipe-controlled raw-material products, never direct piece-stock products.
+     */
+    public void ensureDefaultCoffeeRecipes() {
+        ShiftAuditItem coffeeBeans = shiftAuditItemRepository.findAllByActiveTrue().stream()
+                .filter(item -> "بن قهوة (جرام)".equals(item.getName()))
+                .findFirst()
+                .orElse(null);
+        if (coffeeBeans == null) return;
+
+        Map<String, Double> defaults = Map.of(
+                "قهوة تركية سادة", 10.0,
+                "قهوة تركية دبل", 20.0);
+
+        for (Product product : productRepository.findAll()) {
+            Double gramsPerCup = defaults.get(product.getNameAr());
+            if (gramsPerCup == null) continue;
+
+            if (productRecipeRepository.findAllByProductId(product.getId()).isEmpty()) {
+                productRecipeRepository.save(ProductRecipe.builder()
+                        .product(product)
+                        .auditItem(coffeeBeans)
+                        .deductionQuantity(gramsPerCup)
+                        .build());
+            }
+
+            // A recipe product is controlled by its ingredients. Keeping direct piece tracking
+            // enabled at the same time creates a second, contradictory stock number in the POS.
+            if (product.isTrackInventory() || product.getReservedQuantity() != 0) {
+                product.setTrackInventory(false);
+                product.setReservedQuantity(0);
+                productRepository.save(product);
+            }
+        }
     }
 
     public ShiftAuditItemDto saveAuditItem(ShiftAuditItemDto dto) {
@@ -157,6 +199,8 @@ public class ShiftAuditService {
                     ? openingCounts.get(item.getId())
                     : item.getStockQuantity();
 
+            validateAuditQuantity(openingVal, item);
+
             // Update item stock to opening count
             item.setStockQuantity(openingVal);
             shiftAuditItemRepository.save(item);
@@ -190,6 +234,8 @@ public class ShiftAuditService {
                     ? closingCounts.get(item.getId())
                     : 0.0;
 
+            validateAuditQuantity(actualClosing, item);
+
             Double expectedClosing = Math.max(0.0, record.getOpeningCount() - record.getSoldDeductionCount());
             Double variance = expectedClosing - actualClosing; // Positive means deficit/waste
             Double wastePct = expectedClosing > 0 ? (variance / expectedClosing) * 100.0 : 0.0;
@@ -210,6 +256,18 @@ public class ShiftAuditService {
         return result;
     }
 
+    private void validateAuditQuantity(Double quantity, ShiftAuditItem item) {
+        if (quantity == null || !Double.isFinite(quantity) || quantity < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid stock quantity for " + item.getName());
+        }
+        if (quantity > MAX_AUDIT_QUANTITY) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Stock quantity for " + item.getName() + " cannot exceed "
+                            + (long) MAX_AUDIT_QUANTITY + " " + item.getUnit());
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<ShiftAuditRecordDto> getShiftAuditRecords(Long shiftId) {
         return shiftAuditRecordRepository.findAllByShiftId(shiftId).stream()
@@ -219,25 +277,92 @@ public class ShiftAuditService {
 
     private final com.example.cafemangmentsystem.order.repository.OrderItemRepository orderItemRepository;
 
-    public void deductRecipeInventoryOnOrder(Order order) {
-        if (order == null) return;
+    private RecipeAvailability calculateRecipeAvailability(Product product) {
+        List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(product.getId());
+        if (recipes.isEmpty()) return null;
 
-        List<OrderItem> items = orderItemRepository.findAllByOrderId(order.getId());
-        if (items.isEmpty()) return;
+        long alreadyReserved = java.util.Optional.ofNullable(
+                orderItemRepository.sumNewQuantityByProductId(product.getId())).orElse(0L);
+        long producible = Long.MAX_VALUE;
+        String limitingIngredient = null;
+
+        for (ProductRecipe recipe : recipes) {
+            double perUnit = recipe.getDeductionQuantity();
+            if (!Double.isFinite(perUnit) || perUnit <= 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Invalid recipe quantity for " + product.getNameAr());
+            }
+            ShiftAuditItem ingredient = recipe.getAuditItem();
+            double stock = ingredient.getStockQuantity() == null ? 0.0 : ingredient.getStockQuantity();
+            long ingredientCapacity = Math.max(0L, (long) Math.floor((stock + 0.000001) / perUnit));
+            if (ingredientCapacity < producible) {
+                producible = ingredientCapacity;
+                limitingIngredient = ingredient.getName();
+            }
+        }
+
+        return new RecipeAvailability(Math.max(0L, producible - alreadyReserved), limitingIngredient);
+    }
+
+    @Transactional(readOnly = true)
+    public Integer getRecipeAvailableQuantity(Product product) {
+        if (product == null) return null;
+        RecipeAvailability availability = calculateRecipeAvailability(product);
+        if (availability == null) return null;
+        return (int) Math.min(Integer.MAX_VALUE, availability.availableToAdd());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> getRecipeAvailableQuantities(List<Product> products) {
+        Map<Long, Integer> result = new HashMap<>();
+        if (products == null) return result;
+        for (Product product : products) {
+            Integer available = getRecipeAvailableQuantity(product);
+            if (available != null) result.put(product.getId(), available);
+        }
+        return result;
+    }
+
+    /** Validates the producible menu quantity from recipe stock, including NEW ticket holds. */
+    public void validateRecipeAvailability(Product product, int additionalQuantity) {
+        if (product == null || additionalQuantity < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be at least 1");
+        }
+
+        RecipeAvailability availability = calculateRecipeAvailability(product);
+        if (availability == null) return;
+
+        if (additionalQuantity > availability.availableToAdd()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Only " + availability.availableToAdd() + " unit(s) of " + product.getNameAr()
+                            + " can be added with the available " + availability.limitingIngredient());
+        }
+    }
+
+    private record RecipeAvailability(long availableToAdd, String limitingIngredient) {}
+
+    public void deductRecipeInventoryOnItems(Order order, List<OrderItem> items) {
+        if (order == null || items == null || items.isEmpty()) return;
 
         Long shiftId = order.getShift() != null ? order.getShift().getId() : null;
         List<ShiftAuditRecord> shiftRecords = shiftId != null ? shiftAuditRecordRepository.findAllByShiftId(shiftId) : List.of();
 
         for (OrderItem item : items) {
-            if (item.getProduct() == null) continue;
+            if (item.getProduct() == null || item.getStatus() == com.example.cafemangmentsystem.order.entity.OrderItemStatus.CANCELLED) continue;
 
             List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(item.getProduct().getId());
             for (ProductRecipe recipe : recipes) {
                 ShiftAuditItem auditItem = recipe.getAuditItem();
                 double totalDeducted = recipe.getDeductionQuantity() * item.getQuantity();
 
-                // Deduct stock quantity
-                double newStock = Math.max(0.0, auditItem.getStockQuantity() - totalDeducted);
+                if (auditItem.getStockQuantity() + 0.000001 < totalDeducted) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Insufficient ingredient stock: " + auditItem.getName());
+                }
+
+                // Never clamp an insufficient deduction to zero: doing so hides the shortage and
+                // makes the inventory ledger impossible to reconcile.
+                double newStock = auditItem.getStockQuantity() - totalDeducted;
                 auditItem.setStockQuantity(newStock);
                 shiftAuditItemRepository.save(auditItem);
 
@@ -250,6 +375,43 @@ public class ShiftAuditService {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    public void restoreRecipeInventoryForItem(Order order, OrderItem item) {
+        if (order == null || item == null || item.getProduct() == null) return;
+        restoreRecipeInventory(order, List.of(item));
+    }
+
+    public void restoreRecipeInventoryForOrder(Order order) {
+        if (order == null) return;
+        List<OrderItem> sentItems = orderItemRepository.findAllByOrderId(order.getId()).stream()
+                .filter(item -> item.getStatus() == com.example.cafemangmentsystem.order.entity.OrderItemStatus.SENT)
+                .toList();
+        restoreRecipeInventory(order, sentItems);
+    }
+
+    private void restoreRecipeInventory(Order order, List<OrderItem> items) {
+        if (items == null || items.isEmpty()) return;
+        Long shiftId = order.getShift() != null ? order.getShift().getId() : null;
+        List<ShiftAuditRecord> shiftRecords = shiftId != null
+                ? shiftAuditRecordRepository.findAllByShiftId(shiftId)
+                : List.of();
+
+        for (OrderItem item : items) {
+            if (item.getProduct() == null) continue;
+            for (ProductRecipe recipe : productRecipeRepository.findAllByProductId(item.getProduct().getId())) {
+                ShiftAuditItem auditItem = recipe.getAuditItem();
+                double quantity = recipe.getDeductionQuantity() * item.getQuantity();
+                auditItem.setStockQuantity(auditItem.getStockQuantity() + quantity);
+                shiftAuditItemRepository.save(auditItem);
+                shiftRecords.stream()
+                        .filter(record -> record.getAuditItem().getId().equals(auditItem.getId()))
+                        .forEach(record -> {
+                            record.setSoldDeductionCount(Math.max(0.0, record.getSoldDeductionCount() - quantity));
+                            shiftAuditRecordRepository.save(record);
+                        });
             }
         }
     }

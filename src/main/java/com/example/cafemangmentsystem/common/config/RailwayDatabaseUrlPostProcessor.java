@@ -7,6 +7,7 @@ import org.springframework.core.env.MapPropertySource;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.net.URI;
 
 /**
  * Railway injects DATABASE_URL as "postgresql://user:pass@host:5432/db".
@@ -20,20 +21,35 @@ public class RailwayDatabaseUrlPostProcessor implements EnvironmentPostProcessor
                                        SpringApplication application) {
         String url = environment.getProperty("DATABASE_URL");
         if (url != null && (url.startsWith("postgresql://") || url.startsWith("postgres://"))) {
-            String cleanUrl = url.startsWith("postgresql://")
-                    ? url.substring("postgresql://".length())
-                    : url.substring("postgres://".length());
-            String jdbcUrl = "jdbc:postgresql://" + cleanUrl;
+            try {
+                URI parsed = URI.create(url.replaceFirst("^postgres(?:ql)?://", "http://"));
+                if (parsed.getHost() == null || parsed.getRawPath() == null) {
+                    return;
+                }
+                String jdbcUrl = "jdbc:postgresql://" + parsed.getHost()
+                        + (parsed.getPort() >= 0 ? ":" + parsed.getPort() : "")
+                        + parsed.getRawPath()
+                        + (parsed.getRawQuery() != null ? "?" + parsed.getRawQuery() : "");
 
-            Map<String, Object> map = new HashMap<>();
-            map.put("DATABASE_URL", jdbcUrl);
-            map.put("spring.datasource.url", jdbcUrl);
-            map.put("spring.datasource.driver-class-name", "org.postgresql.Driver");
-            map.put("spring.jpa.database-platform", "org.hibernate.dialect.PostgreSQLDialect");
-            map.put("spring.jpa.properties.hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
-            
-            environment.getPropertySources()
-                    .addFirst(new MapPropertySource("railwayUrlFix", map));
+                Map<String, Object> map = new HashMap<>();
+                map.put("DATABASE_URL", jdbcUrl);
+                map.put("spring.datasource.url", jdbcUrl);
+                if (parsed.getUserInfo() != null) {
+                    String[] credentials = parsed.getUserInfo().split(":", 2);
+                    map.put("spring.datasource.username", credentials[0]);
+                    if (credentials.length == 2) {
+                        map.put("spring.datasource.password", credentials[1]);
+                    }
+                }
+                map.put("spring.datasource.driver-class-name", "org.postgresql.Driver");
+                map.put("spring.jpa.database-platform", "org.hibernate.dialect.PostgreSQLDialect");
+                map.put("spring.jpa.properties.hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
+
+                environment.getPropertySources()
+                        .addFirst(new MapPropertySource("railwayUrlFix", map));
+            } catch (IllegalArgumentException ignored) {
+                // Leave malformed values untouched so Spring can report the configuration error.
+            }
         }
     }
 }
