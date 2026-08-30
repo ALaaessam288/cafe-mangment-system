@@ -98,9 +98,12 @@ public class SecurityConfig {
                 .filter(s -> !s.isEmpty())
                 .toList();
         
-        config.setAllowedOrigins(origins);
+        // Allow all origins using pattern matching — works for any deployment URL.
+        // Safe to use with credentials because the API uses stateless JWT auth (not cookies).
+        config.setAllowedOriginPatterns(Arrays.asList("*"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("*"));
+        config.setExposedHeaders(Arrays.asList("Authorization"));
         config.setAllowCredentials(true);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
