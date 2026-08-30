@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -72,13 +73,14 @@ class ShiftServiceOwnershipTest {
         Shift shift = shift(3L, owner);
         when(shiftRepository.findById(3L)).thenReturn(Optional.of(shift));
         when(userRepository.findById(10L)).thenReturn(Optional.of(owner));
-        when(orderRepository.existsByShiftIdAndStatusIn(eq(3L), any())).thenReturn(true);
+        when(orderRepository.findAllByShiftIdAndStatusIn(eq(3L), any())).thenReturn(List.of(
+                com.example.cafemangmentsystem.order.entity.Order.builder().shift(shift).build()));
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.close(3L, 10L, new CloseShiftRequest(BigDecimal.ZERO, BigDecimal.ZERO, null)));
 
         assertEquals(409, error.getStatusCode().value());
-        assertTrue(error.getReason().contains("open or unpaid"));
+        assertTrue(error.getReason().contains("طلب مفتوح أو معلق"));
     }
 
     private User user(Long id, Role role) {

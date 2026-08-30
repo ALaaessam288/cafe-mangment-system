@@ -1,11 +1,5 @@
 import { TOP_SELLERS_ID } from './menuGroups';
 
-/**
- * Two rows, both optional for the cashier:
- *  1. A handful of top-level groups, starting with ⭐ الأكثر طلبًا (the default).
- *  2. The REAL categories inside the selected group - only rendered when the
- *     group actually contains more than one, so most flows stay at one click.
- */
 export default function CategoryBar({
   groups,
   activeGroupId,
@@ -15,11 +9,12 @@ export default function CategoryBar({
 }) {
   const activeGroup = groups.find((g) => g.id === activeGroupId);
   const subCategories = activeGroup?.categories ?? [];
-  const showSubRow = activeGroupId !== TOP_SELLERS_ID && subCategories.length > 1;
+  const showSubRow = activeGroupId !== TOP_SELLERS_ID && activeCategoryId !== null;
 
   return (
     <div className="menu-groups-wrap">
-      <div className="menu-groups" role="tablist" aria-label="أقسام المنيو">
+      {/* Top Level Main Groups (الأكثر طلباً, مشروبات, مأكولات, حلويات, إضافات) */}
+      <div className="menu-groups" role="tablist" aria-label="أقسام المنيو الرئيسية">
         <button
           type="button"
           role="tab"
@@ -28,7 +23,7 @@ export default function CategoryBar({
           onClick={() => onGroupSelect(TOP_SELLERS_ID)}
         >
           <img src="/images/categories/top_sellers.jpg" className="menu-group__photo" alt="الأكثر طلباً" />
-          <span>الأكثر طلبًا</span>
+          <span>الأكثر طلبًا ⭐</span>
         </button>
 
         {groups.map((group) => (
@@ -46,31 +41,49 @@ export default function CategoryBar({
               <span className="menu-group__icon">{group.icon}</span>
             )}
             <span>{group.label}</span>
+            <span className="menu-group__badge">{group.categories?.length || 0}</span>
           </button>
         ))}
       </div>
 
+      {/* Subcategory Pills when inside a Category */}
       {showSubRow && (
-        <div className="menu-subcats">
+        <div className="menu-subcats animate-fade-in">
           <button
             type="button"
-            className={`menu-subcat ${activeCategoryId == null ? 'menu-subcat--active' : ''}`}
+            className="menu-subcat menu-subcat--back"
             onClick={() => onCategorySelect(null)}
+            title={`رجوع لكروت أقسام ${activeGroup?.label || ''}`}
           >
-            الكل
+            <span>🔙 أقسام {activeGroup?.label || ''}</span>
           </button>
-          {subCategories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`menu-subcat ${activeCategoryId === cat.id ? 'menu-subcat--active' : ''}`}
-              onClick={() => onCategorySelect(cat.id)}
-            >
-              {cat.name}
-            </button>
-          ))}
+
+          <button
+            type="button"
+            className={`menu-subcat ${activeCategoryId === 'ALL' ? 'menu-subcat--active' : ''}`}
+            onClick={() => onCategorySelect('ALL')}
+          >
+            كل الأصناف 📋
+          </button>
+
+          {subCategories.map((cat) => {
+            const catName = cat.displayName || cat.nameAr || cat.name || cat.nameEn;
+            const visual = cat.visual || {};
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                className={`menu-subcat ${activeCategoryId === cat.id ? 'menu-subcat--active' : ''}`}
+                onClick={() => onCategorySelect(cat.id)}
+              >
+                <span>{visual.icon || '☕'}</span>
+                <span>{catName}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+

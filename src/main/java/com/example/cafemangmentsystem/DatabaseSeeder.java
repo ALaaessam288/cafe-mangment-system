@@ -311,15 +311,21 @@ public class DatabaseSeeder implements CommandLineRunner {
 
         // Repair the standard coffee recipe for existing tenant databases. This is idempotent
         // and only touches the two exact seeded Turkish-coffee product names.
-        for (Tenant tenant : tenantRepository.findAll()) {
-            try {
-                TenantContext.set(tenant.getId());
-                shiftAuditService.ensureDefaultCoffeeRecipes();
-            } catch (Exception e) {
-                System.err.println("[SEEDER] Coffee recipe repair skipped for " + tenant.getSlug() + ": " + e.getMessage());
-            } finally {
-                TenantContext.clear();
+        try {
+            for (Tenant tenant : tenantRepository.findAll()) {
+                try {
+                    TenantContext.set(tenant.getId());
+                    shiftAuditService.ensureDefaultCoffeeRecipes();
+                } catch (Exception e) {
+                    System.err.println("[SEEDER] Coffee recipe repair skipped for " + tenant.getSlug() + ": " + e.getMessage());
+                } finally {
+                    TenantContext.clear();
+                }
             }
+        } catch (Exception e) {
+            // A fresh/test database may not have its schema yet. Never prevent the application
+            // from starting because an idempotent data repair could not run.
+            System.err.println("[SEEDER] Coffee recipe repair deferred: " + e.getMessage());
         }
     }
 }

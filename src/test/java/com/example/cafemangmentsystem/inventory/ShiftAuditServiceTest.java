@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 
 @ExtendWith(MockitoExtension.class)
 class ShiftAuditServiceTest {
@@ -180,5 +181,42 @@ class ShiftAuditServiceTest {
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.validateRecipeAvailability(product, 11));
         org.junit.jupiter.api.Assertions.assertTrue(error.getReason().contains("Only 10"));
+    }
+
+    @Test
+    void reportsTwentyFiveCupsAvailableFromTwoHundredFiftyGrams() {
+        ingredient.setStockQuantity(250.0);
+        when(orderItemRepository.sumNewQuantityByProductId(7L)).thenReturn(0L);
+
+        assertEquals(25, service.getRecipeAvailableQuantity(product));
+    }
+
+    @Test
+    void repairsMissingTurkishCoffeeRecipeAndDisablesContradictoryPieceStock() {
+        Product turkishCoffee = Product.builder()
+                .nameAr("قهوة تركية سادة")
+                .stockQuantity(5_565)
+                .reservedQuantity(214)
+                .trackInventory(true)
+                .build();
+        ReflectionTestUtils.setField(turkishCoffee, "id", 99L);
+        ShiftAuditItem coffeeBeans = ShiftAuditItem.builder()
+                .name("بن قهوة (جرام)")
+                .unit("جرام")
+                .stockQuantity(250.0)
+                .build();
+        when(auditItemRepository.findAllByActiveTrue()).thenReturn(List.of(coffeeBeans));
+        when(productRepository.findAll()).thenReturn(List.of(turkishCoffee));
+        when(recipeRepository.findAllByProductId(99L)).thenReturn(List.of());
+
+        service.ensureDefaultCoffeeRecipes();
+
+        verify(recipeRepository).save(argThat(recipe ->
+                recipe.getProduct() == turkishCoffee
+                        && recipe.getAuditItem() == coffeeBeans
+                        && recipe.getDeductionQuantity() == 10.0));
+        org.junit.jupiter.api.Assertions.assertFalse(turkishCoffee.isTrackInventory());
+        assertEquals(0, turkishCoffee.getReservedQuantity());
+        verify(productRepository).save(turkishCoffee);
     }
 }

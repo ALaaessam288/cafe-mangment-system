@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Wallet, Receipt, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Printer, CheckCircle } from 'lucide-react';
+import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Printer, CheckCircle } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { expensesApi } from '../../api/expensesApi';
 import { menuApi } from '../../api/menuApi';
@@ -276,9 +276,19 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   return (
     <>
       <div className="shift-strip">
+        <div className="shift-strip__identity">
+          <span className="shift-strip__live-dot" />
+          <span>
+            <strong>الشيفت شغّال</strong>
+            {shift?.openedAt && (
+              <small>من {new Date(shift.openedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</small>
+            )}
+          </span>
+        </div>
+
         {/* Only ADMIN and SUPERVISOR can see live revenue and drawer totals */}
         {canViewFinancialTotals && (
-          <>
+          <div className="shift-strip__metrics">
             <span className="shift-strip__cell">
               <TrendingUp size={13} />
               <span className="shift-strip__label">مبيعات الشيفت</span>
@@ -302,65 +312,58 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
               <span className="shift-strip__label">المفروض في الدرج</span>
               <strong>{formatCurrency(opening + cash)}</strong>
             </span>
-          </>
+          </div>
         )}
 
-        {shift?.openedAt && (
-          <span className="shift-strip__cell shift-strip__cell--muted">
-            <Receipt size={13} />
-            <span className="shift-strip__label">بدأ الشيفت</span>
-            <strong>{new Date(shift.openedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</strong>
-          </span>
-        )}
+        <div className="shift-strip__tools">
 
         {/* Quick Pending Advances Badge in POS */}
         {pendingAdvances.length > 0 && (
           <button
             type="button"
-            className="btn btn--secondary btn--sm pos-pending-badge-btn"
+            className="shift-tool shift-tool--warning pos-pending-badge-btn"
             onClick={() => setShowPendingModal(true)}
             title="يوجد عُهد مؤقتة معلقة بانتظار التسوية قبل قفل الشيفت"
           >
-            <Clock size={13} /> {pendingAdvances.length} عُهدة معلقة ⏳
+            <Clock size={14} /><span><strong>{pendingAdvances.length} عُهدة معلقة</strong><small>تحتاج تسوية</small></span>
           </button>
         )}
 
         {/* Quick Add Expense Payout Button */}
         <button
           type="button"
-          className="btn btn--secondary btn--sm pos-quick-exp-btn"
+          className="shift-tool shift-tool--expense pos-quick-exp-btn"
           onClick={() => handleOpenQuickExpense('ADVANCE')}
           title="إضافة مصروف عاجل أو سحب عُهدة وطباعة البون"
         >
-          <Plus size={13} /> مصروف سريع 💸
+          <Plus size={14} /><span><strong>مصروف سريع</strong><small>سحب من الدرج</small></span>
         </button>
 
         {/* Quick Stock Refill Button */}
         <button
           type="button"
-          className="btn btn--secondary btn--sm pos-quick-stock-btn"
+          className="shift-tool shift-tool--stock pos-quick-stock-btn"
           onClick={() => setShowStockModal(true)}
           title="تغذية وجرد سريع للمخزون والخامات"
-          style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.35)' }}
         >
-          <Plus size={13} /> تغذية المخزون 📦
+          <Plus size={14} /><span><strong>تغذية المخزون</strong><small>إضافة وجرد</small></span>
         </button>
 
         {/* Only ADMIN and SUPERVISOR can view/print full Daily Report */}
         {canViewFinancialTotals && (
           <button
             type="button"
-            className="btn btn--secondary btn--sm"
-            style={{ padding: '3px 8px', fontSize: '11px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}
+            className="shift-tool shift-tool--report"
             onClick={() => setShowReportModal(true)}
             title="عرض وطباعة تقرير اليومية الشامل"
           >
-            <FileText size={13} /> تقرير اليومية 📊
+            <FileText size={14} /><span><strong>تقرير اليومية</strong><small>عرض وطباعة</small></span>
           </button>
         )}
+        </div>
 
         <button type="button" className="shift-strip__close" onClick={onCloseShift}>
-          <Lock size={13} /> قفل الشيفت
+          <Lock size={14} /><span>قفل الشيفت</span>
         </button>
       </div>
 

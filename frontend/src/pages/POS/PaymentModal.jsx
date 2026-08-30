@@ -74,7 +74,11 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
       <div className="payment-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="payment-modal__header">
-          <h3>الدفع — ترابيزة {order.tableNumber}</h3>
+          <div className="payment-modal__title-wrap">
+            <small>CHECKOUT TERMINAL · 04</small>
+            <h3>تحصيل الفاتورة</h3>
+            <p>{order.tableNumber ? `ترابيزة ${order.tableNumber}` : `طلب #${order.orderNumber || order.id}`}</p>
+          </div>
           <button className="payment-modal__close" onClick={onClose}><X size={18} /></button>
         </div>
 

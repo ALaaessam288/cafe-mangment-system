@@ -25,15 +25,17 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
       }}
       title={`${product.name} — ${formatCurrency(product.price)}\n(كليك يمين: كمية / ملاحظة)`}
     >
+      <img
+        src={photoSrc}
+        className="menu-product__visual"
+        alt=""
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+      />
+      <span className="menu-product__shade" aria-hidden="true" />
       <span className="menu-product__name">{product.name}</span>
       <span className="menu-product__footer">
         <span className="menu-product__price">{formatCurrency(product.price)}</span>
-        <img 
-          src={photoSrc} 
-          className="menu-product__photo-badge" 
-          alt="" 
-          onError={(e) => { e.target.style.display = 'none'; }} 
-        />
+        <span className="menu-product__tap">+ إضافة</span>
       </span>
 
       {/* Stock Progress Bar Indicator */}

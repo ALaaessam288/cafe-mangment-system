@@ -110,6 +110,7 @@ export default function TableGrid({
   return (
     <aside className="pos__tables">
       <div className="pos__panel-header pos__tables-header">
+        <span className="pos__station-number">01</span>
         <div className="pos__tables-tabs">
           <button
             type="button"

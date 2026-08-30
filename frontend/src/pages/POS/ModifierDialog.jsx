@@ -45,6 +45,7 @@ export default function ModifierDialog({
   return (
     <div className="pos__open-modal-overlay" onClick={onCancel}>
       <div className="pos__open-modal modifier-dialog" onClick={(e) => e.stopPropagation()}>
+        <span className="modifier-dialog__kicker">CUSTOMIZE ITEM · 03</span>
         <h3 className="modifier-dialog__title">{product.name}</h3>
         <p className="modifier-dialog__subtitle">
           {options.length > 0 ? 'اختار الحجم / الإضافات' : 'الكمية والملاحظات'}

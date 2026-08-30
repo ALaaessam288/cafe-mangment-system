@@ -29,27 +29,90 @@ export function isFoodProduct(product) {
   return product?.revenueLine === 'FOOD' || product?.stationCode === 'KITCHEN';
 }
 
-/* Order matters: the first definition whose keywords hit the category name
-   wins. "إضافات" is checked before food/desserts so "إضافات الحلويات" lands in
-   the additions group instead of the desserts one. */
 export const GROUP_PHOTOS = {
   TOP_SELLERS: '/images/categories/top_sellers.jpg',
-  EXTRAS: '/images/categories/snacks.jpg',
-  DESSERTS: '/images/categories/desserts.jpg',
-  HOT: '/images/categories/hot.jpg',
-  COLD: '/images/categories/cold.jpg',
-  JUICE: '/images/categories/juice.jpg',
+  DRINKS: '/images/categories/hot.jpg',
   FOOD: '/images/categories/food.jpg',
+  DESSERTS: '/images/categories/desserts.jpg',
+  EXTRAS: '/images/categories/snacks.jpg',
   OTHER: '/images/categories/food.jpg',
 };
 
-const GROUP_DEFS = [
+export function getCategoryVisual(name = '') {
+  const norm = normalizeText(name);
+  if (norm.includes('قهوه') || norm.includes('اسبريسو') || norm.includes('تركي') || norm.includes('فرنساوي') || norm.includes('نسكافيه') || norm.includes('لاتيه') || norm.includes('كابتشينو') || norm.includes('موكا') || norm.includes('امريكانو')) {
+    return { icon: '☕', photo: '/images/categories/hot.jpg', color: '#f59e0b', tag: 'قهوة' };
+  }
+  if (norm.includes('شاي') || norm.includes('ينسون') || norm.includes('اعشاب') || norm.includes('كركديه') || norm.includes('نعناع') || norm.includes('قرفه') || norm.includes('جنزبيل')) {
+    return { icon: '🫖', photo: '/images/categories/hot.jpg', color: '#10b981', tag: 'أعشاب' };
+  }
+  if (norm.includes('سخن') || norm.includes('ساخن') || norm.includes('هوت') || norm.includes('سحلب') || norm.includes('كاكاو')) {
+    return { icon: '☕', photo: '/images/categories/hot.jpg', color: '#f97316', tag: 'مشروبات ساخنة' };
+  }
+  if (norm.includes('ايس') || norm.includes('بارد') || norm.includes('ساقع') || norm.includes('موهيتو') || norm.includes('صودا') || norm.includes('غازي') || norm.includes('مياه') || norm.includes('ريد بول') || norm.includes('كولد')) {
+    return { icon: '🧊', photo: '/images/categories/cold.jpg', color: '#38bdf8', tag: 'مشروبات مثلجة' };
+  }
+  if (norm.includes('عصير') || norm.includes('فريش') || norm.includes('فرابيه') || norm.includes('ميلك') || norm.includes('شيك') || norm.includes('سموزي') || norm.includes('كوكتيل')) {
+    return { icon: '🍹', photo: '/images/categories/juice.jpg', color: '#ec4899', tag: 'عصائر وفرابيه' };
+  }
+  if (norm.includes('وافل') || norm.includes('بان كيك') || norm.includes('بانكيك') || norm.includes('فريسكا')) {
+    return { icon: '🧇', photo: '/images/categories/desserts.jpg', color: '#f59e0b', tag: 'وافل وبان كيك' };
+  }
+  if (norm.includes('قشطوط') || norm.includes('مولتن') || norm.includes('فادج') || norm.includes('طاجن') || norm.includes('كيك') || norm.includes('تشيز') || norm.includes('سينابون') || norm.includes('دونتس')) {
+    return { icon: '🍰', photo: '/images/categories/desserts.jpg', color: '#a855f7', tag: 'كيك وحلويات' };
+  }
+  if (norm.includes('ايس كريم') || norm.includes('جيلاتي') || norm.includes('مثلج')) {
+    return { icon: '🍨', photo: '/images/categories/desserts.jpg', color: '#06b6d4', tag: 'آيس كريم' };
+  }
+  if (norm.includes('ساندوتش') || norm.includes('سوري') || norm.includes('رول') || norm.includes('شاورما') || norm.includes('بانيني')) {
+    return { icon: '🥪', photo: '/images/categories/food.jpg', color: '#eab308', tag: 'سندوتشات' };
+  }
+  if (norm.includes('بيتزا') || norm.includes('فطير')) {
+    return { icon: '🍕', photo: '/images/categories/food.jpg', color: '#ef4444', tag: 'بيتزا' };
+  }
+  if (norm.includes('برجر') || norm.includes('لحم') || norm.includes('فراخ') || norm.includes('وجب')) {
+    return { icon: '🍔', photo: '/images/categories/food.jpg', color: '#f97316', tag: 'برجر ووجبات' };
+  }
+  if (norm.includes('كريب')) {
+    return { icon: '🌯', photo: '/images/categories/food.jpg', color: '#84cc16', tag: 'كريب' };
+  }
+  if (norm.includes('مكرون') || norm.includes('باستا') || norm.includes('نجريسكو')) {
+    return { icon: '🍝', photo: '/images/categories/food.jpg', color: '#f43f5e', tag: 'باستا' };
+  }
+  if (norm.includes('بطاطس') || norm.includes('فرايز') || norm.includes('مقرمش') || norm.includes('مقبلات') || norm.includes('سناكس')) {
+    return { icon: '🍟', photo: '/images/categories/snacks.jpg', color: '#eab308', tag: 'مقبلات وسناكس' };
+  }
+  if (norm.includes('اضاف') || norm.includes('صوص') || norm.includes('نكه') || norm.includes('سيرب') || norm.includes('توبينج')) {
+    return { icon: '➕', photo: '/images/categories/snacks.jpg', color: '#64748b', tag: 'إضافات' };
+  }
+  return { icon: '🍽️', photo: '/images/categories/food.jpg', color: 'var(--accent)', tag: 'عام' };
+}
+
+export const GROUP_DEFS = [
   {
-    id: 'EXTRAS',
-    label: 'إضافات',
-    icon: '➕',
-    photo: '/images/categories/snacks.jpg',
-    keywords: ['اضاف', 'extra', 'addition', 'topping'],
+    id: 'DRINKS',
+    label: 'مشروبات',
+    icon: '🥤',
+    photo: '/images/categories/hot.jpg',
+    keywords: [
+      'ساخن', 'اسبريسو', 'سخن', 'قهوه', 'شاي', 'ينسون', 'نسكافيه', 'هوت',
+      'ايس', 'غازيه', 'موهيتو', 'بارد', 'ساقع', 'مياه', 'صودا', 'عصير',
+      'فرابيه', 'ميلك', 'شيك', 'سموزي', 'كوكتيل', 'اعشاب', 'كركديه',
+      'كولد', 'درينك', 'مشروب', 'مشروبات', 'hot', 'cold', 'iced', 'coffee',
+      'tea', 'juice', 'drink', 'soda', 'beverage', 'water', 'shake', 'frappe'
+    ],
+  },
+  {
+    id: 'FOOD',
+    label: 'مأكولات',
+    icon: '🍽️',
+    photo: '/images/categories/food.jpg',
+    keywords: [
+      'ساندوتش', 'نجريسكو', 'كريب', 'بيتزا', 'سوري', 'برجر', 'وجب', 'ركن',
+      'مقرمشات', 'بطاطس', 'فرايز', 'باستا', 'مكرونه', 'شاورما', 'اكل', 'ماكولات',
+      'sandwich', 'negresco', 'crepe', 'pizza', 'burger', 'meal', 'fries',
+      'food', 'pasta'
+    ],
   },
   {
     id: 'DESSERTS',
@@ -57,51 +120,18 @@ const GROUP_DEFS = [
     icon: '🍰',
     photo: '/images/categories/desserts.jpg',
     keywords: [
-      'وافل', 'بان كيك', 'بانكيك', 'قشطوطه', 'مولتن', 'فادج', 'طاجن', 'فريسكا',
-      'حلو', 'كيك', 'ايس كريم', 'waffle', 'pancake', 'molten', 'fudge', 'fresca',
-      'dessert', 'cake', 'tagen', 'qashtota',
+      'وافل', 'بان كيك', 'بانكيك', 'قشطوطه', 'قشطوطة', 'مولتن', 'فادج', 'طاجن', 'فريسكا',
+      'حلو', 'حلويات', 'كيك', 'ايس كريم', 'تشيز', 'دونتس', 'سينابون', 'جيلاتي',
+      'waffle', 'pancake', 'molten', 'fudge', 'fresca', 'dessert', 'cake',
+      'tagen', 'qashtota', 'ice cream', 'sweet'
     ],
   },
   {
-    id: 'HOT',
-    label: 'مشروبات ساخنة',
-    icon: '☕',
-    photo: '/images/categories/hot.jpg',
-    keywords: [
-      'ساخن', 'اسبريسو', 'سخن', 'قهوه', 'شاي', 'ينسون', 'نسكافيه', 'هوت',
-      'hot', 'espresso', 'coffee', 'tea',
-    ],
-  },
-  {
-    id: 'COLD',
-    label: 'مشروبات ساقعة',
-    icon: '🧊',
-    photo: '/images/categories/cold.jpg',
-    keywords: [
-      'ايس', 'غازيه', 'موهيتو', 'بارد', 'ساقع', 'مياه', 'صودا',
-      'iced', 'ice', 'soft', 'mojito', 'cold', 'soda', 'water',
-    ],
-  },
-  {
-    id: 'JUICE',
-    label: 'عصائر وفرابيه',
-    icon: '🥤',
-    photo: '/images/categories/juice.jpg',
-    keywords: [
-      'عصير', 'فرابيه', 'ميلك', 'شيك', 'سموزي', 'كوكتيل',
-      'juice', 'frappe', 'shake', 'smoo', 'cocktail',
-    ],
-  },
-  {
-    id: 'FOOD',
-    label: 'مأكولات',
-    icon: '🍔',
-    photo: '/images/categories/food.jpg',
-    keywords: [
-      'ساندوتش', 'نجريسكو', 'كريب', 'بيتزا', 'سوري', 'برجر', 'وجب', 'ركن',
-      'مقرمشات', 'بطاطس',
-      'sandwich', 'negresco', 'crepe', 'pizza', 'burger', 'meal', 'fries',
-    ],
+    id: 'EXTRAS',
+    label: 'إضافات',
+    icon: '➕',
+    photo: '/images/categories/snacks.jpg',
+    keywords: ['اضاف', 'extra', 'addition', 'topping', 'صوص', 'سيرب'],
   },
 ];
 
@@ -137,16 +167,19 @@ export function buildMenuGroups(categories = [], products = []) {
     let def = matchGroupByName(cat.name ?? cat.nameAr ?? cat.nameEn);
 
     if (!def) {
-      // No name hit: lean on the data the backend already gives us. Anything
-      // routed to the kitchen / booked on the FOOD revenue line is food.
       const foodCount = catProducts.filter(isFoodProduct).length;
       def = catProducts.length > 0 && foodCount * 2 >= catProducts.length
         ? GROUP_DEFS.find((g) => g.id === 'FOOD')
-        : OTHER_GROUP;
+        : GROUP_DEFS.find((g) => g.id === 'DRINKS') || OTHER_GROUP;
     }
 
     const bucket = ensure(def);
-    bucket.categories.push(cat);
+    bucket.categories.push({
+      ...cat,
+      displayName: cat.nameAr != null && cat.nameAr.trim() !== '' ? cat.nameAr : (cat.name != null ? cat.name : cat.nameEn),
+      productCount: catProducts.length,
+      visual: getCategoryVisual(cat.name ?? cat.nameAr ?? cat.nameEn)
+    });
     bucket.productCount += catProducts.length;
   });
 
@@ -161,7 +194,7 @@ export function productsForGroup(products, group, categoryId) {
   if (!group) return products;
   const ids = new Set(group.categories.map((c) => c.id));
   return products.filter(
-    (p) => ids.has(p.categoryId) && (categoryId == null || p.categoryId === categoryId)
+    (p) => ids.has(p.categoryId) && (categoryId == null || categoryId === 'ALL' || p.categoryId === categoryId)
   );
 }
 

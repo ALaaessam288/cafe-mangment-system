@@ -1435,7 +1435,7 @@ export default function POSPage() {
   }
 
   return (
-    <div className="pos-shell">
+    <div className="pos-shell pos-shell--creative">
       {/* Live shift read-out: sales, split, and what the drawer should hold */}
       <ShiftStrip
         shift={state.activeShift}
@@ -1518,10 +1518,16 @@ export default function POSPage() {
       {openTakeawayModal && (
         <div className="pos__open-modal-overlay" onClick={() => setOpenTakeawayModal(false)}>
           <div className="pos__takeaway-modal" onClick={(e) => e.stopPropagation()}>
-            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--fw-bold)', color: 'var(--text-primary)', margin: 0 }}>
-                {takeawayMode === 'DIRECT' ? '🛍️ أوردر تيك أواي جديد' : '🛵 أوردر دليفري جديد'}
-              </h3>
+            <div className={`pos-popup-hero pos-popup-hero--${takeawayMode.toLowerCase()}`}>
+              <span className="pos-popup-hero__icon">
+                {takeawayMode === 'DIRECT' ? <ShoppingBag size={24} /> : <Bike size={24} />}
+              </span>
+              <div>
+                <small>NEW ORDER CHANNEL · 01</small>
+                <h3>{takeawayMode === 'DIRECT' ? 'استلام من الكاونتر' : 'طلب خارج المكان'}</h3>
+                <p>{takeawayMode === 'DIRECT' ? 'أسرع مسار: افتح الأوردر وابدأ الإضافة فورًا.' : 'سجّل العميل والعنوان ثم تابع الأوردر لحظة بلحظة.'}</p>
+              </div>
+              <strong>{takeawayMode === 'DIRECT' ? 'TAKEAWAY' : 'DELIVERY'}</strong>
             </div>
 
             {/* Mode Tabs */}

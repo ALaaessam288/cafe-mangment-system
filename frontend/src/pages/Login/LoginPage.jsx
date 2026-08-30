@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Lock, User, Eye, EyeOff, Coffee, HelpCircle, Hash } from 'lucide-react';
+import {
+  Activity, ArrowLeft, Boxes, Building2, CheckCircle2, CircleDollarSign, Clock3,
+  Coffee, Eye, EyeOff, Hash, Headphones, HelpCircle, KeyRound, Lock, PackageCheck,
+  Radio, ReceiptText, ShieldCheck, Sparkles, TrendingUp, User, X,
+} from 'lucide-react';
 import { authApi } from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../utils/constants';
 import Button from '../../components/Button/Button';
 import './LoginPage.css';
+
+const operationalCards = [
+  { icon: CircleDollarSign, label: 'مبيعات اليوم', value: '24,680', unit: 'ج.م', meta: '+18%', tone: 'gold' },
+  { icon: ReceiptText, label: 'طلبات نشطة', value: '18', unit: 'طلب', meta: '6 بالمطبخ', tone: 'blue' },
+  { icon: Boxes, label: 'حالة المخزون', value: '94', unit: '%', meta: 'مستقر', tone: 'mint' },
+];
 
 export default function LoginPage() {
   const { login, isLoading } = useAuth();
@@ -13,8 +23,6 @@ export default function LoginPage() {
   const location = useLocation();
   const params = useParams();
   const [searchParams] = useSearchParams();
-
-  // Detect tenant slug from route parameter /:tenantSlug/login or query ?tenant=slug / ?slug=slug
   const routeSlug = params.tenantSlug || searchParams.get('tenant') || searchParams.get('slug') || '';
   const [tenantSlug, setTenantSlug] = useState(routeSlug);
   const [username, setUsername] = useState('');
@@ -26,29 +34,23 @@ export default function LoginPage() {
   const [pin, setPin] = useState('');
   const [pinLoading, setPinLoading] = useState(false);
 
+  function switchMode(usePin) {
+    setPinMode(usePin);
+    setError('');
+    if (usePin) setPassword(''); else setPin('');
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-
     const cleanSlug = (routeSlug || tenantSlug).trim().toLowerCase();
     const trimmedUsername = username.trim();
-    if (!cleanSlug) {
-      setError('يرجى إدخال كود الكافيه');
-      return;
-    }
-    if (!trimmedUsername) {
-      setError('يرجى إدخال اسم المستخدم');
-      return;
-    }
-    if (!password) {
-      setError('يرجى إدخال كلمة المرور');
-      return;
-    }
-
+    if (!cleanSlug) return setError('يرجى إدخال كود الكافيه');
+    if (!trimmedUsername) return setError('يرجى إدخال اسم المستخدم');
+    if (!password) return setError('يرجى إدخال كلمة المرور');
     const result = await login(cleanSlug, trimmedUsername, password);
     if (result.success) {
-      const requestedPath = location.state?.from?.pathname;
-      navigate(requestedPath || result.defaultRoute || ROUTES.POS, { replace: true });
+      navigate(location.state?.from?.pathname || result.defaultRoute || ROUTES.POS, { replace: true });
     } else {
       setError(result.message || 'بيانات الدخول غير صحيحة');
     }
@@ -58,21 +60,16 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     const cleanSlug = (routeSlug || tenantSlug).trim().toLowerCase();
-    if (!cleanSlug) { setError('يرجى إدخال كود الكافيه'); return; }
-    if (!pin || pin.length < 4) { setError('يرجى إدخال رمز PIN (4 أرقام على الأقل)'); return; }
+    if (!cleanSlug) return setError('يرجى إدخال كود الكافيه');
+    if (!pin || pin.length < 4) return setError('يرجى إدخال رمز PIN من 4 أرقام على الأقل');
     setPinLoading(true);
     try {
       const result = await authApi.loginPin(cleanSlug, pin);
       if (result?.token) {
-        // Store token via existing auth context – call login with token payload
-        // authApi.loginPin returns the token; we rely on AuthContext login to handle it
-        // Since AuthContext.login expects (slug, user, pass), we do manual token store
         localStorage.setItem('authToken', result.token);
         if (result.refreshToken) localStorage.setItem('refreshToken', result.refreshToken);
         window.location.replace(location.state?.from?.pathname || '/pos');
-      } else {
-        setError('رمز PIN غير صحيح أو انتهت صلاحيته');
-      }
+      } else setError('رمز PIN غير صحيح أو انتهت صلاحيته');
     } catch (err) {
       setError(err?.response?.data?.message || 'رمز PIN غير صحيح');
     } finally {
@@ -80,274 +77,125 @@ export default function LoginPage() {
     }
   }
 
+  const supportMessage = `مرحباً إدارة كافيو، أحتاج مساعدة في استعادة كلمة المرور لحسابي${username ? ` (اسم المستخدم: ${username.trim()})` : ''}${routeSlug ? ` في كافيه: ${routeSlug}` : ''}.`;
 
   return (
-    <div className="login-page">
-      {/* Background Pattern Elements */}
-      <div className="login-page__bg-glow" />
+    <main className="login-page">
+      <div className="login-page__orb login-page__orb--one" />
+      <div className="login-page__orb login-page__orb--two" />
+      <div className="login-page__rings" aria-hidden="true"><i /><i /><i /></div>
 
-      <div className="login-card">
-        {/* Brand Header */}
-        <div className="login-card__brand">
-          <div className="login-card__logo-wrapper mb-2">
-            <img src="/caffio-logo.png" alt="Caffio - Café Business Simplified" className="login-card__logo-img" />
-          </div>
-          <p className="login-card__subtitle">نظام إدارة نقاط البيع والعمليات السحابية</p>
+      <section className="login-showcase" aria-label="مميزات منصة كافيو">
+        <div className="login-showcase__brandline">
+          <img src="/caffio-logo.png" alt="Caffio" />
+          <span>OPERATIONS OS</span>
         </div>
+        <div className="login-showcase__topline"><Radio size={14} /> مصمم للتشغيل لحظة بلحظة <i /></div>
+        <h1>مش مجرد كاشير.<br /><span>دي غرفة التحكم.</span></h1>
+        <p className="login-showcase__lead">كل نبضة في مكانك — من أول الأوردر لآخر جرام مخزون — قدامك لحظة بلحظة.</p>
 
-
-        {/* Mode toggle */}
-        <div className="d-flex gap-2 mb-3">
-          <button
-            type="button"
-            className={`btn btn-sm flex-fill ${!pinMode ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-white opacity-75'}`}
-            onClick={() => { setPinMode(false); setError(''); setPin(''); }}
-          >
-            <User size={14} className="me-1" /> دخول بكلمة مرور
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm flex-fill ${pinMode ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-white opacity-75'}`}
-            onClick={() => { setPinMode(true); setError(''); setPassword(''); }}
-          >
-            <Hash size={14} className="me-1" /> دخول برمز PIN
-          </button>
+        <div className="login-command" aria-label="نموذج توضيحي لغرفة التحكم">
+          <div className="login-command__head">
+            <div><Activity size={17} /><span>لمحة من غرفة التحكم</span></div>
+            <small><span /> نموذج توضيحي</small>
+          </div>
+          <div className="login-command__metrics">
+            {operationalCards.map(({ icon: Icon, label, value, unit, meta, tone }) => (
+              <article className={`login-metric login-metric--${tone}`} key={label}>
+                <span className="login-metric__icon"><Icon size={18} /></span>
+                <small>{label}</small>
+                <strong>{value} <em>{unit}</em></strong>
+                <span className="login-metric__meta">{tone === 'gold' && <TrendingUp size={12} />}{meta}</span>
+              </article>
+            ))}
+          </div>
+          <div className="login-command__flow">
+            <span><ReceiptText size={15} /> أوردر جديد</span><i />
+            <span><Coffee size={15} /> تحت التحضير</span><i />
+            <span><PackageCheck size={15} /> خصم المخزون</span>
+          </div>
+          <div className="login-command__shift"><span><Clock3 size={15} /> شيفت المساء</span><strong>04:26:18</strong><small>يعمل الآن</small></div>
         </div>
+        <div className="login-showcase__trust">
+          <span><ShieldCheck size={17} /> صلاحيات دقيقة</span>
+          <span><CheckCircle2 size={17} /> بيانات لحظية</span>
+          <span><Sparkles size={17} /> تجربة أسرع</span>
+        </div>
+      </section>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="login-card__error" role="alert">
-            <i className="bi bi-exclamation-triangle-fill" />
-            <span>{error}</span>
-          </div>
-        )}
+      <section className="login-access" aria-label="تسجيل الدخول">
+        <div className="login-access__mobile-brand"><img src="/caffio-logo.png" alt="Caffio" /></div>
+        <div className="login-access__eyebrow"><span>01</span><i /> بوابة الفريق</div>
+        <div className="login-card">
+          <header className="login-card__header">
+            <span>جاهز للشيفت؟</span><h2>ادخل.. وخلي التشغيل علينا.</h2><p>بياناتك هي مفتاح غرفة التحكم الخاصة بمكانك.</p>
+          </header>
 
-        {/* Tenant Scope Badge (Only shown if visiting a tenant-specific URL) */}
-        {routeSlug && (
-          <div className="d-flex align-items-center justify-content-center gap-2 p-2 mb-3 bg-dark border border-secondary rounded">
-            <Coffee size={16} className="text-warning" />
-            <span className="small text-white opacity-75">كافيه:</span>
-            <span className="badge bg-warning text-dark fw-bold">{routeSlug}</span>
-          </div>
-        )}
-
-        {/* Login Form */}
-        {!pinMode && <form onSubmit={handleSubmit} className="login-form">
-          {!routeSlug && (
-            <div className="form-group">
-              <label className="form-label" htmlFor="login-tenant">كود الكافيه</label>
-              <div className="input-wrapper">
-                <span className="input-icon"><Building2 size={18} /></span>
-                <input
-                  id="login-tenant"
-                  type="text"
-                  className="form-input"
-                  placeholder="مثال: caffio-downtown"
-                  value={tenantSlug}
-                  onChange={(e) => { setTenantSlug(e.target.value); setError(''); }}
-                  autoComplete="organization"
-                  autoFocus
-                  disabled={isLoading}
-                />
-              </div>
+          {routeSlug && (
+            <div className="login-tenant-badge">
+              <span className="login-tenant-badge__icon"><Coffee size={18} /></span>
+              <span><small>تسجيل الدخول إلى</small><strong>{routeSlug}</strong></span>
+              <CheckCircle2 size={18} className="login-tenant-badge__check" />
             </div>
           )}
-          {/* Username Input */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="login-username">اسم المستخدم</label>
-            <div className="input-wrapper">
-              <span className="input-icon">
-                <User size={18} />
-              </span>
-              <input
-                id="login-username"
-                type="text"
-                className="form-input"
-                placeholder="أدخل اسم المستخدم"
-                value={username}
-                onChange={(e) => { setUsername(e.target.value); setError(''); }}
-                autoComplete="username"
-                autoFocus={Boolean(routeSlug)}
-                disabled={isLoading}
-              />
-            </div>
+
+          <div className="login-mode-switch" role="tablist" aria-label="طريقة تسجيل الدخول">
+            <button type="button" role="tab" aria-selected={!pinMode} className={!pinMode ? 'is-active' : ''} onClick={() => switchMode(false)}><KeyRound size={17} /> كلمة المرور</button>
+            <button type="button" role="tab" aria-selected={pinMode} className={pinMode ? 'is-active' : ''} onClick={() => switchMode(true)}><Hash size={17} /> رمز PIN</button>
           </div>
 
-          {/* Password Input */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="login-password">كلمة المرور</label>
-            <div className="input-wrapper">
-              <span className="input-icon">
-                <Lock size={18} />
-              </span>
-              <input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                autoComplete="current-password"
-                disabled={isLoading}
-              />
-              <button
-                type="button"
-                className="password-toggle-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-                title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+          {error && <div className="login-card__error" role="alert"><span>!</span><p>{error}</p></div>}
 
-          {/* Forgot Password Link */}
-          <div className="d-flex justify-content-end mb-3">
-            <button
-              type="button"
-              className="btn btn-sm btn-link text-white opacity-75 p-0 text-decoration-none small"
-              onClick={() => setForgotModal(true)}
-              style={{ fontSize: '0.85rem' }}
-            >
-              نسيت كلمة المرور؟
-            </button>
-          </div>
-
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            className="login-submit-btn"
-            loading={isLoading}
-            disabled={isLoading}
-          >
-            تسجيل الدخول
-          </Button>
-        </form>}
-
-        {/* PIN Form */}
-        {pinMode && (
-          <form onSubmit={handlePinSubmit} className="login-form">
-            {!routeSlug && (
-              <div className="form-group">
-                <label className="form-label" htmlFor="pin-tenant">كود الكافيه</label>
-                <div className="input-wrapper">
-                  <span className="input-icon"><Building2 size={18} /></span>
-                  <input
-                    id="pin-tenant"
-                    type="text"
-                    className="form-input"
-                    placeholder="مثال: caffio-downtown"
-                    value={tenantSlug}
-                    onChange={(e) => { setTenantSlug(e.target.value); setError(''); }}
-                    autoComplete="organization"
-                    disabled={pinLoading}
-                  />
+          {!pinMode ? (
+            <form onSubmit={handleSubmit} className="login-form">
+              {!routeSlug && <LoginField id="login-tenant" label="كود الكافيه" icon={Building2} placeholder="مثال: wanas" value={tenantSlug} onChange={(value) => { setTenantSlug(value); setError(''); }} autoComplete="organization" autoFocus disabled={isLoading} hint="الكود الخاص بفرعك أو مؤسستك" />}
+              <LoginField id="login-username" label="اسم المستخدم" icon={User} placeholder="اكتب اسم المستخدم" value={username} onChange={(value) => { setUsername(value); setError(''); }} autoComplete="username" autoFocus={Boolean(routeSlug)} disabled={isLoading} />
+              <div className="login-field">
+                <div className="login-field__label-row"><label htmlFor="login-password">كلمة المرور</label><button type="button" onClick={() => setForgotModal(true)}>نسيت كلمة المرور؟</button></div>
+                <div className="login-field__control">
+                  <Lock size={18} className="login-field__icon" />
+                  <input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="أدخل كلمة المرور" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} autoComplete="current-password" disabled={isLoading} />
+                  <button type="button" className="login-field__password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
                 </div>
               </div>
-            )}
-            <div className="form-group">
-              <label className="form-label" htmlFor="login-pin">رمز PIN</label>
-              <div className="input-wrapper">
-                <span className="input-icon"><Hash size={18} /></span>
-                <input
-                  id="login-pin"
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={8}
-                  className="form-input"
-                  placeholder="••••"
-                  value={pin}
-                  onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
-                  autoFocus
-                  autoComplete="one-time-code"
-                  disabled={pinLoading}
-                  style={{ letterSpacing: '0.4em', fontSize: '1.4rem', textAlign: 'center' }}
-                />
+              <Button type="submit" variant="primary" size="lg" className="login-submit-btn" loading={isLoading} disabled={isLoading} rightIcon={<ArrowLeft size={19} />}>دخول إلى مساحة العمل</Button>
+            </form>
+          ) : (
+            <form onSubmit={handlePinSubmit} className="login-form login-form--pin">
+              {!routeSlug && <LoginField id="pin-tenant" label="كود الكافيه" icon={Building2} placeholder="مثال: wanas" value={tenantSlug} onChange={(value) => { setTenantSlug(value); setError(''); }} autoComplete="organization" disabled={pinLoading} />}
+              <div className="login-field">
+                <label htmlFor="login-pin">رمز الدخول السريع</label>
+                <div className="login-field__control login-field__control--pin"><Hash size={19} className="login-field__icon" /><input id="login-pin" type="password" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder="••••" value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }} autoFocus autoComplete="one-time-code" disabled={pinLoading} /></div>
+                <small className="login-field__hint">رمز من 4 إلى 8 أرقام يحدده مدير المكان.</small>
               </div>
-              <p className="small text-white opacity-50 mt-1 mb-0" style={{ fontSize: '0.78rem' }}>
-                رمز PIN مكوّن من 4-8 أرقام يُحدده المشرف من إدارة المستخدمين.
-              </p>
-            </div>
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="login-submit-btn"
-              loading={pinLoading}
-              disabled={pinLoading}
-            >
-              دخول برمز PIN
-            </Button>
-          </form>
-        )}
-      </div>
+              <Button type="submit" variant="primary" size="lg" className="login-submit-btn" loading={pinLoading} disabled={pinLoading} rightIcon={<ArrowLeft size={19} />}>دخول سريع</Button>
+            </form>
+          )}
 
-      {/* ── FORGOT PASSWORD MODAL ── */}
+          <footer className="login-card__footer">
+            <span><ShieldCheck size={15} /> جلسة محمية ومشفّرة</span>
+            <button type="button" onClick={() => navigate(ROUTES.SUPER_ADMIN_LOGIN)}>مسؤول المنصة؟ <strong>دخول Super Admin</strong></button>
+          </footer>
+        </div>
+        <p className="login-access__support"><Headphones size={16} /> محتاج مساعدة؟ <button type="button" onClick={() => setForgotModal(true)}>تواصل مع الدعم</button></p>
+      </section>
+
       {forgotModal && (
-        <div
-          className="modal fade show d-block"
-          tabIndex="-1"
-          style={{ backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1050 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setForgotModal(false); }}
-        >
-          <div className="modal-dialog modal-dialog-centered w-100" style={{ maxWidth: '480px' }}>
-            <div className="modal-content border-secondary shadow-lg bg-dark text-white">
-              <div className="modal-header border-secondary p-3">
-                <h5 className="modal-title fw-bold text-warning d-flex align-items-center gap-2">
-                  <HelpCircle size={20} />
-                  استعادة كلمة المرور والدعم الفني
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setForgotModal(false)}
-                />
-              </div>
-
-              <div className="modal-body p-4">
-                <div className="p-3 bg-black rounded border border-secondary mb-3">
-                  <h6 className="fw-bold text-white mb-2">👤 للموظفين والكاشيرات:</h6>
-                  <p className="small text-white opacity-75 mb-0">
-                    يرجى التوجه إلى مدير الكافيه / المشرف المسؤول لإعادة تعيين كلمة المرور أو رمز الـ PIN الخاص بك من شاشة إدارة المستخدمين.
-                  </p>
-                </div>
-
-                <div className="p-3 bg-black rounded border border-secondary">
-                  <h6 className="fw-bold text-warning mb-2">🏢 لمالكي الكافيهات والمديرين:</h6>
-                  <p className="small text-white opacity-75 mb-3">
-                    يمكنك التواصل المباشر مع إدارة المنصة والدعم الفني عبر واتساب لاستعادة الحساب وتعيين كلمة مرور جديدة فوراً.
-                  </p>
-                  <button
-                    type="button"
-                    className="btn btn-success w-100 fw-bold d-flex align-items-center justify-content-center gap-2 py-2"
-                    onClick={() => {
-                      const msg = `مرحباً إدارة كافيو، أحتاج مساعدة في استعادة كلمة المرور لحسابي${username ? ` (اسم المستخدم: ${username.trim()})` : ''}${routeSlug ? ` في كافيه: ${routeSlug}` : ''}.`;
-                      window.open(`https://wa.me/201061967618?text=${encodeURIComponent(msg)}`, '_blank');
-                    }}
-                  >
-                    <i className="bi bi-whatsapp fs-5" />
-                    مراسلة الدعم الفني عبر واتساب 📲
-                  </button>
-                </div>
-              </div>
-
-              <div className="modal-footer border-secondary p-3">
-                <button
-                  type="button"
-                  className="btn btn-secondary w-100"
-                  onClick={() => setForgotModal(false)}
-                >
-                  إغلاق
-                </button>
-              </div>
+        <div className="login-modal" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setForgotModal(false); }}>
+          <section className="login-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="support-title">
+            <header><span><HelpCircle size={22} /></span><div><h3 id="support-title">مساعدة تسجيل الدخول</h3><p>هنساعدك ترجع لحسابك بأمان.</p></div><button type="button" onClick={() => setForgotModal(false)} aria-label="إغلاق"><X size={20} /></button></header>
+            <div className="login-modal__body">
+              <article><User size={20} /><div><strong>للموظفين والكاشيرات</strong><p>اطلب من مدير الكافيه إعادة تعيين كلمة المرور أو رمز PIN من إدارة المستخدمين.</p></div></article>
+              <article><Building2 size={20} /><div><strong>للمالك أو المدير</strong><p>تواصل مع دعم Caffio لتأكيد بيانات المؤسسة واستعادة الحساب.</p></div></article>
+              <button type="button" className="login-modal__whatsapp" onClick={() => window.open(`https://wa.me/201061967618?text=${encodeURIComponent(supportMessage)}`, '_blank')}><Headphones size={18} /> مراسلة الدعم عبر واتساب</button>
             </div>
-          </div>
+          </section>
         </div>
       )}
-    </div>
+    </main>
   );
+}
+
+function LoginField({ id, label, icon: Icon, hint, onChange, ...inputProps }) {
+  return <div className="login-field"><label htmlFor={id}>{label}</label><div className="login-field__control"><Icon size={18} className="login-field__icon" /><input id={id} onChange={(e) => onChange(e.target.value)} {...inputProps} /></div>{hint && <small className="login-field__hint">{hint}</small>}</div>;
 }

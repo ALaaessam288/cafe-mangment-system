@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
+import CategoryGrid from './CategoryGrid';
 import ProductGrid from './ProductGrid';
 import QuickAccessBar from './QuickAccessBar';
 import {
@@ -13,9 +14,9 @@ import {
 /**
  * The cashier's product area.
  *
- * Defaults to ⭐ الأكثر طلبًا so the common items are one click away, keeps the
- * top-level tabs down to a handful of groups, and searches the WHOLE menu
- * (not just the open category) as the cashier types.
+ * Supports the 3 main super groups (مشروبات 🥤, مأكولات 🍽️, حلويات 🍰) + الأكثر طلباً ⭐.
+ * Clicking a group presents interactive Category Cards, allowing the cashier to choose
+ * the desired category before viewing its products, with seamless 1-tap back navigation.
  */
 export default function MenuPanel({
   categories,
@@ -39,14 +40,20 @@ export default function MenuPanel({
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
   const visibleProducts = useMemo(() => {
-    // Search always spans the entire menu - the cashier shouldn't have to be in
-    // the right category first.
+    // Search always spans the entire menu
     if (searchQuery.trim()) return searchProducts(products, searchQuery, categories);
     if (activeGroupId === TOP_SELLERS_ID) return topProducts;
     return productsForGroup(products, activeGroup, activeCategoryId);
   }, [searchQuery, products, categories, activeGroupId, activeGroup, activeCategoryId, topProducts]);
 
   const isSearching = searchQuery.trim().length > 0;
+
+  // Decide whether to show category cards grid or products grid
+  const shouldShowCategoryCards =
+    !isSearching &&
+    activeGroupId !== TOP_SELLERS_ID &&
+    activeCategoryId === null &&
+    (activeGroup?.categories?.length > 1);
 
   useEffect(() => {
     setHighlightIndex(0);
@@ -115,6 +122,11 @@ export default function MenuPanel({
   return (
     <section className="pos__menu">
       <div className="pos__menu-header">
+        <div className="pos__menu-title">
+          <span>02</span>
+          <strong>المنيو</strong>
+          <small>اختار الصنف — ضغطة واحدة تضيفه للأوردر</small>
+        </div>
         <SearchBar
           ref={searchRef}
           value={searchQuery}
@@ -151,21 +163,58 @@ export default function MenuPanel({
         <QuickAccessBar products={quickAccessProducts} onProductClick={onProductClick} />
       )}
 
-      <ProductGrid
-        products={visibleProducts}
-        loading={loading}
-        highlightIndex={isSearching ? highlightIndex : -1}
-        onProductClick={onProductClick}
-        onProductDetails={onProductDetails}
-        cardRefs={cardRefs}
-        emptyText={
-          isSearching
-            ? 'مفيش صنف بالاسم ده.'
-            : activeGroupId === TOP_SELLERS_ID
-              ? 'لسه مفيش مبيعات كفاية — اختار قسم من فوق.'
-              : 'مفيش أصناف متاحة في القسم ده.'
-        }
-      />
+      {/* Active Category Breadcrumb Bar when browsing inside a category */}
+      {!isSearching && activeGroupId !== TOP_SELLERS_ID && activeCategoryId !== null && (
+        <div className="pos-category-active-bar animate-fade-in">
+          <button
+            type="button"
+            className="pos-category-back-btn"
+            onClick={() => setActiveCategoryId(null)}
+            title={`رجوع لكافة أقسام ${activeGroup?.label || ''}`}
+          >
+            <span>🔙</span>
+            <strong>رجوع لأقسام {activeGroup?.label || ''}</strong>
+          </button>
+          <div className="pos-category-active-info">
+            <span className="pos-category-active-name">
+              {activeCategoryId === 'ALL'
+                ? `كل أصناف ${activeGroup?.label || ''}`
+                : (activeGroup?.categories?.find((c) => c.id === activeCategoryId)?.displayName ||
+                   activeGroup?.categories?.find((c) => c.id === activeCategoryId)?.name ||
+                   'القسم')}
+            </span>
+            <span className="pos-category-active-count">({visibleProducts.length} صنف)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Show Category Cards Grid or Products Grid */}
+      {shouldShowCategoryCards ? (
+        <CategoryGrid
+          categories={activeGroup.categories}
+          groupLabel={activeGroup.label}
+          groupIcon={activeGroup.icon}
+          onSelectCategory={setActiveCategoryId}
+          onViewAll={() => setActiveCategoryId('ALL')}
+        />
+      ) : (
+        <ProductGrid
+          products={visibleProducts}
+          loading={loading}
+          highlightIndex={isSearching ? highlightIndex : -1}
+          onProductClick={onProductClick}
+          onProductDetails={onProductDetails}
+          cardRefs={cardRefs}
+          emptyText={
+            isSearching
+              ? 'مفيش صنف بالاسم ده.'
+              : activeGroupId === TOP_SELLERS_ID
+                ? 'لسه مفيش مبيعات كفاية — اختار قسم من فوق.'
+                : 'مفيش أصناف متاحة في القسم ده.'
+          }
+        />
+      )}
     </section>
   );
 }
+

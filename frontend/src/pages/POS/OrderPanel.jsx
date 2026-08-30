@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus, Minus, Undo2, Printer, Tag, Sparkles, Trash2, Edit3, ShoppingBag, MapPin, Phone } from 'lucide-react';
+import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus, Minus, Undo2, Printer, Tag, Sparkles, Trash2, Edit3, ShoppingBag, MapPin, Phone, ReceiptText } from 'lucide-react';
 import Spinner from '../../components/Spinner/Spinner';
 import Badge from '../../components/Badge/Badge';
 import DiscountServiceModal from '../../components/DiscountServiceModal/DiscountServiceModal';
@@ -9,6 +9,7 @@ import {
   NEXT_STEP,
   itemStatusLabel,
   itemStatusVariant,
+  orderStatusLabel,
   serveAction,
   serveNextStep,
 } from '../../utils/labels';
@@ -94,51 +95,59 @@ export default function OrderPanel({
   const disableSendBtn = !order?.items?.length || !hasNewItems;
 
   const isDelivery = order?.type === 'TAKEAWAY' && Boolean(order.customerAddress || order.deliveryFee > 0);
+  const activeItemCount = order?.items?.reduce(
+    (total, item) => item.status === 'CANCELLED' ? total : total + Number(item.quantity || 0),
+    0,
+  ) || 0;
+  const ticketNumber = order?.orderNumber ?? (order?.id ? String(order.id).slice(-6) : '---');
 
   return (
     <aside className="pos__order">
-      <div className="pos__panel-header" style={{ height: order?.customerAddress ? 'auto' : undefined, minHeight: '40px', padding: '6px 10px' }}>
-        {order?.type === 'TAKEAWAY' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%', lineHeight: 1.2 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }}>
-                {isDelivery ? <Bike size={13} style={{ color: '#8b5cf6' }} /> : <ShoppingBag size={13} style={{ color: 'var(--accent)' }} />}
-                <span>{isDelivery ? 'دليفري' : 'تيك أواي'}: {order.customerName || 'تيك أواي'}</span>
+      <div className={`pos__panel-header pos-ticket-header ${order ? 'pos-ticket-header--active' : ''}`}>
+        {order ? (
+          <>
+            <div className="pos-ticket-header__topline">
+              <div className="pos-ticket-header__number">
+                <ReceiptText size={14} />
+                <span>أوردر</span>
+                <strong>#{ticketNumber}</strong>
+              </div>
+              <span className={`pos-ticket-header__status pos-ticket-header__status--${String(order.status || 'open').toLowerCase()}`}>
+                {orderStatusLabel(order.status)}
               </span>
-              {order.customerPhone && (
-                <span style={{ fontSize: '11px', color: 'var(--accent-hover)', fontFamily: 'var(--font-mono)' }}>
-                  {order.customerPhone}
-                </span>
-              )}
+              <span className="pos-ticket-header__count">{activeItemCount} صنف</span>
             </div>
+
+            <div className="pos-ticket-header__details">
+              <div className="pos-ticket-header__identity">
+                <span className={`pos-ticket-header__type ${isDelivery ? 'pos-ticket-header__type--delivery' : ''}`}>
+                  {isDelivery ? <Bike size={13} /> : order.type === 'TAKEAWAY' ? <ShoppingBag size={13} /> : <Utensils size={13} />}
+                  {isDelivery ? 'دليفري' : order.type === 'TAKEAWAY' ? 'تيك أواي' : `ترابيزة ${table?.number ?? order.tableNumber ?? ''}`}
+                </span>
+                <strong>{order.customerName || (order.type === 'TAKEAWAY' ? 'عميل تيك أواي' : 'أوردر الصالة')}</strong>
+              </div>
+
+              <div className="pos-ticket-header__meta">
+                {order.customerPhone && <span dir="ltr"><Phone size={10} /> {order.customerPhone}</span>}
+                {order.guestCount > 0 && <span><Users size={10} /> {order.guestCount}</span>}
+                {table && onMoveTable && (
+                  <button type="button" onClick={onMoveTable} title="نقل أو دمج الترابيزة">نقل / دمج</button>
+                )}
+              </div>
+            </div>
+
             {order.customerAddress && (
-              <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
-                <MapPin size={11} style={{ color: '#8b5cf6', flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.customerAddress}</span>
+              <div className="pos-ticket-header__address" title={order.customerAddress}>
+                <MapPin size={11} />
+                <span>{order.customerAddress}</span>
               </div>
             )}
-          </div>
-        ) : table ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>ترابيزة {table.number}</span>
-            {order && onMoveTable && (
-              <button 
-                className="btn btn--secondary btn--sm" 
-                onClick={onMoveTable}
-                title="نقل / دمج الطاولة"
-                style={{ padding: '4px 8px', fontSize: '11px' }}
-              >
-                نقل / دمج
-              </button>
-            )}
-          </div>
+          </>
         ) : (
-          <span className="text-muted">اختار ترابيزة أو أوردر</span>
-        )}
-        {order?.guestCount && (
-          <span className="pos__guest-count">
-            <Users size={13} /> {order.guestCount}
-          </span>
+          <>
+            <span className="pos__station-number pos__station-number--order">03</span>
+            <span className="text-muted">اختار ترابيزة أو أوردر</span>
+          </>
         )}
       </div>
 
@@ -148,9 +157,17 @@ export default function OrderPanel({
         /* Nothing picked yet. One instruction, pointing at the one place to look - the table
            grid is on the right in this RTL layout. */
         <div className="pos__empty pos__empty--start">
+          <div className="pos-empty-orbit" aria-hidden="true">
+            <i /><i /><span><Users size={22} /></span>
+          </div>
           <div className="pos__empty-title">ابدأ من الترابيزات</div>
           <div className="pos__empty-hint">
             اختار ترابيزة من على اليمين، أو دوس «تيك أواي» لأوردر خارجي.
+          </div>
+          <div className="pos-empty-steps" aria-label="خطوات إنشاء الطلب">
+            <span><b>1</b> اختار</span><i />
+            <span><b>2</b> ضيف</span><i />
+            <span><b>3</b> ابعت</span>
           </div>
         </div>
       ) : !order ? (
@@ -158,11 +175,19 @@ export default function OrderPanel({
            أوردر" right after the other message said "اختار ترابيزة أو أوردر عشان تبدأ" - two
            different instructions for what is really one continuous flow. */
         <div className="pos__empty pos__empty--start">
+          <div className="pos-empty-orbit pos-empty-orbit--ready" aria-hidden="true">
+            <i /><i /><span><Utensils size={22} /></span>
+          </div>
           <div className="pos__empty-title">
             {table ? `ترابيزة ${table.number} فاضية` : 'الترابيزة فاضية'}
           </div>
           <div className="pos__empty-hint">
             دوس على أي صنف من المنيو والأوردر هيتفتح لوحده.
+          </div>
+          <div className="pos-empty-steps pos-empty-steps--ready">
+            <span><b>✓</b> اختارت</span><i />
+            <span><b>2</b> ضيف صنف</span><i />
+            <span><b>3</b> ابعت</span>
           </div>
         </div>
       ) : (

@@ -225,6 +225,29 @@
   box-shadow: 0 0 6px var(--accent);
 }
 
+/* POS command header: quieter chrome, clearer groups, more room for selling. */
+.app-layout:has(.pos-shell--creative) .app-topbar {
+  height:44px;
+  padding:4px 8px;
+  gap:8px;
+  border-bottom-color:rgba(148,163,184,.1);
+  background:linear-gradient(105deg,#111825,#070b12 58%,#11150f);
+  box-shadow:0 6px 20px rgba(0,0,0,.28);
+}
+.app-layout:has(.pos-shell--creative) .app-topbar::after { content:'';position:absolute;right:10px;bottom:-1px;width:86px;height:2px;background:linear-gradient(90deg,var(--accent),transparent);box-shadow:0 0 12px rgba(245,158,11,.35); }
+.app-layout:has(.pos-shell--creative) .app-topbar__start { height:34px;gap:7px;padding:0 4px;border:1px solid rgba(245,158,11,.1);border-radius:11px 4px 11px 11px;background:rgba(245,158,11,.025); }
+.app-layout:has(.pos-shell--creative) .app-topbar__menu-btn { height:28px;border-radius:8px 3px 8px 8px; }
+.app-layout:has(.pos-shell--creative) .app-topbar__brand { padding-inline:4px 8px; }
+.app-layout:has(.pos-shell--creative) .app-topbar__brand-name { max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.app-layout:has(.pos-shell--creative) .app-topbar__center { min-width:0;flex:1;gap:7px; }
+.app-layout:has(.pos-shell--creative) .app-topbar__search-btn { width:min(32vw,340px);height:30px;justify-content:flex-start;border-radius:9px;background:rgba(3,8,14,.42); }
+.app-layout:has(.pos-shell--creative) .app-topbar__search-placeholder { flex:1;text-align:start; }
+.app-layout:has(.pos-shell--creative) .app-topbar__clock-chip { height:30px;border-radius:9px;background:rgba(255,255,255,.022); }
+.app-layout:has(.pos-shell--creative) .app-topbar__end { height:34px;gap:4px;padding:2px 4px;border:1px solid rgba(148,163,184,.09);border-radius:10px;background:rgba(255,255,255,.018); }
+.app-layout:has(.pos-shell--creative) .app-topbar__action-btn { width:27px;height:27px;border:0;background:transparent; }
+.app-layout:has(.pos-shell--creative) .app-topbar__user-chip { height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.035); }
+@media(max-width:980px){.app-layout:has(.pos-shell--creative) .app-topbar__search-placeholder,.app-layout:has(.pos-shell--creative) .app-topbar__date,.app-layout:has(.pos-shell--creative) .app-topbar__clock-divider{display:none}.app-layout:has(.pos-shell--creative) .app-topbar__search-btn{width:auto}.app-layout:has(.pos-shell--creative) .app-topbar__user-name{display:none}}
+
 /* ═══════════════════════════════════════
    BACKDROP OVERLAY
 ═══════════════════════════════════════ */
