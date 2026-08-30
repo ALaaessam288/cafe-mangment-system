@@ -41,6 +41,11 @@ export default function ReportsPage() {
   const [payrollData, setPayrollData] = useState(null);
   const [bestSellers, setBestSellers] = useState([]);
   const [hourlySales, setHourlySales] = useState([]);
+  const [recipeData, setRecipeData] = useState(null);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+  const [simulatorRawId, setSimulatorRawId] = useState('');
+  const [simulatorGrams, setSimulatorGrams] = useState('250');
+  const [simulatorCostPerKg, setSimulatorCostPerKg] = useState('400');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('FINANCIAL');
@@ -146,13 +151,72 @@ export default function ReportsPage() {
         // Load payroll data
         const pData = await employeesApi.getPayrollSummary(payrollStartDate, payrollEndDate);
         setPayrollData(pData);
+
+        // Load recipe profitability data
+        try {
+          const recData = await reportsApi.getRecipeProfitability(params);
+          setRecipeData(recData);
+          if (recData?.rawMaterials?.length > 0 && !simulatorRawId) {
+            setSimulatorRawId(String(recData.rawMaterials[0].id));
+            if (recData.rawMaterials[0].costPer1000Units > 0) {
+              setSimulatorCostPerKg(String(recData.rawMaterials[0].costPer1000Units));
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load recipe profitability', e);
+        }
       }
     } catch (err) {
       toast.error(err.message, 'فشل تحميل بيانات التقارير');
     } finally {
       setLoading(false);
     }
-  }, [toast, canViewReports, filterMode, selectedFilterShiftId, startDate, endDate, payrollStartDate, payrollEndDate]);
+  }, [toast, canViewReports, filterMode, selectedFilterShiftId, startDate, endDate, payrollStartDate, payrollEndDate, simulatorRawId]);
+
+  const loadRecipeData = useCallback(async () => {
+    if (!canViewReports) return;
+    setRecipeLoading(true);
+    try {
+      let params = {};
+      if (filterMode === 'SHIFT' && selectedFilterShiftId) {
+        params.shiftId = selectedFilterShiftId;
+      } else if (filterMode === 'DATES') {
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+      }
+      const data = await reportsApi.getRecipeProfitability(params);
+      setRecipeData(data);
+      if (data?.rawMaterials?.length > 0 && !simulatorRawId) {
+        setSimulatorRawId(String(data.rawMaterials[0].id));
+      }
+    } catch (err) {
+      toast.error(err.message, 'فشل تحميل تقرير ربحية الوصفات');
+    } finally {
+      setRecipeLoading(false);
+    }
+  }, [canViewReports, filterMode, selectedFilterShiftId, startDate, endDate, simulatorRawId, toast]);
+
+  const loadAnalytics = useCallback(async () => {
+    if (!canViewReports) return;
+    setAnalyticsLoading(true);
+    try {
+      let params = {};
+      if (filterMode === 'DATES') {
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+      }
+      const [bs, hs] = await Promise.all([
+        reportsApi.getBestSellers(params),
+        reportsApi.getHourlySales(params)
+      ]);
+      setBestSellers(bs || []);
+      setHourlySales(hs || []);
+    } catch (err) {
+      toast.error(err.message, 'فشل تحميل التحليلات');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [canViewReports, filterMode, startDate, endDate, toast]);
 
   useEffect(() => {
     loadData();
@@ -431,6 +495,12 @@ export default function ReportsPage() {
             onClick={() => { sounds.playTap(); setActiveTab('HOURLY'); loadAnalytics(); }}
           >
             <Activity size={16} /> خريطة المبيعات بالساعة
+          </button>
+          <button
+            className={`reports-tab-btn ${activeTab === 'RECIPES' ? 'reports-tab-btn--active' : ''}`}
+            onClick={() => { sounds.playTap(); setActiveTab('RECIPES'); loadRecipeData(); }}
+          >
+            <Layers size={16} /> ربحية الوصفات والمواد الخام ☕
           </button>
         </div>
       )}
@@ -1242,6 +1312,389 @@ export default function ReportsPage() {
                 </div>
               );
             })()
+          )}
+        </div>
+      )}
+
+      {/* ── RECIPE PROFITABILITY & YIELD TAB ── */}
+      {canViewReports && activeTab === 'RECIPES' && (
+        <div className="animate-fade-in-up" style={{ padding: '0 1rem 1.5rem' }}>
+          
+          {/* Section Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <h3 style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem' }}>
+                <Layers size={22} /> تحليل ربحية الوصفات والمواد الخام ☕
+              </h3>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                حساب إنتاجية الخامات (بالجرامات) وتكلفة الفنجان وصافي الأرباح المتوقعة والفعلية — {periodLabel}
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={14} />} onClick={loadRecipeData} loading={recipeLoading}>
+              تحديث البيانات
+            </Button>
+          </div>
+
+          {recipeLoading ? (
+            <div className="data-table-empty"><Spinner /></div>
+          ) : !recipeData || recipeData.rawMaterials?.length === 0 ? (
+            <div className="data-table-empty" style={{ padding: '3rem 1rem' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '8px' }}>☕</div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '4px' }}>لم يتم العثور على خامات أو وصفات مسجلة</div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                يمكنك ربط المنتجات بالمواد الخام من شاشة المنتجات والمخزون للاستفادة من تقارير الربحية الدقيقة.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {/* Top 4 KPI Metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '1.5rem' }}>
+                <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>💰 مبيعات الوصفات في الفترة</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--accent)' }}>
+                    {formatCurrency(recipeData.totalRecipeRevenue || 0)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>إجمالي الإيراد من الأصناف المعتمدة على خامات</div>
+                </div>
+
+                <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>📦 تكلفة الخامات المستهلكة</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#ef4444' }}>
+                    {formatCurrency(recipeData.totalRecipeCost || 0)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>تكلفة المواد الخام المنصرفة في المبيعات</div>
+                </div>
+
+                <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>🚀 صافي أرباح الوصفات المحققة</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--success)' }}>
+                    {formatCurrency(recipeData.totalRecipeGrossProfit || 0)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>الأرباح المتبقية بعد خصم تكلفة الخامات</div>
+                </div>
+
+                <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>🎯 متوسط هامش الربح الإجمالي</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#38bdf8' }}>
+                    {(recipeData.averageProfitMarginPercent || 0).toFixed(1)}%
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>نسبة العائد الصافي من إجمالي سعر البيع</div>
+                </div>
+              </div>
+
+              {/* 🧮 Interactive Yield & Profit Simulator */}
+              {(() => {
+                const currentRaw = recipeData.rawMaterials.find(r => String(r.id) === String(simulatorRawId)) || recipeData.rawMaterials[0];
+                const grams = parseFloat(simulatorGrams) || 0;
+                const costKg = parseFloat(simulatorCostPerKg) || (currentRaw ? currentRaw.costPer1000Units : 400);
+                const costGram = costKg / 1000.0;
+                const batchCost = grams * costGram;
+
+                const rawProducts = currentRaw?.products || [];
+
+                return (
+                  <div style={{
+                    background: 'linear-gradient(145deg, rgba(245, 158, 11, 0.06), rgba(16, 185, 129, 0.04))',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    marginBottom: '2rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '26px' }}>🧮</span>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)', fontWeight: 'bold' }}>
+                            محاكي وحاسبة أرباح الخامات والوصفات (Yield & Profit Simulator)
+                          </h4>
+                          <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            اكتب كمية الخامة بالجرام وسعر الكيلو لتعرف فوراً عدد الفناجين المنتجة، الإيراد المتوقع، وصافي الأرباح
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Simulator Inputs Bar */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '14px',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      marginBottom: '16px'
+                    }}>
+                      {/* Select Raw Material */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                          اختر المادة الخام:
+                        </label>
+                        <select
+                          className="field-select__control"
+                          value={currentRaw?.id || ''}
+                          onChange={(e) => {
+                            setSimulatorRawId(e.target.value);
+                            const found = recipeData.rawMaterials.find(r => String(r.id) === e.target.value);
+                            if (found && found.costPer1000Units > 0) {
+                              setSimulatorCostPerKg(String(found.costPer1000Units));
+                            }
+                          }}
+                          style={{ width: '100%', height: '42px' }}
+                        >
+                          {recipeData.rawMaterials.map(rm => (
+                            <option key={rm.id} value={rm.id}>
+                              {rm.name} (المخزون: {rm.currentStock} {rm.unit})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Input Weight / Grams */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                          الوزن / الكمية ({currentRaw?.unit || 'جرام'}):
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="input"
+                          value={simulatorGrams}
+                          onChange={(e) => setSimulatorGrams(e.target.value)}
+                          placeholder="مثلاً 250"
+                          style={{ width: '100%', height: '42px', fontSize: '16px', fontWeight: 'bold', textAlign: 'center' }}
+                        />
+                        {/* Quick Presets */}
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                          {[100, 250, 500, 1000].map(amt => (
+                            <button
+                              key={amt}
+                              type="button"
+                              style={{
+                                flex: 1,
+                                padding: '4px 6px',
+                                fontSize: '11px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: parseFloat(simulatorGrams) === amt ? 'var(--accent)' : 'var(--bg-secondary)',
+                                color: parseFloat(simulatorGrams) === amt ? '#000' : 'var(--text-primary)',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => setSimulatorGrams(String(amt))}
+                            >
+                              {amt} ج
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Input Cost per Kg */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                          سعر شراء الكيلو (ج.م / 1000 {currentRaw?.unit || 'جرام'}):
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="10"
+                          className="input"
+                          value={simulatorCostPerKg}
+                          onChange={(e) => setSimulatorCostPerKg(e.target.value)}
+                          placeholder="مثلاً 400"
+                          style={{ width: '100%', height: '42px', fontSize: '16px', fontWeight: 'bold', textAlign: 'center' }}
+                        />
+                        {/* Cost Presets */}
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                          {[300, 400, 500, 600].map(c => (
+                            <button
+                              key={c}
+                              type="button"
+                              style={{
+                                flex: 1,
+                                padding: '4px 6px',
+                                fontSize: '11px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: parseFloat(simulatorCostPerKg) === c ? 'var(--accent)' : 'var(--bg-secondary)',
+                                color: parseFloat(simulatorCostPerKg) === c ? '#000' : 'var(--text-primary)',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => setSimulatorCostPerKg(String(c))}
+                            >
+                              {c} ج
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Simulation Cards for Each Recipe Product */}
+                    <div style={{ marginBottom: '10px', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                      📊 العائد والأرباح المتوقعة لـ <span style={{ color: 'var(--accent)' }}>{grams} {currentRaw?.unit || 'جرام'}</span> {currentRaw?.name} (تكلفة الشراء الإجمالية: <span style={{ color: '#ef4444' }}>{formatCurrency(batchCost)}</span>):
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+                      {rawProducts.map(prod => {
+                        const deduction = prod.deductionQuantity || 10;
+                        const yieldCups = Math.floor((grams / deduction) * 10) / 10;
+                        const expectedRev = yieldCups * prod.sellingPrice;
+                        const prodCostPerCup = deduction * costGram;
+                        const prodProfitPerCup = prod.sellingPrice - prodCostPerCup;
+                        const totalProfit = expectedRev - batchCost;
+                        const marginPct = prod.sellingPrice > 0 ? (prodProfitPerCup / prod.sellingPrice) * 100 : 0;
+
+                        return (
+                          <div
+                            key={prod.productId}
+                            style={{
+                              background: 'var(--bg-surface)',
+                              border: '1px solid rgba(245, 158, 11, 0.3)',
+                              borderRadius: '12px',
+                              padding: '16px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '10px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                              <div>
+                                <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                                  ☕ {prod.productName}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                  الاستهلاك: <strong>{deduction} {currentRaw?.unit || 'جرام'}</strong> / فنجان • سعر البيع: <strong>{formatCurrency(prod.sellingPrice)}</strong>
+                                </div>
+                              </div>
+                              <Badge variant="success" style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>
+                                هامش {marginPct.toFixed(0)}%
+                              </Badge>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.85rem' }}>
+                              <div style={{ background: 'var(--bg-secondary)', padding: '8px 10px', borderRadius: '8px' }}>
+                                <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.75rem' }}>☕ الإنتاجية الصافية:</span>
+                                <strong style={{ fontSize: '1.1rem', color: 'var(--accent)' }}>{yieldCups} فنجان</strong>
+                              </div>
+
+                              <div style={{ background: 'var(--bg-secondary)', padding: '8px 10px', borderRadius: '8px' }}>
+                                <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.75rem' }}>💵 إجمالي الإيراد:</span>
+                                <strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{formatCurrency(expectedRev)}</strong>
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(16, 185, 129, 0.1)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              borderRadius: '8px',
+                              padding: '10px 12px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <div>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>🚀 صافي الربح من الـ {grams} جرام:</span>
+                                <strong style={{ fontSize: '1.2rem', color: 'var(--success)' }}>{formatCurrency(totalProfit)}</strong>
+                              </div>
+                              <div style={{ textAlign: 'left', fontSize: '0.8rem' }}>
+                                <div style={{ color: 'var(--text-secondary)' }}>الربح لكل فنجان:</div>
+                                <strong style={{ color: 'var(--success)' }}>+{formatCurrency(prodProfitPerCup)}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 📋 All Recipe Products Profitability Table */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', marginTop: '1.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} /> جدول أرباح ومبيعات كافة الوصفات ({recipeData.recipes?.length || 0} صنف)
+                </h4>
+              </div>
+
+              <div className="data-table-wrap" style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'right' }}>الصنف</th>
+                      <th>المادة الخام</th>
+                      <th>معيار الفنجان</th>
+                      <th>سعر البيع</th>
+                      <th>تكلفة الفنجان</th>
+                      <th>صافي ربح الفنجان</th>
+                      <th>هامش الربح</th>
+                      <th>إنتاجية 250 جرام</th>
+                      <th>إيراد 250 جرام</th>
+                      <th>المبيعات الفعلية</th>
+                      <th>الخام المستهلك</th>
+                      <th>صافي الربح الفعلي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recipeData.recipes.map((item) => (
+                      <tr key={item.productId}>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                          <div>{item.productName}</div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.categoryName}</span>
+                        </td>
+                        <td>
+                          <Badge variant="neutral">{item.rawMaterialName}</Badge>
+                        </td>
+                        <td className="data-table__number">
+                          <strong>{item.deductionQuantity}</strong> {item.rawMaterialUnit}
+                        </td>
+                        <td className="data-table__number" style={{ fontWeight: 'bold' }}>
+                          {formatCurrency(item.sellingPrice)}
+                        </td>
+                        <td className="data-table__number" style={{ color: '#ef4444' }}>
+                          {formatCurrency(item.costPerUnitSold)}
+                        </td>
+                        <td className="data-table__number" style={{ color: 'var(--success)', fontWeight: 'bold' }}>
+                          +{formatCurrency(item.profitPerUnitSold)}
+                        </td>
+                        <td className="data-table__number">
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: 'bold',
+                            background: item.profitMarginPercent >= 70 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                            color: item.profitMarginPercent >= 70 ? '#10b981' : '#f59e0b'
+                          }}>
+                            {item.profitMarginPercent.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="data-table__number" style={{ color: 'var(--accent)' }}>
+                          {item.yieldPer250Units} فنجان
+                        </td>
+                        <td className="data-table__number" style={{ fontWeight: 'bold' }}>
+                          {formatCurrency(item.revenuePer250Units)}
+                        </td>
+                        <td className="data-table__number" style={{ fontWeight: 'bold' }}>
+                          {item.actualQuantitySold > 0 ? (
+                            <span style={{ color: 'var(--accent)' }}>{item.actualQuantitySold} وحدة</span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>0</span>
+                          )}
+                        </td>
+                        <td className="data-table__number" style={{ color: 'var(--text-secondary)' }}>
+                          {(item.actualQuantitySold * item.deductionQuantity).toFixed(1)} {item.rawMaterialUnit}
+                        </td>
+                        <td className="data-table__number" style={{ color: item.actualProfit > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>
+                          {item.actualProfit > 0 ? `+${formatCurrency(item.actualProfit)}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </div>
       )}

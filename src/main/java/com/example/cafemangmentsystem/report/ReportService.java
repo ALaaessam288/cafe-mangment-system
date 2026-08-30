@@ -49,6 +49,8 @@ public class ReportService {
     private final PaymentRepository paymentRepository;
     private final ShiftRepository shiftRepository;
     private final DebtRepository debtRepository;
+    private final com.example.cafemangmentsystem.inventory.repository.ProductRecipeRepository productRecipeRepository;
+    private final com.example.cafemangmentsystem.inventory.repository.ShiftAuditItemRepository shiftAuditItemRepository;
 
     private static class SalesAccumulator {
         final String name;
@@ -344,5 +346,163 @@ public class ReportService {
                     .atTime(LocalTime.MAX).atZone(ZoneId.of("Africa/Cairo")).toInstant(); } catch (Exception ignored) {}
         }
         return new Instant[]{ start, end };
+    }
+
+    @Transactional(readOnly = true)
+    public com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto getRecipeProfitability(
+            String startDate, String endDate, Long shiftId) {
+        
+        Instant startInstant = null;
+        Instant endInstant = null;
+
+        if (shiftId != null) {
+            Shift shift = shiftRepository.findById(shiftId).orElse(null);
+            if (shift != null) {
+                startInstant = shift.getOpenedAt();
+                endInstant = shift.getClosedAt() != null ? shift.getClosedAt() : Instant.now();
+            }
+        } else {
+            Instant[] range = resolveDateRange(startDate, endDate);
+            startInstant = range[0];
+            endInstant = range[1];
+        }
+
+        // Aggregate actual sold product quantities in the period
+        List<Order> closedOrders = orderRepository.findByStatus(OrderStatus.CLOSED);
+        final Instant fStart = startInstant;
+        final Instant fEnd = endInstant;
+
+        Map<Long, Integer> productQuantitiesSold = new HashMap<>();
+        for (Order order : closedOrders) {
+            Instant t = order.getClosedAt() != null ? order.getClosedAt() : order.getOpenedAt();
+            if (fStart != null && t.isBefore(fStart)) continue;
+            if (fEnd != null && t.isAfter(fEnd)) continue;
+
+            List<OrderItem> items = orderItemRepository.findByOrder(order);
+            for (OrderItem item : items) {
+                if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
+                if (item.getProduct() != null) {
+                    productQuantitiesSold.merge(item.getProduct().getId(), item.getQuantity(), Integer::sum);
+                }
+            }
+        }
+
+        // Load all shift audit items & recipes
+        List<com.example.cafemangmentsystem.inventory.entity.ShiftAuditItem> auditItems = shiftAuditItemRepository.findAll();
+        List<com.example.cafemangmentsystem.inventory.entity.ProductRecipe> allRecipes = productRecipeRepository.findAll();
+
+        Map<Long, List<com.example.cafemangmentsystem.inventory.entity.ProductRecipe>> recipesByAuditItem = new HashMap<>();
+        for (com.example.cafemangmentsystem.inventory.entity.ProductRecipe r : allRecipes) {
+            if (r.getAuditItem() != null) {
+                recipesByAuditItem.computeIfAbsent(r.getAuditItem().getId(), k -> new ArrayList<>()).add(r);
+            }
+        }
+
+        List<com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto.RawMaterialProfitSummary> rawSummaries = new ArrayList<>();
+        List<com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem> allRecipeItems = new ArrayList<>();
+
+        double grandTotalRevenue = 0.0;
+        double grandTotalCost = 0.0;
+        double grandTotalProfit = 0.0;
+
+        for (com.example.cafemangmentsystem.inventory.entity.ShiftAuditItem item : auditItems) {
+            if (!item.isActive()) continue;
+            List<com.example.cafemangmentsystem.inventory.entity.ProductRecipe> itemRecipes = recipesByAuditItem.getOrDefault(item.getId(), List.of());
+            if (itemRecipes.isEmpty()) continue;
+
+            double unitCost = item.getCostPerUnit() != null && item.getCostPerUnit() > 0 ? item.getCostPerUnit() : 0.40;
+            double cost1000 = unitCost * 1000.0;
+            double cost250 = unitCost * 250.0;
+
+            List<com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem> productItems = new ArrayList<>();
+            double itemConsumedQty = 0.0;
+            double itemGenRevenue = 0.0;
+            double itemRealizedCost = 0.0;
+
+            for (com.example.cafemangmentsystem.inventory.entity.ProductRecipe recipe : itemRecipes) {
+                var prod = recipe.getProduct();
+                if (prod == null || !prod.isActive()) continue;
+
+                double deduction = recipe.getDeductionQuantity() != null && recipe.getDeductionQuantity() > 0
+                        ? recipe.getDeductionQuantity()
+                        : 10.0;
+
+                double price = prod.getPrice() != null ? prod.getPrice().doubleValue() : 0.0;
+                double yield250 = 250.0 / deduction;
+                double yield1000 = 1000.0 / deduction;
+                double rev250 = yield250 * price;
+                double rev1000 = yield1000 * price;
+                double costPerSold = deduction * unitCost;
+                double profitPerSold = price - costPerSold;
+                double marginPct = price > 0 ? (profitPerSold / price) * 100.0 : 0.0;
+
+                int soldQty = productQuantitiesSold.getOrDefault(prod.getId(), 0);
+                double actRev = soldQty * price;
+                double actCost = soldQty * costPerSold;
+                double actProfit = actRev - actCost;
+
+                itemConsumedQty += soldQty * deduction;
+                itemGenRevenue += actRev;
+                itemRealizedCost += actCost;
+
+                var recipeItem = new com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem(
+                        prod.getId(),
+                        prod.getNameAr() != null ? prod.getNameAr() : (prod.getNameEn() != null ? prod.getNameEn() : "منتج #" + prod.getId()),
+                        prod.getCategory() != null ? (prod.getCategory().getNameAr() != null ? prod.getCategory().getNameAr() : prod.getCategory().getNameEn()) : "عام",
+                        price,
+                        item.getId(),
+                        item.getName(),
+                        item.getUnit(),
+                        deduction,
+                        Math.round(yield250 * 10.0) / 10.0,
+                        Math.round(yield1000 * 10.0) / 10.0,
+                        Math.round(rev250 * 100.0) / 100.0,
+                        Math.round(rev1000 * 100.0) / 100.0,
+                        Math.round(costPerSold * 100.0) / 100.0,
+                        Math.round(profitPerSold * 100.0) / 100.0,
+                        Math.round(marginPct * 10.0) / 10.0,
+                        soldQty,
+                        Math.round(actRev * 100.0) / 100.0,
+                        Math.round(actCost * 100.0) / 100.0,
+                        Math.round(actProfit * 100.0) / 100.0
+                );
+
+                productItems.add(recipeItem);
+                allRecipeItems.add(recipeItem);
+            }
+
+            double itemRealProfit = itemGenRevenue - itemRealizedCost;
+            grandTotalRevenue += itemGenRevenue;
+            grandTotalCost += itemRealizedCost;
+            grandTotalProfit += itemRealProfit;
+
+            rawSummaries.add(new com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto.RawMaterialProfitSummary(
+                    item.getId(),
+                    item.getName(),
+                    item.getUnit(),
+                    item.getStockQuantity() != null ? item.getStockQuantity() : 0.0,
+                    unitCost,
+                    cost1000,
+                    cost250,
+                    productItems,
+                    Math.round(itemConsumedQty * 10.0) / 10.0,
+                    Math.round(itemGenRevenue * 100.0) / 100.0,
+                    Math.round(itemRealizedCost * 100.0) / 100.0,
+                    Math.round(itemRealProfit * 100.0) / 100.0
+            ));
+        }
+
+        double avgMargin = grandTotalRevenue > 0
+                ? (grandTotalProfit / grandTotalRevenue) * 100.0
+                : (allRecipeItems.isEmpty() ? 0.0 : allRecipeItems.stream().mapToDouble(com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem::profitMarginPercent).average().orElse(0.0));
+
+        return new com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto(
+                rawSummaries,
+                allRecipeItems,
+                Math.round(grandTotalRevenue * 100.0) / 100.0,
+                Math.round(grandTotalCost * 100.0) / 100.0,
+                Math.round(grandTotalProfit * 100.0) / 100.0,
+                Math.round(avgMargin * 10.0) / 10.0
+        );
     }
 }

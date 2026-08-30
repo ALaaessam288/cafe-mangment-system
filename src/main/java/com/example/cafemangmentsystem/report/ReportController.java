@@ -43,4 +43,13 @@ public class ReportController {
             @RequestParam(required = false) String endDate) {
         return reportService.getHourlySales(startDate, endDate);
     }
+
+    @GetMapping("/recipe-profitability")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR')")
+    public com.example.cafemangmentsystem.report.dto.RecipeProfitabilityDto getRecipeProfitability(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Long shiftId) {
+        return reportService.getRecipeProfitability(startDate, endDate, shiftId);
+    }
 }

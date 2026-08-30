@@ -152,6 +152,14 @@ public class DatabaseSeeder implements CommandLineRunner {
             // Column already exists or table doesn't exist yet
         }
 
+        // Ensure cost_per_unit column exists on shift_audit_items table
+        try {
+            jdbcTemplate.execute("ALTER TABLE shift_audit_items ADD COLUMN cost_per_unit NUMERIC DEFAULT 0.40");
+            System.out.println("[SEEDER] Added cost_per_unit column to shift_audit_items table.");
+        } catch (Exception ignored) {
+            // Column already exists
+        }
+
         // Ensure every existing tenant has a register seeded.
         // This previously inserted into a `deleted` column that doesn't exist on `registers`
         // (the real columns are `deleted_at`/`deleted_by`) and omitted the NOT NULL

@@ -37,9 +37,16 @@ public class ShiftAuditItem extends TenantScopedEntity {
     @Builder.Default
     private boolean requiresAudit = true;
 
+    @Column(name = "cost_per_unit")
+    @Builder.Default
+    private Double costPerUnit = 0.0;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    public Double getCostPerUnit() { return costPerUnit != null ? costPerUnit : 0.0; }
+    public void setCostPerUnit(Double costPerUnit) { this.costPerUnit = costPerUnit; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
