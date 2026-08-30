@@ -20,9 +20,8 @@ public class RegisterService {
     private final RegisterRepository registerRepository;
 
     public RegisterResponse create(RegisterRequest request) {
-        Register register = Register.builder()
-                .name(request.name())
-                .build();
+        Register register = new Register();
+        register.setName(request.name());
 
         return RegisterResponse.from(registerRepository.save(register));
     }
@@ -30,9 +29,8 @@ public class RegisterService {
     public List<RegisterResponse> findAll() {
         List<Register> list = registerRepository.findAll();
         if (list.isEmpty()) {
-            Register defaultRegister = Register.builder()
-                    .name("الكاشير الرئيسي (الدرج 1)")
-                    .build();
+            Register defaultRegister = new Register();
+            defaultRegister.setName("الكاشير الرئيسي (الدرج 1)");
             list = List.of(registerRepository.save(defaultRegister));
         }
         return list.stream()

@@ -82,11 +82,10 @@ public class RefreshTokenService {
     private String issueFor(User user) {
         String raw = generateRawToken();
 
-        RefreshToken token = RefreshToken.builder()
-                .user(user)
-                .tokenHash(hash(raw))
-                .expiresAt(Instant.now().plusMillis(refreshExpirationMs))
-                .build();
+        RefreshToken token = new RefreshToken();
+        token.setUser(user);
+        token.setTokenHash(hash(raw));
+        token.setExpiresAt(Instant.now().plusMillis(refreshExpirationMs));
         refreshTokenRepository.save(token);
 
         return raw;

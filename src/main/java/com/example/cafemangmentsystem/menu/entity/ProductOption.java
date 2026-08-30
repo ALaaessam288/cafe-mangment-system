@@ -37,4 +37,16 @@ public class ProductOption extends TenantScopedEntity {
     @Column(name = "is_default", nullable = false)
     @Builder.Default
     private boolean isDefault = false;
+
+    public Product getProduct() { return product; }
+    public void setProduct(Product product) { this.product = product; }
+
+    public String getNameAr() { return nameAr; }
+    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
+
+    public BigDecimal getPriceDelta() { return priceDelta; }
+    public void setPriceDelta(BigDecimal priceDelta) { this.priceDelta = priceDelta; }
+
+    public boolean isDefault() { return isDefault; }
+    public void setDefault(boolean aDefault) { isDefault = aDefault; }
 }

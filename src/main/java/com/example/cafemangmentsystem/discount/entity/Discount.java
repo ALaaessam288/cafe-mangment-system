@@ -70,4 +70,37 @@ public class Discount extends TenantScopedEntity {
 
     @Column(name = "applied_at", nullable = false)
     private Instant appliedAt;
+
+    public Order getOrder() { return order; }
+    public void setOrder(Order order) { this.order = order; }
+
+    public OrderItem getItem() { return item; }
+    public void setItem(OrderItem item) { this.item = item; }
+
+    public DiscountType getType() { return type; }
+    public void setType(DiscountType type) { this.type = type; }
+
+    public DiscountScope getScope() { return scope; }
+    public void setScope(DiscountScope scope) { this.scope = scope; }
+
+    public BigDecimal getValue() { return value; }
+    public void setValue(BigDecimal value) { this.value = value; }
+
+    public BigDecimal getMaxValue() { return maxValue; }
+    public void setMaxValue(BigDecimal maxValue) { this.maxValue = maxValue; }
+
+    public boolean isRequiresSupervisor() { return requiresSupervisor; }
+    public void setRequiresSupervisor(boolean requiresSupervisor) { this.requiresSupervisor = requiresSupervisor; }
+
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public User getAppliedBy() { return appliedBy; }
+    public void setAppliedBy(User appliedBy) { this.appliedBy = appliedBy; }
+
+    public Instant getAppliedAt() { return appliedAt; }
+    public void setAppliedAt(Instant appliedAt) { this.appliedAt = appliedAt; }
 }

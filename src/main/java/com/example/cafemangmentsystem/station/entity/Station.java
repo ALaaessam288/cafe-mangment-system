@@ -36,4 +36,13 @@ public class Station extends TenantScopedEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "printer_id")
     private Printer printer;
+
+    public StationCode getCode() { return code; }
+    public void setCode(StationCode code) { this.code = code; }
+
+    public String getNameAr() { return nameAr; }
+    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
+
+    public Printer getPrinter() { return printer; }
+    public void setPrinter(Printer printer) { this.printer = printer; }
 }

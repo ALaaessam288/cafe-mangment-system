@@ -17,6 +17,7 @@ import com.example.cafemangmentsystem.order.entity.Order;
 import com.example.cafemangmentsystem.order.entity.OrderItem;
 import com.example.cafemangmentsystem.shift.entity.Shift;
 import com.example.cafemangmentsystem.shift.repository.ShiftRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -46,30 +47,30 @@ public class ShiftAuditService {
     public List<ShiftAuditItemDto> getAuditItems() {
         List<ShiftAuditItem> list = shiftAuditItemRepository.findAllByActiveTrue();
         if (list.isEmpty()) {
-            ShiftAuditItem coffee = ShiftAuditItem.builder()
-                    .name("بن قهوة (جرام)")
-                    .unit("جرام")
-                    .stockQuantity(1000.0)
-                    .minThreshold(200.0)
-                    .requiresAudit(true)
-                    .active(true)
-                    .build();
-            ShiftAuditItem milk = ShiftAuditItem.builder()
-                    .name("حليب / لبن (لتر)")
-                    .unit("لتر")
-                    .stockQuantity(10.0)
-                    .minThreshold(2.0)
-                    .requiresAudit(true)
-                    .active(true)
-                    .build();
-            ShiftAuditItem cups = ShiftAuditItem.builder()
-                    .name("أكواب ورقية (قطعة)")
-                    .unit("قطعة")
-                    .stockQuantity(200.0)
-                    .minThreshold(20.0)
-                    .requiresAudit(true)
-                    .active(true)
-                    .build();
+            ShiftAuditItem coffee = new ShiftAuditItem();
+            coffee.setName("بن قهوة (جرام)");
+            coffee.setUnit("جرام");
+            coffee.setStockQuantity(1000.0);
+            coffee.setMinThreshold(200.0);
+            coffee.setRequiresAudit(true);
+            coffee.setActive(true);
+
+            ShiftAuditItem milk = new ShiftAuditItem();
+            milk.setName("حليب / لبن (لتر)");
+            milk.setUnit("لتر");
+            milk.setStockQuantity(10.0);
+            milk.setMinThreshold(2.0);
+            milk.setRequiresAudit(true);
+            milk.setActive(true);
+
+            ShiftAuditItem cups = new ShiftAuditItem();
+            cups.setName("أكواب ورقية (قطعة)");
+            cups.setUnit("قطعة");
+            cups.setStockQuantity(200.0);
+            cups.setMinThreshold(20.0);
+            cups.setRequiresAudit(true);
+            cups.setActive(true);
+
             list = shiftAuditItemRepository.saveAll(List.of(coffee, milk, cups));
         }
         ensureDefaultCoffeeRecipes();
@@ -96,11 +97,11 @@ public class ShiftAuditService {
             if (gramsPerCup == null) continue;
 
             if (productRecipeRepository.findAllByProductId(product.getId()).isEmpty()) {
-                productRecipeRepository.save(ProductRecipe.builder()
-                        .product(product)
-                        .auditItem(coffeeBeans)
-                        .deductionQuantity(gramsPerCup)
-                        .build());
+                ProductRecipe recipe = new ProductRecipe();
+                recipe.setProduct(product);
+                recipe.setAuditItem(coffeeBeans);
+                recipe.setDeductionQuantity(gramsPerCup);
+                productRecipeRepository.save(recipe);
             }
 
             // A recipe product is controlled by its ingredients. Keeping direct piece tracking
@@ -125,14 +126,13 @@ public class ShiftAuditService {
             item.setRequiresAudit(dto.requiresAudit());
             item.setActive(dto.active());
         } else {
-            item = ShiftAuditItem.builder()
-                    .name(dto.name())
-                    .unit(dto.unit())
-                    .stockQuantity(dto.stockQuantity() != null ? dto.stockQuantity() : 0.0)
-                    .minThreshold(dto.minThreshold() != null ? dto.minThreshold() : 0.0)
-                    .requiresAudit(dto.requiresAudit())
-                    .active(true)
-                    .build();
+            item = new ShiftAuditItem();
+            item.setName(dto.name());
+            item.setUnit(dto.unit());
+            item.setStockQuantity(dto.stockQuantity() != null ? dto.stockQuantity() : 0.0);
+            item.setMinThreshold(dto.minThreshold() != null ? dto.minThreshold() : 0.0);
+            item.setRequiresAudit(dto.requiresAudit());
+            item.setActive(true);
         }
         return ShiftAuditItemDto.from(shiftAuditItemRepository.save(item));
     }
@@ -174,11 +174,10 @@ public class ShiftAuditService {
                 ShiftAuditItem auditItem = shiftAuditItemRepository.findById(dto.auditItemId())
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Audit item not found: " + dto.auditItemId()));
 
-                ProductRecipe recipe = ProductRecipe.builder()
-                        .product(product)
-                        .auditItem(auditItem)
-                        .deductionQuantity(dto.deductionQuantity())
-                        .build();
+                ProductRecipe recipe = new ProductRecipe();
+                recipe.setProduct(product);
+                recipe.setAuditItem(auditItem);
+                recipe.setDeductionQuantity(dto.deductionQuantity());
 
                 savedList.add(productRecipeRepository.save(recipe));
             }
@@ -205,13 +204,12 @@ public class ShiftAuditService {
             item.setStockQuantity(openingVal);
             shiftAuditItemRepository.save(item);
 
-            ShiftAuditRecord record = ShiftAuditRecord.builder()
-                    .shift(shift)
-                    .auditItem(item)
-                    .openingCount(openingVal)
-                    .soldDeductionCount(0.0)
-                    .auditedAt(Instant.now())
-                    .build();
+            ShiftAuditRecord record = new ShiftAuditRecord();
+            record.setShift(shift);
+            record.setAuditItem(item);
+            record.setOpeningCount(openingVal);
+            record.setSoldDeductionCount(0.0);
+            record.setAuditedAt(Instant.now());
 
             savedRecords.add(shiftAuditRecordRepository.save(record));
         }

@@ -54,4 +54,28 @@ public class Payment extends TenantScopedEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cashier_id", nullable = false)
     private User cashier;
+
+    public Order getOrder() { return order; }
+    public void setOrder(Order order) { this.order = order; }
+
+    public PaymentMethod getMethod() { return method; }
+    public void setMethod(PaymentMethod method) { this.method = method; }
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public BigDecimal getReceived() { return received; }
+    public void setReceived(BigDecimal received) { this.received = received; }
+
+    public BigDecimal getChange() { return change; }
+    public void setChange(BigDecimal change) { this.change = change; }
+
+    public String getReference() { return reference; }
+    public void setReference(String reference) { this.reference = reference; }
+
+    public Instant getPaidAt() { return paidAt; }
+    public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
+
+    public User getCashier() { return cashier; }
+    public void setCashier(User cashier) { this.cashier = cashier; }
 }

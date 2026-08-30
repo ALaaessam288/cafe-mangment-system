@@ -24,12 +24,11 @@ public class ProductOptionService {
     public ProductOptionResponse create(Long productId, ProductOptionRequest request) {
         Product product = productService.getOrThrow(productId);
 
-        ProductOption option = ProductOption.builder()
-                .product(product)
-                .nameAr(request.nameAr())
-                .priceDelta(request.priceDelta())
-                .isDefault(request.isDefault())
-                .build();
+        ProductOption option = new ProductOption();
+        option.setProduct(product);
+        option.setNameAr(request.nameAr());
+        option.setPriceDelta(request.priceDelta());
+        option.setDefault(request.isDefault());
 
         return ProductOptionResponse.from(productOptionRepository.save(option));
     }

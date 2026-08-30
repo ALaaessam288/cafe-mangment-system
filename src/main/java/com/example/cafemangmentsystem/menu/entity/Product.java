@@ -77,4 +77,40 @@ public class Product extends SoftDeletableEntity {
 
     @Column(name = "min_stock_threshold")
     private Integer minStockThreshold;
+
+    public Category getCategory() { return category; }
+    public void setCategory(Category category) { this.category = category; }
+
+    public Station getStation() { return station; }
+    public void setStation(Station station) { this.station = station; }
+
+    public RevenueLine getRevenueLine() { return revenueLine; }
+    public void setRevenueLine(RevenueLine revenueLine) { this.revenueLine = revenueLine; }
+
+    public String getNameAr() { return nameAr; }
+    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
+
+    public String getNameEn() { return nameEn; }
+    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
+
+    public BigDecimal getPrice() { return price; }
+    public void setPrice(BigDecimal price) { this.price = price; }
+
+    public boolean isAvailable() { return available; }
+    public void setAvailable(boolean available) { this.available = available; }
+
+    public String getPrepNote() { return prepNote; }
+    public void setPrepNote(String prepNote) { this.prepNote = prepNote; }
+
+    public int getStockQuantity() { return stockQuantity; }
+    public void setStockQuantity(int stockQuantity) { this.stockQuantity = stockQuantity; }
+
+    public int getReservedQuantity() { return reservedQuantity; }
+    public void setReservedQuantity(int reservedQuantity) { this.reservedQuantity = reservedQuantity; }
+
+    public boolean isTrackInventory() { return trackInventory; }
+    public void setTrackInventory(boolean trackInventory) { this.trackInventory = trackInventory; }
+
+    public Integer getMinStockThreshold() { return minStockThreshold; }
+    public void setMinStockThreshold(Integer minStockThreshold) { this.minStockThreshold = minStockThreshold; }
 }

@@ -1,0 +1,4 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <localRepository>C:/Users/alaae/.m2/repository</localRepository>
+  <offline>false</offline>
+</settings>

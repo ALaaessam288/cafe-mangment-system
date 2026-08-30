@@ -96,4 +96,58 @@ public class Expense extends TenantScopedEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "recorded_by", nullable = false)
     private User recordedBy;
+
+    public ExpenseType getType() { return type; }
+    public void setType(ExpenseType type) { this.type = type; }
+
+    public RevenueLine getRevenueLine() { return revenueLine; }
+    public void setRevenueLine(RevenueLine revenueLine) { this.revenueLine = revenueLine; }
+
+    public ExpenseStatus getStatus() { return status; }
+    public void setStatus(ExpenseStatus status) { this.status = status; }
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public BigDecimal getAdvanceAmount() { return advanceAmount; }
+    public void setAdvanceAmount(BigDecimal advanceAmount) { this.advanceAmount = advanceAmount; }
+
+    public BigDecimal getActualAmount() { return actualAmount; }
+    public void setActualAmount(BigDecimal actualAmount) { this.actualAmount = actualAmount; }
+
+    public BigDecimal getReturnedAmount() { return returnedAmount; }
+    public void setReturnedAmount(BigDecimal returnedAmount) { this.returnedAmount = returnedAmount; }
+
+    public boolean isAdvance() { return isAdvance; }
+    public void setAdvance(boolean advance) { isAdvance = advance; }
+
+    public Instant getSettledAt() { return settledAt; }
+    public void setSettledAt(Instant settledAt) { this.settledAt = settledAt; }
+
+    public User getSettledBy() { return settledBy; }
+    public void setSettledBy(User settledBy) { this.settledBy = settledBy; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public LocalDate getExpenseDate() { return expenseDate; }
+    public void setExpenseDate(LocalDate expenseDate) { this.expenseDate = expenseDate; }
+
+    public boolean isRecurring() { return recurring; }
+    public void setRecurring(boolean recurring) { this.recurring = recurring; }
+
+    public boolean isPaidFromDrawer() { return paidFromDrawer; }
+    public void setPaidFromDrawer(boolean paidFromDrawer) { this.paidFromDrawer = paidFromDrawer; }
+
+    public Shift getShift() { return shift; }
+    public void setShift(Shift shift) { this.shift = shift; }
+
+    public String getSpenderName() { return spenderName; }
+    public void setSpenderName(String spenderName) { this.spenderName = spenderName; }
+
+    public Employee getEmployee() { return employee; }
+    public void setEmployee(Employee employee) { this.employee = employee; }
+
+    public User getRecordedBy() { return recordedBy; }
+    public void setRecordedBy(User recordedBy) { this.recordedBy = recordedBy; }
 }

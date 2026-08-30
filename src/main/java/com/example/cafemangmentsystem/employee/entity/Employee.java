@@ -115,4 +115,13 @@ public class Employee extends TenantScopedEntity {
     public void setSalaryPeriod(String salaryPeriod) {
         this.salaryPeriod = salaryPeriod;
     }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
+
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+
+    public java.time.LocalDate getHireDate() { return hireDate; }
+    public void setHireDate(java.time.LocalDate hireDate) { this.hireDate = hireDate; }
 }

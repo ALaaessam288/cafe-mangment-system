@@ -21,6 +21,7 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final TenantService tenantService;
     private final JdbcTemplate jdbcTemplate;
     private final WanasMenuSeeder wanasMenuSeeder;
+
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final com.example.cafemangmentsystem.debt.repository.DebtRepository debtRepository;
     private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
@@ -120,68 +121,6 @@ public class DatabaseSeeder implements CommandLineRunner {
             }
         }
 
-        // Shift audit raw materials (audit_items) are intentionally never seeded: they are
-        // business-specific (a bakery's ingredients look nothing like a coffee shop's), and the
-        // Inventory page already has a full add/edit/delete UI for them. A prior version of this
-        // seeder hardcoded 3 fixed items (coffee, milk, cups) via `SELECT id FROM tenants LIMIT 1`
-        // gated by a global `COUNT(*) == 0` check - so it only ever ran once, for whichever tenant
-        // happened to be first, and every tenant created afterward silently got none at all.
-
-        // Seed default Cash Register if empty
-        try {
-            int regCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM registers", Integer.class);
-            if (regCount == 0) {
-                Long firstTenantId = jdbcTemplate.queryForObject("SELECT id FROM tenants LIMIT 1", Long.class);
-                if (firstTenantId != null) {
-                    jdbcTemplate.execute("INSERT INTO registers (tenant_id, name, active, created_at, updated_at) " +
-                            "VALUES (" + firstTenantId + ", 'الكاشير الرئيسي (الدرج 1)', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
-                    System.out.println("[SEEDER] Seeded default Cash Register.");
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("[SEEDER] Default register seeding skipped: " + e.getMessage());
-        }
-
-        // Run database corrections first (BAR products/order items should map to BUFFET revenue line)
-        try {
-            jdbcTemplate.execute(
-                "UPDATE products SET revenue_line = 'BUFFET' " +
-                "WHERE station_id IN (SELECT id FROM stations WHERE code = 'BAR') AND revenue_line = 'FOOD'"
-            );
-            jdbcTemplate.execute(
-                "UPDATE order_items SET revenue_line_snapshot = 'BUFFET' " +
-                "WHERE station_snapshot = 'BAR' AND revenue_line_snapshot = 'FOOD'"
-            );
-            System.out.println("[SEEDER] Corrected BAR products/order items to BUFFET revenue line.");
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Failed to correct revenue lines: " + e.getMessage());
-        }
-
-        // Patch the expenses.type CHECK constraint to allow the new DEBTS type (added for debt
-        // settlement). SQLite bakes enum CHECK constraints into the table's DDL text at creation
-        // time, and Hibernate's ddl-auto=update never rewrites that text for a table that already
-        // exists - so on any database created before this change, inserting an expense with
-        // type=DEBTS would fail its CHECK constraint. This rewrites the stored CREATE TABLE text in
-        // sqlite_master directly (the standard SQLite technique, since ALTER TABLE cannot modify
-        // CHECK constraints) and is a no-op once the constraint already allows DEBTS.
-        try {
-            Boolean needsPatch = jdbcTemplate.queryForObject(
-                "SELECT sql NOT LIKE '%DEBTS%' FROM sqlite_master WHERE type='table' AND name='expenses'",
-                Boolean.class);
-            if (Boolean.TRUE.equals(needsPatch)) {
-                jdbcTemplate.execute("PRAGMA writable_schema = 1");
-                jdbcTemplate.update(
-                    "UPDATE sqlite_master SET sql = REPLACE(sql, ?, ?) WHERE type='table' AND name='expenses'",
-                    "'INSTALLMENTS')))", "'INSTALLMENTS','DEBTS')))"
-                );
-                jdbcTemplate.execute("PRAGMA writable_schema = 0");
-                System.out.println("[SEEDER] Patched expenses.type CHECK constraint to allow DEBTS.");
-            }
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Failed to patch expenses type constraint: " + e.getMessage());
-            try { jdbcTemplate.execute("PRAGMA writable_schema = 0"); } catch (Exception ignored) { }
-        }
-
         // Ensure paid_amount column exists on debts table
         try {
             jdbcTemplate.execute("ALTER TABLE debts ADD COLUMN paid_amount NUMERIC NOT NULL DEFAULT 0");
@@ -249,19 +188,18 @@ public class DatabaseSeeder implements CommandLineRunner {
         try {
             Tenant platformTenant = tenantRepository.findBySlug("platform").orElse(null);
             if (platformTenant == null) {
-                platformTenant = Tenant.builder()
-                        .name("Caffio Platform")
-                        .slug("platform")
-                        .businessType(BusinessType.CAFE_AND_RESTAURANT)
-                        .status(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE)
-                        .timezone("Africa/Cairo")
-                        .currency("EGP")
-                        .subscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE)
-                        .maxTables(9999)
-                        .maxUsers(9999)
-                        .maxProducts(9999)
-                        .planSelected(true)
-                        .build();
+                platformTenant = new Tenant();
+                platformTenant.setName("Caffio Platform");
+                platformTenant.setSlug("platform");
+                platformTenant.setBusinessType(BusinessType.CAFE_AND_RESTAURANT);
+                platformTenant.setStatus(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE);
+                platformTenant.setTimezone("Africa/Cairo");
+                platformTenant.setCurrency("EGP");
+                platformTenant.setSubscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE);
+                platformTenant.setMaxTables(9999);
+                platformTenant.setMaxUsers(9999);
+                platformTenant.setMaxProducts(9999);
+                platformTenant.setPlanSelected(true);
                 platformTenant = tenantRepository.save(platformTenant);
                 System.out.println("[SEEDER] Created Master Platform Tenant (ID: " + platformTenant.getId() + ")");
             }
@@ -271,12 +209,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                 try {
                     User adminUser = userRepository.findByUsername("alaaHarb").orElse(null);
                     if (adminUser == null) {
-                        adminUser = User.builder()
-                                .username("alaaHarb")
-                                .passwordHash(passwordEncoder.encode("alaa@12345"))
-                                .fullName("Alaa Harb")
-                                .role(Role.SUPER_ADMIN)
-                                .build();
+                        adminUser = new User();
+                        adminUser.setUsername("alaaHarb");
+                        adminUser.setPasswordHash(passwordEncoder.encode("alaa@12345"));
+                        adminUser.setFullName("Alaa Harb");
+                        adminUser.setRole(Role.SUPER_ADMIN);
                         userRepository.save(adminUser);
                         System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
                     } else if (adminUser.getRole() != Role.SUPER_ADMIN) {
@@ -296,19 +233,18 @@ public class DatabaseSeeder implements CommandLineRunner {
         try {
             Tenant wanasTenant = tenantRepository.findBySlug("wanas").orElse(null);
             if (wanasTenant == null) {
-                wanasTenant = Tenant.builder()
-                        .name("Wanas Cafe")
-                        .slug("wanas")
-                        .businessType(BusinessType.CAFE)
-                        .status(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE)
-                        .timezone("Africa/Cairo")
-                        .currency("EGP")
-                        .subscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO)
-                        .maxTables(50)
-                        .maxUsers(10)
-                        .maxProducts(200)
-                        .planSelected(true)
-                        .build();
+                wanasTenant = new Tenant();
+                wanasTenant.setName("Wanas Cafe");
+                wanasTenant.setSlug("wanas");
+                wanasTenant.setBusinessType(BusinessType.CAFE);
+                wanasTenant.setStatus(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE);
+                wanasTenant.setTimezone("Africa/Cairo");
+                wanasTenant.setCurrency("EGP");
+                wanasTenant.setSubscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO);
+                wanasTenant.setMaxTables(50);
+                wanasTenant.setMaxUsers(10);
+                wanasTenant.setMaxProducts(200);
+                wanasTenant.setPlanSelected(true);
                 wanasTenant = tenantRepository.save(wanasTenant);
                 System.out.println("[SEEDER] Created Wanas Cafe Tenant (ID: " + wanasTenant.getId() + ")");
             }
@@ -318,22 +254,20 @@ public class DatabaseSeeder implements CommandLineRunner {
                 try {
                     User wanasAdmin = userRepository.findByUsername("alaaHarb").orElse(null);
                     if (wanasAdmin == null) {
-                        wanasAdmin = User.builder()
-                                .username("alaaHarb")
-                                .passwordHash(passwordEncoder.encode("alaa@12345"))
-                                .fullName("Alaa Harb")
-                                .role(Role.ADMIN)
-                                .build();
+                        wanasAdmin = new User();
+                        wanasAdmin.setUsername("alaaHarb");
+                        wanasAdmin.setPasswordHash(passwordEncoder.encode("alaa@12345"));
+                        wanasAdmin.setFullName("Alaa Harb");
+                        wanasAdmin.setRole(Role.ADMIN);
                         userRepository.save(wanasAdmin);
                     }
                     User cashier = userRepository.findByUsername("cashier1").orElse(null);
                     if (cashier == null) {
-                        cashier = User.builder()
-                                .username("cashier1")
-                                .passwordHash(passwordEncoder.encode("123456"))
-                                .fullName("كاشير 1")
-                                .role(Role.CASHIER)
-                                .build();
+                        cashier = new User();
+                        cashier.setUsername("cashier1");
+                        cashier.setPasswordHash(passwordEncoder.encode("123456"));
+                        cashier.setFullName("كاشير 1");
+                        cashier.setRole(Role.CASHIER);
                         userRepository.save(cashier);
                     }
                 } finally {

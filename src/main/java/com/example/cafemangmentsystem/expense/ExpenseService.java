@@ -67,24 +67,23 @@ public class ExpenseService {
             spender = employee.getName() != null ? employee.getName() : employee.getFullName();
         }
 
-        Expense expense = Expense.builder()
-                .type(request.type())
-                .revenueLine(request.revenueLine())
-                .status(status)
-                .amount(request.amount())
-                .advanceAmount(advanceAmt)
-                .actualAmount(actualAmt)
-                .returnedAmount(returnedAmt)
-                .isAdvance(isAdvance)
-                .expenseDate(request.expenseDate())
-                .recurring(request.recurring())
-                .paidFromDrawer(request.paidFromDrawer())
-                .notes(request.notes())
-                .shift(shift)
-                .employee(employee)
-                .spenderName(spender)
-                .recordedBy(recordedBy)
-                .build();
+        Expense expense = new Expense();
+        expense.setType(request.type());
+        expense.setRevenueLine(request.revenueLine());
+        expense.setStatus(status);
+        expense.setAmount(request.amount());
+        expense.setAdvanceAmount(advanceAmt);
+        expense.setActualAmount(actualAmt);
+        expense.setReturnedAmount(returnedAmt);
+        expense.setAdvance(isAdvance);
+        expense.setExpenseDate(request.expenseDate());
+        expense.setRecurring(request.recurring());
+        expense.setPaidFromDrawer(request.paidFromDrawer());
+        expense.setNotes(request.notes());
+        expense.setShift(shift);
+        expense.setEmployee(employee);
+        expense.setSpenderName(spender);
+        expense.setRecordedBy(recordedBy);
 
         return ExpenseResponse.from(expenseRepository.save(expense));
     }

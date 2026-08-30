@@ -31,4 +31,13 @@ public class CafeTable extends SoftDeletableEntity {
 
     @Column(nullable = false)
     private Integer seats;
+
+    public Integer getNumber() { return number; }
+    public void setNumber(Integer number) { this.number = number; }
+
+    public TableZone getZone() { return zone; }
+    public void setZone(TableZone zone) { this.zone = zone; }
+
+    public Integer getSeats() { return seats; }
+    public void setSeats(Integer seats) { this.seats = seats; }
 }

@@ -56,4 +56,31 @@ public class Shift extends TenantScopedEntity {
     @Column(name = "snacks_net", precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal snacksNet = BigDecimal.ZERO;
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+
+    public Register getRegister() { return register; }
+    public void setRegister(Register register) { this.register = register; }
+
+    public Instant getOpenedAt() { return openedAt; }
+    public void setOpenedAt(Instant openedAt) { this.openedAt = openedAt; }
+
+    public Instant getClosedAt() { return closedAt; }
+    public void setClosedAt(Instant closedAt) { this.closedAt = closedAt; }
+
+    public BigDecimal getOpeningFloat() { return openingFloat; }
+    public void setOpeningFloat(BigDecimal openingFloat) { this.openingFloat = openingFloat; }
+
+    public BigDecimal getExpectedCash() { return expectedCash; }
+    public void setExpectedCash(BigDecimal expectedCash) { this.expectedCash = expectedCash; }
+
+    public BigDecimal getCountedCash() { return countedCash; }
+    public void setCountedCash(BigDecimal countedCash) { this.countedCash = countedCash; }
+
+    public BigDecimal getVariance() { return variance; }
+    public void setVariance(BigDecimal variance) { this.variance = variance; }
+
+    public BigDecimal getSnacksNet() { return snacksNet; }
+    public void setSnacksNet(BigDecimal snacksNet) { this.snacksNet = snacksNet; }
 }

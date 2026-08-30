@@ -79,4 +79,46 @@ public class OrderItem extends TenantScopedEntity {
 
     @Column(name = "cancel_reason")
     private String cancelReason;
+
+    public Order getOrder() { return order; }
+    public void setOrder(Order order) { this.order = order; }
+
+    public Product getProduct() { return product; }
+    public void setProduct(Product product) { this.product = product; }
+
+    public String getProductNameSnapshot() { return productNameSnapshot; }
+    public void setProductNameSnapshot(String productNameSnapshot) { this.productNameSnapshot = productNameSnapshot; }
+
+    public String getCategoryNameSnapshot() { return categoryNameSnapshot; }
+    public void setCategoryNameSnapshot(String categoryNameSnapshot) { this.categoryNameSnapshot = categoryNameSnapshot; }
+
+    public BigDecimal getUnitPriceSnapshot() { return unitPriceSnapshot; }
+    public void setUnitPriceSnapshot(BigDecimal unitPriceSnapshot) { this.unitPriceSnapshot = unitPriceSnapshot; }
+
+    public StationCode getStationSnapshot() { return stationSnapshot; }
+    public void setStationSnapshot(StationCode stationSnapshot) { this.stationSnapshot = stationSnapshot; }
+
+    public RevenueLine getRevenueLineSnapshot() { return revenueLineSnapshot; }
+    public void setRevenueLineSnapshot(RevenueLine revenueLineSnapshot) { this.revenueLineSnapshot = revenueLineSnapshot; }
+
+    public Integer getQuantity() { return quantity; }
+    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
+
+    public OrderItemStatus getStatus() { return status; }
+    public void setStatus(OrderItemStatus status) { this.status = status; }
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
+
+    public User getAddedBy() { return addedBy; }
+    public void setAddedBy(User addedBy) { this.addedBy = addedBy; }
+
+    public User getCancelledBy() { return cancelledBy; }
+    public void setCancelledBy(User cancelledBy) { this.cancelledBy = cancelledBy; }
+
+    public String getCancelReason() { return cancelReason; }
+    public void setCancelReason(String cancelReason) { this.cancelReason = cancelReason; }
 }

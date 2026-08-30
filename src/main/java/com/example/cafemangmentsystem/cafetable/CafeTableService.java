@@ -28,11 +28,10 @@ public class CafeTableService {
         
         quotaService.checkTableQuota(cafeTableRepository.count());
 
-        CafeTable table = CafeTable.builder()
-                .number(request.number())
-                .zone(request.zone())
-                .seats(request.seats())
-                .build();
+        CafeTable table = new CafeTable();
+        table.setNumber(request.number());
+        table.setZone(request.zone());
+        table.setSeats(request.seats());
 
         return CafeTableResponse.from(cafeTableRepository.save(table));
     }

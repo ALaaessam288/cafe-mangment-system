@@ -115,4 +115,70 @@ public class Order extends TenantScopedEntity {
      */
     @Column(name = "void_reason")
     private String voidReason;
+
+    public Integer getOrderNumber() { return orderNumber; }
+    public void setOrderNumber(Integer orderNumber) { this.orderNumber = orderNumber; }
+
+    public CafeTable getTable() { return table; }
+    public void setTable(CafeTable table) { this.table = table; }
+
+    public OrderType getType() { return type; }
+    public void setType(OrderType type) { this.type = type; }
+
+    public OrderStatus getStatus() { return status; }
+    public void setStatus(OrderStatus status) { this.status = status; }
+
+    public User getOpenedBy() { return openedBy; }
+    public void setOpenedBy(User openedBy) { this.openedBy = openedBy; }
+
+    public User getClosedBy() { return closedBy; }
+    public void setClosedBy(User closedBy) { this.closedBy = closedBy; }
+
+    public User getServedBy() { return servedBy; }
+    public void setServedBy(User servedBy) { this.servedBy = servedBy; }
+
+    public Shift getShift() { return shift; }
+    public void setShift(Shift shift) { this.shift = shift; }
+
+    public BigDecimal getSubtotal() { return subtotal; }
+    public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+
+    public BigDecimal getDiscount() { return discount; }
+    public void setDiscount(BigDecimal discount) { this.discount = discount; }
+
+    public BigDecimal getService() { return service; }
+    public void setService(BigDecimal service) { this.service = service; }
+
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+
+    public BigDecimal getTotal() { return total; }
+    public void setTotal(BigDecimal total) { this.total = total; }
+
+    public Instant getOpenedAt() { return openedAt; }
+    public void setOpenedAt(Instant openedAt) { this.openedAt = openedAt; }
+
+    public Instant getClosedAt() { return closedAt; }
+    public void setClosedAt(Instant closedAt) { this.closedAt = closedAt; }
+
+    public Instant getServedAt() { return servedAt; }
+    public void setServedAt(Instant servedAt) { this.servedAt = servedAt; }
+
+    public String getVoidReason() { return voidReason; }
+    public void setVoidReason(String voidReason) { this.voidReason = voidReason; }
+
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
+
+    public String getCustomerPhone() { return customerPhone; }
+    public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+
+    public String getCustomerAddress() { return customerAddress; }
+    public void setCustomerAddress(String customerAddress) { this.customerAddress = customerAddress; }
+
+    public Instant getPickupAt() { return pickupAt; }
+    public void setPickupAt(Instant pickupAt) { this.pickupAt = pickupAt; }
+
+    public Integer getGuestCount() { return guestCount; }
+    public void setGuestCount(Integer guestCount) { this.guestCount = guestCount; }
 }

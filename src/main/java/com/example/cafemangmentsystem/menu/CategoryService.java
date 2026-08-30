@@ -20,11 +20,10 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
 
     public CategoryResponse create(CategoryRequest request) {
-        Category category = Category.builder()
-                .nameAr(request.nameAr())
-                .nameEn(request.nameEn())
-                .displayOrder(request.displayOrder())
-                .build();
+        Category category = new Category();
+        category.setNameAr(request.nameAr());
+        category.setNameEn(request.nameEn());
+        category.setDisplayOrder(request.displayOrder());
 
         return CategoryResponse.from(categoryRepository.save(category));
     }

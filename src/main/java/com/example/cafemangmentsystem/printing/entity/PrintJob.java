@@ -60,4 +60,31 @@ public class PrintJob extends TenantScopedEntity {
 
     @Column(name = "printed_at")
     private Instant printedAt;
+
+    public Order getOrder() { return order; }
+    public void setOrder(Order order) { this.order = order; }
+
+    public Printer getPrinter() { return printer; }
+    public void setPrinter(Printer printer) { this.printer = printer; }
+
+    public TicketType getTicketType() { return ticketType; }
+    public void setTicketType(TicketType ticketType) { this.ticketType = ticketType; }
+
+    public PrintJobStatus getStatus() { return status; }
+    public void setStatus(PrintJobStatus status) { this.status = status; }
+
+    public String getPayload() { return payload; }
+    public void setPayload(String payload) { this.payload = payload; }
+
+    public Integer getAttempts() { return attempts; }
+    public void setAttempts(Integer attempts) { this.attempts = attempts; }
+
+    public String getLastError() { return lastError; }
+    public void setLastError(String lastError) { this.lastError = lastError; }
+
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+
+    public Instant getPrintedAt() { return printedAt; }
+    public void setPrintedAt(Instant printedAt) { this.printedAt = printedAt; }
 }

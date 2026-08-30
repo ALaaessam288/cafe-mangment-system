@@ -51,4 +51,25 @@ public class EmployeeTransaction extends TenantScopedEntity {
     @Column(name = "paid_from_drawer", nullable = false)
     @Builder.Default
     private boolean paidFromDrawer = false;
+
+    public Employee getEmployee() { return employee; }
+    public void setEmployee(Employee employee) { this.employee = employee; }
+
+    public EmployeeTransactionType getType() { return type; }
+    public void setType(EmployeeTransactionType type) { this.type = type; }
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public LocalDate getTransactionDate() { return transactionDate; }
+    public void setTransactionDate(LocalDate transactionDate) { this.transactionDate = transactionDate; }
+
+    public boolean isSettled() { return settled; }
+    public void setSettled(boolean settled) { this.settled = settled; }
+
+    public boolean isPaidFromDrawer() { return paidFromDrawer; }
+    public void setPaidFromDrawer(boolean paidFromDrawer) { this.paidFromDrawer = paidFromDrawer; }
 }

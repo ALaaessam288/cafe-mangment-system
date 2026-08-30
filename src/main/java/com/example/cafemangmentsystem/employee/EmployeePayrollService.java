@@ -38,15 +38,14 @@ public class EmployeePayrollService {
 
         LocalDate txDate = request.transactionDate() != null ? request.transactionDate() : LocalDate.now();
 
-        EmployeeTransaction transaction = EmployeeTransaction.builder()
-                .employee(employee)
-                .type(request.type())
-                .amount(request.amount())
-                .notes(request.notes())
-                .transactionDate(txDate)
-                .settled(false)
-                .paidFromDrawer(Boolean.TRUE.equals(request.paidFromDrawer()))
-                .build();
+        EmployeeTransaction transaction = new EmployeeTransaction();
+        transaction.setEmployee(employee);
+        transaction.setType(request.type());
+        transaction.setAmount(request.amount());
+        transaction.setNotes(request.notes());
+        transaction.setTransactionDate(txDate);
+        transaction.setSettled(false);
+        transaction.setPaidFromDrawer(Boolean.TRUE.equals(request.paidFromDrawer()));
 
         EmployeeTransaction saved = transactionRepository.save(transaction);
 
@@ -92,7 +91,7 @@ public class EmployeePayrollService {
     @Transactional(readOnly = true)
     public List<WeeklyPayrollSummaryDto> getWeeklyPayrollSummary(LocalDate startDate, LocalDate endDate) {
         List<Employee> activeEmployees = employeeRepository.findAll().stream()
-                .filter(Employee::isActive)
+                .filter(e -> e.isActive())
                 .toList();
 
         List<WeeklyPayrollSummaryDto> summaries = new ArrayList<>();
@@ -108,55 +107,42 @@ public class EmployeePayrollService {
             // Bonuses already paid from the drawer were expensed immediately in
             // createTransaction() - only the still-unpaid ones remain owed at payout time.
             BigDecimal unpaidBonuses = BigDecimal.ZERO;
-            boolean hasPayout = false;
 
-            List<EmployeeTransactionDto> dtoList = new ArrayList<>();
-
-            for (EmployeeTransaction t : txs) {
-                dtoList.add(EmployeeTransactionDto.from(t));
-                if (t.getType() == EmployeeTransactionType.DEDUCTION) {
-                    deductions = deductions.add(t.getAmount());
-                } else if (t.getType() == EmployeeTransactionType.ADVANCE) {
-                    advances = advances.add(t.getAmount());
-                } else if (t.getType() == EmployeeTransactionType.BONUS) {
-                    bonuses = bonuses.add(t.getAmount());
-                    if (!t.isPaidFromDrawer()) {
-                        unpaidBonuses = unpaidBonuses.add(t.getAmount());
+            for (EmployeeTransaction tx : txs) {
+                if (tx.getType() == EmployeeTransactionType.DEDUCTION) {
+                    deductions = deductions.add(tx.getAmount());
+                } else if (tx.getType() == EmployeeTransactionType.ADVANCE) {
+                    advances = advances.add(tx.getAmount());
+                } else if (tx.getType() == EmployeeTransactionType.BONUS) {
+                    bonuses = bonuses.add(tx.getAmount());
+                    if (!tx.isPaidFromDrawer()) {
+                        unpaidBonuses = unpaidBonuses.add(tx.getAmount());
                     }
-                } else if (t.getType() == EmployeeTransactionType.SALARY_PAYOUT) {
-                    hasPayout = true;
                 }
             }
 
-            long days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
-            if (days <= 0) days = 1;
-            BigDecimal baseWeekly = BigDecimal.ZERO;
-            BigDecimal rate = emp.getBaseSalary() != null ? emp.getBaseSalary() : BigDecimal.ZERO;
-            String period = emp.getSalaryPeriod() != null ? emp.getSalaryPeriod() : "WEEKLY";
+            BigDecimal base = emp.getBaseSalary() != null ? emp.getBaseSalary() : BigDecimal.ZERO;
+            // Net = Base + unpaidBonuses - deductions - advances
+            // (Bonuses that were paid immediately from the drawer were already pocketed, so adding
+            // them here too would pay them twice.)
+            BigDecimal net = base.add(unpaidBonuses).subtract(deductions).subtract(advances);
 
-            if ("DAILY".equals(period)) {
-                baseWeekly = rate.multiply(BigDecimal.valueOf(days));
-            } else if ("WEEKLY".equals(period)) {
-                baseWeekly = rate.multiply(BigDecimal.valueOf(days)).divide(BigDecimal.valueOf(7), 2, java.math.RoundingMode.HALF_UP);
-            } else if ("MONTHLY".equals(period)) {
-                baseWeekly = rate.multiply(BigDecimal.valueOf(days)).divide(BigDecimal.valueOf(30), 2, java.math.RoundingMode.HALF_UP);
-            }
+            List<EmployeeTransactionDto> dtoList = txs.stream()
+                    .map(EmployeeTransactionDto::from)
+                    .toList();
 
-            BigDecimal netPayable = baseWeekly.add(unpaidBonuses).subtract(deductions).subtract(advances);
-            if (netPayable.compareTo(BigDecimal.ZERO) < 0) {
-                netPayable = BigDecimal.ZERO;
-            }
+            boolean isSettled = txs.stream().anyMatch(t -> t.getType() == EmployeeTransactionType.SALARY_PAYOUT);
 
             summaries.add(new WeeklyPayrollSummaryDto(
                     emp.getId(),
                     emp.getName(),
                     emp.getJobTitle(),
-                    baseWeekly,
+                    base,
                     deductions,
                     advances,
                     bonuses,
-                    netPayable,
-                    hasPayout,
+                    net,
+                    isSettled,
                     dtoList
             ));
         }
@@ -171,15 +157,14 @@ public class EmployeePayrollService {
 
         LocalDate payoutDate = date != null ? date : LocalDate.now();
 
-        EmployeeTransaction payout = EmployeeTransaction.builder()
-                .employee(employee)
-                .type(EmployeeTransactionType.SALARY_PAYOUT)
-                .amount(amount)
-                .notes("تسديد الرواتب والقبض الأسبوعي")
-                .transactionDate(payoutDate)
-                .settled(true)
-                .paidFromDrawer(paidFromDrawer)
-                .build();
+        EmployeeTransaction payout = new EmployeeTransaction();
+        payout.setEmployee(employee);
+        payout.setType(EmployeeTransactionType.SALARY_PAYOUT);
+        payout.setAmount(amount);
+        payout.setNotes("تسديد الرواتب والقبض الأسبوعي");
+        payout.setTransactionDate(payoutDate);
+        payout.setSettled(true);
+        payout.setPaidFromDrawer(paidFromDrawer);
 
         EmployeeTransaction saved = transactionRepository.save(payout);
 

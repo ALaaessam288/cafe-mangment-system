@@ -54,10 +54,20 @@ public class WanasMenuSeeder {
     public void seedFullWanasMenu() {
         // Ensure Stations exist for the current tenant
         Station barStation = stationRepository.findFirstByCode(StationCode.BAR)
-                .orElseGet(() -> stationRepository.save(Station.builder().code(StationCode.BAR).nameAr("البار / الكافيه").build()));
+                .orElseGet(() -> {
+                    Station s = new Station();
+                    s.setCode(StationCode.BAR);
+                    s.setNameAr("البار / الكافيه");
+                    return stationRepository.save(s);
+                });
 
         Station kitchenStation = stationRepository.findFirstByCode(StationCode.KITCHEN)
-                .orElseGet(() -> stationRepository.save(Station.builder().code(StationCode.KITCHEN).nameAr("المطبخ").build()));
+                .orElseGet(() -> {
+                    Station s = new Station();
+                    s.setCode(StationCode.KITCHEN);
+                    s.setNameAr("المطبخ");
+                    return stationRepository.save(s);
+                });
 
         // ==================== 1. DRINKS (المشروبات) ====================
 
@@ -464,62 +474,62 @@ public class WanasMenuSeeder {
     }
 
     private Category createCat(String nameAr, String nameEn, int displayOrder) {
-        return categoryRepository.save(Category.builder()
-                .nameAr(nameAr)
-                .nameEn(nameEn)
-                .displayOrder(displayOrder)
-                .build());
+        Category c = new Category();
+        c.setNameAr(nameAr);
+        c.setNameEn(nameEn);
+        c.setDisplayOrder(displayOrder);
+        return categoryRepository.save(c);
     }
 
     private Product createProd(Category category, Station station, RevenueLine revenueLine, String nameAr, double price) {
-        return productRepository.save(Product.builder()
-                .category(category)
-                .station(station)
-                .revenueLine(revenueLine)
-                .nameAr(nameAr)
-                .price(BigDecimal.valueOf(price))
-                .available(true)
-                .stockQuantity(0)
-                .trackInventory(false)
-                .minStockThreshold(0)
-                .build());
+        Product p = new Product();
+        p.setCategory(category);
+        p.setStation(station);
+        p.setRevenueLine(revenueLine);
+        p.setNameAr(nameAr);
+        p.setPrice(BigDecimal.valueOf(price));
+        p.setAvailable(true);
+        p.setStockQuantity(0);
+        p.setTrackInventory(false);
+        p.setMinStockThreshold(0);
+        return productRepository.save(p);
     }
 
     private Product createProdWithNote(Category category, Station station, RevenueLine revenueLine, String nameAr, double price, String prepNote) {
-        return productRepository.save(Product.builder()
-                .category(category)
-                .station(station)
-                .revenueLine(revenueLine)
-                .nameAr(nameAr)
-                .price(BigDecimal.valueOf(price))
-                .available(true)
-                .prepNote(prepNote)
-                .stockQuantity(0)
-                .trackInventory(false)
-                .minStockThreshold(0)
-                .build());
+        Product p = new Product();
+        p.setCategory(category);
+        p.setStation(station);
+        p.setRevenueLine(revenueLine);
+        p.setNameAr(nameAr);
+        p.setPrice(BigDecimal.valueOf(price));
+        p.setAvailable(true);
+        p.setPrepNote(prepNote);
+        p.setStockQuantity(0);
+        p.setTrackInventory(false);
+        p.setMinStockThreshold(0);
+        return productRepository.save(p);
     }
 
     private Product createProdWithOptions(Category category, Station station, RevenueLine revenueLine, String nameAr, double basePrice, OptionSeed... options) {
-        Product product = productRepository.save(Product.builder()
-                .category(category)
-                .station(station)
-                .revenueLine(revenueLine)
-                .nameAr(nameAr)
-                .price(BigDecimal.valueOf(basePrice))
-                .available(true)
-                .stockQuantity(0)
-                .trackInventory(false)
-                .minStockThreshold(0)
-                .build());
+        Product p = new Product();
+        p.setCategory(category);
+        p.setStation(station);
+        p.setRevenueLine(revenueLine);
+        p.setNameAr(nameAr);
+        p.setPrice(BigDecimal.valueOf(basePrice));
+        p.setAvailable(true);
+        p.setStockQuantity(0);
+        p.setTrackInventory(false);
+        p.setMinStockThreshold(0);
+        Product product = productRepository.save(p);
 
         for (OptionSeed opt : options) {
-            productOptionRepository.save(ProductOption.builder()
-                    .product(product)
-                    .nameAr(opt.nameAr)
-                    .priceDelta(BigDecimal.valueOf(opt.priceDelta))
-                    .isDefault(opt.isDefault)
-                    .build());
+            ProductOption po = new ProductOption();
+            po.setProduct(product);
+            po.setNameAr(opt.nameAr);
+            po.setPriceDelta(BigDecimal.valueOf(opt.priceDelta));
+            po.setDefault(opt.isDefault);
+            productOptionRepository.save(po);
         }
         return product;
     }

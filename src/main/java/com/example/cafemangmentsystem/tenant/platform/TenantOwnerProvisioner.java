@@ -34,27 +34,25 @@ public class TenantOwnerProvisioner {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public User createOwner(String username, String fullName, String rawPassword, Integer defaultTables) {
-        User owner = User.builder()
-                .username(username)
-                .fullName(fullName)
-                .passwordHash(passwordEncoder.encode(rawPassword))
-                .role(Role.ADMIN)
-                .build();
+        User owner = new User();
+        owner.setUsername(username);
+        owner.setFullName(fullName);
+        owner.setPasswordHash(passwordEncoder.encode(rawPassword));
+        owner.setRole(Role.ADMIN);
         userRepository.save(owner);
 
         // Seed default cash register for this tenant
-        Register register = Register.builder()
-                .name("الدرج الرئيسي")
-                .build();
+        Register register = new Register();
+        register.setName("الدرج الرئيسي");
         registerRepository.save(register);
         
         int tablesToCreate = defaultTables != null ? defaultTables : 5;
         for (int i = 1; i <= tablesToCreate; i++) {
-            cafeTableRepository.save(CafeTable.builder()
-                    .number(i)
-                    .zone(com.example.cafemangmentsystem.cafetable.entity.TableZone.INDOOR)
-                    .seats(4)
-                    .build());
+            CafeTable table = new CafeTable();
+            table.setNumber(i);
+            table.setZone(com.example.cafemangmentsystem.cafetable.entity.TableZone.INDOOR);
+            table.setSeats(4);
+            cafeTableRepository.save(table);
         }
         
         return owner;

@@ -40,4 +40,22 @@ public class ShiftAuditItem extends TenantScopedEntity {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getUnit() { return unit; }
+    public void setUnit(String unit) { this.unit = unit; }
+
+    public Double getStockQuantity() { return stockQuantity; }
+    public void setStockQuantity(Double stockQuantity) { this.stockQuantity = stockQuantity; }
+
+    public Double getMinThreshold() { return minThreshold; }
+    public void setMinThreshold(Double minThreshold) { this.minThreshold = minThreshold; }
+
+    public boolean isRequiresAudit() { return requiresAudit; }
+    public void setRequiresAudit(boolean requiresAudit) { this.requiresAudit = requiresAudit; }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }

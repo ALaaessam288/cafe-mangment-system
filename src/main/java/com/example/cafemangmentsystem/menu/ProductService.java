@@ -13,6 +13,9 @@ import com.example.cafemangmentsystem.inventory.ShiftAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -33,17 +36,16 @@ public class ProductService {
     public ProductResponse create(ProductRequest request) {
         quotaService.checkProductQuota(productRepository.count());
         
-        Product product = Product.builder()
-                .category(getCategoryOrThrow(request.categoryId()))
-                .station(getStationOrThrow(request.stationId()))
-                .revenueLine(request.revenueLine())
-                .nameAr(request.nameAr())
-                .nameEn(request.nameEn())
-                .price(request.price())
-                .prepNote(request.prepNote())
-                .trackInventory(request.trackInventory() != null && request.trackInventory())
-                .minStockThreshold(request.minStockThreshold())
-                .build();
+        Product product = new Product();
+        product.setCategory(getCategoryOrThrow(request.categoryId()));
+        product.setStation(getStationOrThrow(request.stationId()));
+        product.setRevenueLine(request.revenueLine());
+        product.setNameAr(request.nameAr());
+        product.setNameEn(request.nameEn());
+        product.setPrice(request.price());
+        product.setPrepNote(request.prepNote());
+        product.setTrackInventory(request.trackInventory() != null && request.trackInventory());
+        product.setMinStockThreshold(request.minStockThreshold());
 
         return toResponse(productRepository.save(product));
     }

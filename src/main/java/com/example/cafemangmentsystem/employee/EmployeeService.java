@@ -28,13 +28,12 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeDto create(EmployeeRequest request) {
-        Employee employee = Employee.builder()
-                .name(request.name())
-                .jobTitle(request.jobTitle())
-                .baseSalary(request.baseSalary())
-                .salaryPeriod(request.salaryPeriod() != null ? request.salaryPeriod() : "WEEKLY")
-                .active(request.active() != null ? request.active() : true)
-                .build();
+        Employee employee = new Employee();
+        employee.setName(request.name());
+        employee.setJobTitle(request.jobTitle());
+        employee.setBaseSalary(request.baseSalary());
+        employee.setSalaryPeriod(request.salaryPeriod() != null ? request.salaryPeriod() : "WEEKLY");
+        employee.setActive(request.active() != null ? request.active() : true);
         return EmployeeDto.from(employeeRepository.save(employee));
     }
 

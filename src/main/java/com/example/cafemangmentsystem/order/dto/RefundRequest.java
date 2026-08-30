@@ -18,4 +18,10 @@ public class RefundRequest {
 
     @NotBlank(message = "سبب الإرجاع مطلوب")
     private String reason;
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 }

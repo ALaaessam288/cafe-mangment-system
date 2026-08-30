@@ -3,6 +3,7 @@ package com.example.cafemangmentsystem.tenant;
 import com.example.cafemangmentsystem.common.tenant.TenantContext;
 import com.example.cafemangmentsystem.tenant.dto.TenantResponse;
 import com.example.cafemangmentsystem.tenant.entity.Tenant;
+import com.example.cafemangmentsystem.tenant.entity.TenantActivityLog;
 import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
 import com.example.cafemangmentsystem.tenant.dto.PublicTenantDto;
 import com.example.cafemangmentsystem.tenant.platform.TenantOwnerProvisioner;
@@ -116,12 +117,12 @@ public class TenantService {
 
         Tenant saved = tenantRepository.save(tenant);
         
-        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
-                .tenantId(saved.getId())
-                .action(action)
-                .details(details)
-                .performedBy("SYSTEM_OR_ADMIN")
-                .build());
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(saved.getId());
+        log.setAction(action);
+        log.setDetails(details);
+        log.setPerformedBy("SYSTEM_OR_ADMIN");
+        tenantActivityLogRepository.save(log);
                 
         return TenantResponse.from(saved);
     }
@@ -165,12 +166,12 @@ public class TenantService {
 
         Tenant saved = tenantRepository.save(tenant);
 
-        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
-                .tenantId(saved.getId())
-                .action("PLAN_SELECTED")
-                .details("Tenant selected plan: " + (plan != null ? plan.name() : "DEFAULT"))
-                .performedBy("TENANT_ADMIN")
-                .build());
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(saved.getId());
+        log.setAction("PLAN_SELECTED");
+        log.setDetails("Tenant selected plan: " + (plan != null ? plan.name() : "DEFAULT"));
+        log.setPerformedBy("TENANT_ADMIN");
+        tenantActivityLogRepository.save(log);
 
         return TenantResponse.from(saved);
     }
@@ -200,32 +201,31 @@ public class TenantService {
         java.time.Instant subEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? null : java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS);
         java.time.Instant trialEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS) : null;
 
-        Tenant tenant = Tenant.builder()
-                .name(request.name())
-                .slug(request.slug())
-                .businessType(request.businessType())
-                .status(status)
-                .subscriptionPlan(plan)
-                .maxTables(plan.getMaxTables())
-                .maxUsers(plan.getMaxUsers())
-                .maxProducts(plan.getMaxProducts())
-                .subscriptionEndsAt(subEnd)
-                .trialEndsAt(trialEnd)
-                .planSelected(true)
-                .ownerWhatsapp(request.ownerWhatsapp())
-                .timezone(request.timezone() == null ? "Africa/Cairo" : request.timezone())
-                .currency(request.currency() == null ? "EGP" : request.currency())
-                .build();
+        Tenant tenant = new Tenant();
+        tenant.setName(request.name());
+        tenant.setSlug(request.slug());
+        tenant.setBusinessType(request.businessType());
+        tenant.setStatus(status);
+        tenant.setSubscriptionPlan(plan);
+        tenant.setMaxTables(plan.getMaxTables());
+        tenant.setMaxUsers(plan.getMaxUsers());
+        tenant.setMaxProducts(plan.getMaxProducts());
+        tenant.setSubscriptionEndsAt(subEnd);
+        tenant.setTrialEndsAt(trialEnd);
+        tenant.setPlanSelected(true);
+        tenant.setOwnerWhatsapp(request.ownerWhatsapp());
+        tenant.setTimezone(request.timezone() == null ? "Africa/Cairo" : request.timezone());
+        tenant.setCurrency(request.currency() == null ? "EGP" : request.currency());
 
         tenant = tenantSaver.save(tenant);
         
         // Log CREATED event
-        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
-                .tenantId(tenant.getId())
-                .action("CREATED")
-                .details("Tenant provisioned")
-                .performedBy(request.ownerUsername())
-                .build());
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(tenant.getId());
+        log.setAction("CREATED");
+        log.setDetails("Tenant provisioned");
+        log.setPerformedBy(request.ownerUsername());
+        tenantActivityLogRepository.save(log);
         
         com.example.cafemangmentsystem.user.entity.User owner;
         TenantContext.set(tenant.getId());
@@ -322,12 +322,12 @@ public class TenantService {
 
         Tenant saved = tenantRepository.save(tenant);
 
-        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
-                .tenantId(saved.getId())
-                .action("PLAN_CUSTOMIZED")
-                .details("Plan customized: " + saved.getSubscriptionPlan() + ", Tables: " + saved.getMaxTables() + ", Users: " + saved.getMaxUsers() + ", Products: " + saved.getMaxProducts())
-                .performedBy("SUPER_ADMIN")
-                .build());
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(saved.getId());
+        log.setAction("PLAN_CUSTOMIZED");
+        log.setDetails("Plan customized: " + saved.getSubscriptionPlan() + ", Tables: " + saved.getMaxTables() + ", Users: " + saved.getMaxUsers() + ", Products: " + saved.getMaxProducts());
+        log.setPerformedBy("SUPER_ADMIN");
+        tenantActivityLogRepository.save(log);
 
         return TenantResponse.from(saved);
     }
@@ -337,12 +337,13 @@ public class TenantService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
         tenant.setLogoUrl(logoUrl);
         Tenant saved = tenantRepository.save(tenant);
-        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
-                .tenantId(saved.getId())
-                .action("LOGO_UPDATED")
-                .details(logoUrl != null ? "Logo updated" : "Logo removed")
-                .performedBy("TENANT_ADMIN")
-                .build());
+        
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(saved.getId());
+        log.setAction("LOGO_UPDATED");
+        log.setDetails(logoUrl != null ? "Logo updated" : "Logo removed");
+        log.setPerformedBy("TENANT_ADMIN");
+        tenantActivityLogRepository.save(log);
         return TenantResponse.from(saved);
     }
 

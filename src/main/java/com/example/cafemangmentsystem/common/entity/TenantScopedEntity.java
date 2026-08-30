@@ -24,4 +24,7 @@ public abstract class TenantScopedEntity extends BaseEntity {
     @TenantId
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 }

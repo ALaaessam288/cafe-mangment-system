@@ -61,4 +61,34 @@ public class Debt extends TenantScopedEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "recorded_by", nullable = false)
     private User recordedBy;
+
+    public String getCreditorName() { return creditorName; }
+    public void setCreditorName(String creditorName) { this.creditorName = creditorName; }
+
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+
+    public BigDecimal getPaidAmount() { return paidAmount; }
+    public void setPaidAmount(BigDecimal paidAmount) { this.paidAmount = paidAmount; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public LocalDate getDebtDate() { return debtDate; }
+    public void setDebtDate(LocalDate debtDate) { this.debtDate = debtDate; }
+
+    public LocalDate getDueDate() { return dueDate; }
+    public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
+
+    public boolean isSettled() { return settled; }
+    public void setSettled(boolean settled) { this.settled = settled; }
+
+    public Instant getSettledAt() { return settledAt; }
+    public void setSettledAt(Instant settledAt) { this.settledAt = settledAt; }
+
+    public boolean isPaidFromDrawer() { return paidFromDrawer; }
+    public void setPaidFromDrawer(boolean paidFromDrawer) { this.paidFromDrawer = paidFromDrawer; }
+
+    public User getRecordedBy() { return recordedBy; }
+    public void setRecordedBy(User recordedBy) { this.recordedBy = recordedBy; }
 }

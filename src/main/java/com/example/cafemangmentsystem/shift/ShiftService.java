@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,11 +50,6 @@ public class ShiftService {
 
     private static final java.util.Set<OrderStatus> UNSETTLED_ORDER_STATUSES = EnumSet.of(
             OrderStatus.OPEN, OrderStatus.SENT, OrderStatus.SERVED, OrderStatus.READY_FOR_PICKUP);
-
-    private final ShiftRepository shiftRepository;
-    private final UserRepository userRepository;
-    private final RegisterRepository registerRepository;
-    private final PaymentRepository paymentRepository;
 
     private final ShiftRepository shiftRepository;
     private final UserRepository userRepository;
@@ -88,12 +84,11 @@ public class ShiftService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "المستخدم غير موجود: " + userId));
 
-        Shift shift = Shift.builder()
-                .user(user)
-                .register(register)
-                .openingFloat(request.openingFloat() != null ? request.openingFloat() : BigDecimal.ZERO)
-                .openedAt(Instant.now())
-                .build();
+        Shift shift = new Shift();
+        shift.setUser(user);
+        shift.setRegister(register);
+        shift.setOpeningFloat(request.openingFloat() != null ? request.openingFloat() : BigDecimal.ZERO);
+        shift.setOpenedAt(Instant.now());
 
         return ShiftResponse.from(shiftRepository.save(shift));
     }

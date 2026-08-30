@@ -1,6 +1,7 @@
 package com.example.cafemangmentsystem.common.config;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -32,8 +33,9 @@ import java.util.stream.Stream;
  */
 @Component
 @Order(Integer.MIN_VALUE)
-@Slf4j
 public class DatabaseBackupRunner implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DatabaseBackupRunner.class);
 
     /** Roughly two weeks of daily restarts. */
     private static final int KEEP = 14;

@@ -21,13 +21,12 @@ public class PrinterService {
     private final PrinterRepository printerRepository;
 
     public PrinterResponse create(PrinterRequest request) {
-        Printer printer = Printer.builder()
-                .name(request.name())
-                .ipAddress(request.ipAddress())
-                .port(request.port())
-                .type(request.type())
-                .paperWidth(request.paperWidth())
-                .build();
+        Printer printer = new Printer();
+        printer.setName(request.name());
+        printer.setIpAddress(request.ipAddress());
+        printer.setPort(request.port());
+        printer.setType(request.type());
+        printer.setPaperWidth(request.paperWidth());
 
         return PrinterResponse.from(printerRepository.save(printer));
     }

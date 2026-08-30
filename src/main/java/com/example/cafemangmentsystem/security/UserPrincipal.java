@@ -49,4 +49,9 @@ public class UserPrincipal implements UserDetails {
     public boolean isEnabled() {
         return active;
     }
+
+    public Long getId() { return id; }
+    public Long getTenantId() { return tenantId; }
+    public String getFullName() { return fullName; }
+    public boolean isActive() { return active; }
 }

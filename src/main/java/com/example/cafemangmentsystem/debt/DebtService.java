@@ -35,14 +35,13 @@ public class DebtService {
         User recordedBy = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        Debt debt = Debt.builder()
-                .creditorName(request.creditorName())
-                .amount(request.amount())
-                .notes(request.notes())
-                .debtDate(request.debtDate() != null ? request.debtDate() : LocalDate.now())
-                .dueDate(request.dueDate())
-                .recordedBy(recordedBy)
-                .build();
+        Debt debt = new Debt();
+        debt.setCreditorName(request.creditorName());
+        debt.setAmount(request.amount());
+        debt.setNotes(request.notes());
+        debt.setDebtDate(request.debtDate() != null ? request.debtDate() : LocalDate.now());
+        debt.setDueDate(request.dueDate());
+        debt.setRecordedBy(recordedBy);
 
         return DebtResponse.from(debtRepository.save(debt));
     }

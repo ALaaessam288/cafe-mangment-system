@@ -43,13 +43,12 @@ public class UserService {
         
         quotaService.checkUserQuota(userRepository.count());
 
-        User user = User.builder()
-                .username(request.username())
-                .fullName(request.fullName())
-                .passwordHash(passwordEncoder.encode(request.password()))
-                .pinHash(request.pin() == null ? null : passwordEncoder.encode(request.pin()))
-                .role(request.role())
-                .build();
+        User user = new User();
+        user.setUsername(request.username());
+        user.setFullName(request.fullName());
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setPinHash(request.pin() == null ? null : passwordEncoder.encode(request.pin()));
+        user.setRole(request.role());
 
         return UserResponse.from(userRepository.save(user));
     }

@@ -71,16 +71,15 @@ public class PaymentService {
 
         User cashier = userRepository.findById(userId).orElseThrow();
 
-        Payment payment = Payment.builder()
-                .order(order)
-                .method(request.method())
-                .amount(request.amount())
-                .received(received)
-                .change(change)
-                .reference(reference)
-                .paidAt(Instant.now())
-                .cashier(cashier)
-                .build();
+        Payment payment = new Payment();
+        payment.setOrder(order);
+        payment.setMethod(request.method());
+        payment.setAmount(request.amount());
+        payment.setReceived(received);
+        payment.setChange(change);
+        payment.setReference(reference);
+        payment.setPaidAt(Instant.now());
+        payment.setCashier(cashier);
 
         paymentRepository.save(payment);
 

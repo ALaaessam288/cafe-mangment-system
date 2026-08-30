@@ -54,4 +54,31 @@ public class ShiftAuditRecord extends TenantScopedEntity {
 
     @Column(name = "audited_at")
     private Instant auditedAt;
+
+    public Shift getShift() { return shift; }
+    public void setShift(Shift shift) { this.shift = shift; }
+
+    public ShiftAuditItem getAuditItem() { return auditItem; }
+    public void setAuditItem(ShiftAuditItem auditItem) { this.auditItem = auditItem; }
+
+    public Double getOpeningCount() { return openingCount; }
+    public void setOpeningCount(Double openingCount) { this.openingCount = openingCount; }
+
+    public Double getSoldDeductionCount() { return soldDeductionCount; }
+    public void setSoldDeductionCount(Double soldDeductionCount) { this.soldDeductionCount = soldDeductionCount; }
+
+    public Double getExpectedClosingCount() { return expectedClosingCount; }
+    public void setExpectedClosingCount(Double expectedClosingCount) { this.expectedClosingCount = expectedClosingCount; }
+
+    public Double getActualClosingCount() { return actualClosingCount; }
+    public void setActualClosingCount(Double actualClosingCount) { this.actualClosingCount = actualClosingCount; }
+
+    public Double getVarianceCount() { return varianceCount; }
+    public void setVarianceCount(Double varianceCount) { this.varianceCount = varianceCount; }
+
+    public Double getWastePercentage() { return wastePercentage; }
+    public void setWastePercentage(Double wastePercentage) { this.wastePercentage = wastePercentage; }
+
+    public Instant getAuditedAt() { return auditedAt; }
+    public void setAuditedAt(Instant auditedAt) { this.auditedAt = auditedAt; }
 }

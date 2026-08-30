@@ -45,4 +45,25 @@ public class Printer extends TenantScopedEntity {
 
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+
+    public Integer getPort() { return port; }
+    public void setPort(Integer port) { this.port = port; }
+
+    public PrinterType getType() { return type; }
+    public void setType(PrinterType type) { this.type = type; }
+
+    public Integer getPaperWidth() { return paperWidth; }
+    public void setPaperWidth(Integer paperWidth) { this.paperWidth = paperWidth; }
+
+    public boolean isOnline() { return online; }
+    public void setOnline(boolean online) { this.online = online; }
+
+    public Instant getLastSeenAt() { return lastSeenAt; }
+    public void setLastSeenAt(Instant lastSeenAt) { this.lastSeenAt = lastSeenAt; }
 }

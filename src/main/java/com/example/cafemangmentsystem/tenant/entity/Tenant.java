@@ -81,4 +81,55 @@ public class Tenant extends BaseEntity {
     @Column(name = "plan_selected")
     @Builder.Default
     private Boolean planSelected = false;
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getSlug() { return slug; }
+    public void setSlug(String slug) { this.slug = slug; }
+
+    public BusinessType getBusinessType() { return businessType; }
+    public void setBusinessType(BusinessType businessType) { this.businessType = businessType; }
+
+    public TenantStatus getStatus() { return status; }
+    public void setStatus(TenantStatus status) { this.status = status; }
+
+    public String getTimezone() { return timezone; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
+
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+
+    public SubscriptionPlan getSubscriptionPlan() { return subscriptionPlan; }
+    public void setSubscriptionPlan(SubscriptionPlan subscriptionPlan) { this.subscriptionPlan = subscriptionPlan; }
+
+    public java.time.Instant getTrialEndsAt() { return trialEndsAt; }
+    public void setTrialEndsAt(java.time.Instant trialEndsAt) { this.trialEndsAt = trialEndsAt; }
+
+    public java.time.Instant getSubscriptionEndsAt() { return subscriptionEndsAt; }
+    public void setSubscriptionEndsAt(java.time.Instant subscriptionEndsAt) { this.subscriptionEndsAt = subscriptionEndsAt; }
+
+    public Integer getMaxTables() { return maxTables; }
+    public void setMaxTables(Integer maxTables) { this.maxTables = maxTables; }
+
+    public Integer getMaxUsers() { return maxUsers; }
+    public void setMaxUsers(Integer maxUsers) { this.maxUsers = maxUsers; }
+
+    public Integer getMaxProducts() { return maxProducts; }
+    public void setMaxProducts(Integer maxProducts) { this.maxProducts = maxProducts; }
+
+    public Integer getServiceChargePercent() { return serviceChargePercent; }
+    public void setServiceChargePercent(Integer serviceChargePercent) { this.serviceChargePercent = serviceChargePercent; }
+
+    public String getOwnerWhatsapp() { return ownerWhatsapp; }
+    public void setOwnerWhatsapp(String ownerWhatsapp) { this.ownerWhatsapp = ownerWhatsapp; }
+
+    public Boolean getWhatsappAlertsEnabled() { return whatsappAlertsEnabled; }
+    public void setWhatsappAlertsEnabled(Boolean whatsappAlertsEnabled) { this.whatsappAlertsEnabled = whatsappAlertsEnabled; }
+
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+
+    public Boolean getPlanSelected() { return planSelected; }
+    public void setPlanSelected(Boolean planSelected) { this.planSelected = planSelected; }
 }

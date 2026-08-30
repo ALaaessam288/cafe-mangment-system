@@ -1,6 +1,7 @@
 package com.example.cafemangmentsystem.license;
 
 import com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan;
+import com.example.cafemangmentsystem.tenant.entity.TenantActivityLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,13 +33,12 @@ public class LicenseKeyService {
 
         Instant expires = validDays > 0 ? Instant.now().plus(validDays, ChronoUnit.DAYS) : null;
 
-        LicenseKey lk = LicenseKey.builder()
-                .key(key)
-                .plan(plan)
-                .maxActivations(1)
-                .expiresAt(expires)
-                .notes(notes)
-                .build();
+        LicenseKey lk = new LicenseKey();
+        lk.setKey(key);
+        lk.setPlan(plan);
+        lk.setMaxActivations(1);
+        lk.setExpiresAt(expires);
+        lk.setNotes(notes);
         return repo.save(lk);
     }
 
@@ -115,12 +115,12 @@ public class LicenseKeyService {
         lk.setActivatedAt(Instant.now());
         repo.save(lk);
 
-        tenantActivityLogRepository.save(com.example.cafemangmentsystem.tenant.entity.TenantActivityLog.builder()
-                .tenantId(tenantId)
-                .action("LICENSE_ACTIVATED")
-                .details("تم تفعيل المفتاح " + lk.getKey() + " للباقة " + lk.getPlan().getDisplayName())
-                .performedBy("TENANT_ADMIN")
-                .build());
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(tenantId);
+        log.setAction("LICENSE_ACTIVATED");
+        log.setDetails("تم تفعيل المفتاح " + lk.getKey() + " للباقة " + lk.getPlan().getDisplayName());
+        log.setPerformedBy("TENANT_ADMIN");
+        tenantActivityLogRepository.save(log);
 
         return com.example.cafemangmentsystem.tenant.dto.TenantResponse.from(savedTenant);
     }

@@ -30,4 +30,13 @@ public enum SubscriptionPlan {
         this.includesKds = includesKds;
         this.includesMultiRegister = includesMultiRegister;
     }
+
+    public String getDisplayName() { return displayName; }
+    public int getMonthlyPriceEgp() { return monthlyPriceEgp; }
+    public int getMaxTables() { return maxTables; }
+    public int getMaxUsers() { return maxUsers; }
+    public int getMaxProducts() { return maxProducts; }
+    public boolean isIncludesExpenses() { return includesExpenses; }
+    public boolean isIncludesKds() { return includesKds; }
+    public boolean isIncludesMultiRegister() { return includesMultiRegister; }
 }

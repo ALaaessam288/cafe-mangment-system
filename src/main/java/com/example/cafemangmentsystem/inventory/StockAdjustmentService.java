@@ -54,15 +54,14 @@ public class StockAdjustmentService {
 
         product.setStockQuantity(newQuantity);
 
-        StockAdjustment adjustment = StockAdjustment.builder()
-                .product(product)
-                .type(request.type())
-                .quantityChange(request.quantityChange())
-                .resultingQuantity(newQuantity)
-                .reason(request.reason())
-                .adjustedBy(adjustedBy)
-                .adjustedAt(Instant.now())
-                .build();
+        StockAdjustment adjustment = new StockAdjustment();
+        adjustment.setProduct(product);
+        adjustment.setType(request.type());
+        adjustment.setQuantityChange(request.quantityChange());
+        adjustment.setResultingQuantity(newQuantity);
+        adjustment.setReason(request.reason());
+        adjustment.setAdjustedBy(adjustedBy);
+        adjustment.setAdjustedAt(Instant.now());
 
         return StockAdjustmentResponse.from(stockAdjustmentRepository.save(adjustment));
     }

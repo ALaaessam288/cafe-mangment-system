@@ -1,6 +1,7 @@
 package com.example.cafemangmentsystem.security;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -31,8 +32,9 @@ import java.util.Set;
  * An explicitly configured value (property or environment variable) always wins, so server
  * deployments and integration tests can still pin a known key.
  */
-@Slf4j
 public final class SecretMaterial {
+
+    private static final Logger log = LoggerFactory.getLogger(SecretMaterial.class);
 
     /** Same directory the SQLite database lives in, so backup/restore covers both. */
     private static final Path HOME = Path.of(System.getProperty("user.home"), ".cafepos");

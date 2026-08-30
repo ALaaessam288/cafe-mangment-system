@@ -28,10 +28,9 @@ public class StationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Station already exists for code: " + request.code());
         }
 
-        Station station = Station.builder()
-                .code(request.code())
-                .nameAr(request.nameAr())
-                .build();
+        Station station = new Station();
+        station.setCode(request.code());
+        station.setNameAr(request.nameAr());
 
         return StationResponse.from(stationRepository.save(station));
     }

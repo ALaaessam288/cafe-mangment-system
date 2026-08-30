@@ -94,15 +94,15 @@ public class OrderService {
                     List<Register> registers = registerRepository.findAll();
                     Register reg = registers.stream().filter(Register::isActive).findFirst()
                             .orElseGet(() -> {
-                                Register newReg = Register.builder().name("الكاشير الرئيسي").build();
+                                Register newReg = new Register();
+                                newReg.setName("الكاشير الرئيسي");
                                 return registerRepository.save(newReg);
                             });
-                    Shift autoShift = Shift.builder()
-                            .user(openedBy)
-                            .register(reg)
-                            .openedAt(Instant.now())
-                            .openingFloat(BigDecimal.ZERO)
-                            .build();
+                    Shift autoShift = new Shift();
+                    autoShift.setUser(openedBy);
+                    autoShift.setRegister(reg);
+                    autoShift.setOpenedAt(Instant.now());
+                    autoShift.setOpeningFloat(BigDecimal.ZERO);
                     return shiftRepository.save(autoShift);
                 });
 
@@ -138,21 +138,21 @@ public class OrderService {
             }
         }
 
-        Order.OrderBuilder builder = Order.builder()
-                .table(table)
-                .type(request.type())
-                .status(OrderStatus.OPEN)
-                .openedBy(openedBy)
-                .shift(shift)
-                .guestCount(request.guestCount())
-                .customerName(effectiveCustomerName)
-                .customerPhone(request.customerPhone())
-                .customerAddress(request.customerAddress())
-                .deliveryFee(request.deliveryFee() != null ? request.deliveryFee() : BigDecimal.ZERO)
-                .pickupAt(request.pickupAt())
-                .openedAt(Instant.now());
+        Order order = new Order();
+        order.setTable(table);
+        order.setType(request.type());
+        order.setStatus(OrderStatus.OPEN);
+        order.setOpenedBy(openedBy);
+        order.setShift(shift);
+        order.setGuestCount(request.guestCount());
+        order.setCustomerName(effectiveCustomerName);
+        order.setCustomerPhone(request.customerPhone());
+        order.setCustomerAddress(request.customerAddress());
+        order.setDeliveryFee(request.deliveryFee() != null ? request.deliveryFee() : BigDecimal.ZERO);
+        order.setPickupAt(request.pickupAt());
+        order.setOpenedAt(Instant.now());
 
-        return toResponse(saveWithNextOrderNumber(builder));
+        return toResponse(saveWithNextOrderNumber(order));
     }
 
     /**
@@ -170,11 +170,11 @@ public class OrderService {
      * {@code (tenant_id, business_day, order_number)} plus retry on constraint violation, which in
      * turn needs a real migration tool rather than {@code ddl-auto=update}.
      */
-    private Order saveWithNextOrderNumber(Order.OrderBuilder builder) {
+    private Order saveWithNextOrderNumber(Order order) {
         ORDER_NUMBER_LOCK.lock();
         try {
             int orderNumber = orderRepository.findMaxOrderNumberSince(startOfBusinessDay()) + 1;
-            Order order = builder.orderNumber(orderNumber).build();
+            order.setOrderNumber(orderNumber);
             Order saved = orderRepository.save(order);
             // Force the insert while the lock is still held; without this Hibernate could defer it
             // past the unlock and let a second caller read a stale maximum.
@@ -262,19 +262,18 @@ public class OrderService {
             existing.setQuantity(existing.getQuantity() + quantity);
             orderItemRepository.save(existing);
         } else {
-            OrderItem item = OrderItem.builder()
-                    .order(order)
-                    .product(product)
-                    .productNameSnapshot(productName)
-                    .categoryNameSnapshot(product.getCategory() != null ? product.getCategory().getNameAr() : null)
-                    .unitPriceSnapshot(unitPrice)
-                    .stationSnapshot(product.getStation().getCode())
-                    .revenueLineSnapshot(product.getRevenueLine())
-                    .quantity(quantity)
-                    .status(OrderItemStatus.NEW)
-                    .note(request.note())
-                    .addedBy(addedBy)
-                    .build();
+            OrderItem item = new OrderItem();
+            item.setOrder(order);
+            item.setProduct(product);
+            item.setProductNameSnapshot(productName);
+            item.setCategoryNameSnapshot(product.getCategory() != null ? product.getCategory().getNameAr() : null);
+            item.setUnitPriceSnapshot(unitPrice);
+            item.setStationSnapshot(product.getStation().getCode());
+            item.setRevenueLineSnapshot(product.getRevenueLine());
+            item.setQuantity(quantity);
+            item.setStatus(OrderItemStatus.NEW);
+            item.setNote(request.note());
+            item.setAddedBy(addedBy);
 
             orderItemRepository.save(item);
         }
@@ -680,17 +679,16 @@ public class OrderService {
 
         User appliedBy = userId != null ? userRepository.findById(userId).orElse(null) : null;
 
-        Discount discount = Discount.builder()
-                .order(order)
-                .type(request.type())
-                .scope(DiscountScope.ORDER)
-                .value(request.value())
-                .maxValue(request.maxValue())
-                .reason(request.reason() != null && !request.reason().isBlank() ? request.reason() : "خصم يدوي")
-                .amount(amount)
-                .appliedBy(appliedBy)
-                .appliedAt(Instant.now())
-                .build();
+        Discount discount = new Discount();
+        discount.setOrder(order);
+        discount.setType(request.type());
+        discount.setScope(DiscountScope.ORDER);
+        discount.setValue(request.value());
+        discount.setMaxValue(request.maxValue());
+        discount.setReason(request.reason() != null && !request.reason().isBlank() ? request.reason() : "خصم يدوي");
+        discount.setAmount(amount);
+        discount.setAppliedBy(appliedBy);
+        discount.setAppliedAt(Instant.now());
         discountRepository.save(discount);
 
         order.setDiscount(amount);
@@ -714,18 +712,17 @@ public class OrderService {
 
         User appliedBy = userRepository.findById(userId).orElseThrow();
 
-        Discount discount = Discount.builder()
-                .order(order)
-                .item(item)
-                .type(request.type())
-                .scope(DiscountScope.ITEM)
-                .value(request.value())
-                .maxValue(request.maxValue())
-                .reason(request.reason())
-                .amount(amount)
-                .appliedBy(appliedBy)
-                .appliedAt(Instant.now())
-                .build();
+        Discount discount = new Discount();
+        discount.setOrder(order);
+        discount.setItem(item);
+        discount.setType(request.type());
+        discount.setScope(DiscountScope.ITEM);
+        discount.setValue(request.value());
+        discount.setMaxValue(request.maxValue());
+        discount.setReason(request.reason());
+        discount.setAmount(amount);
+        discount.setAppliedBy(appliedBy);
+        discount.setAppliedAt(Instant.now());
         discountRepository.save(discount);
 
         item.setDiscountAmount(item.getDiscountAmount().add(amount));
@@ -888,16 +885,15 @@ public class OrderService {
         // up as a shortfall at close of shift.
         PaymentMethod refundMethod = originalPaymentMethod(payments);
 
-        Payment refundPayment = Payment.builder()
-                .order(order)
-                .method(refundMethod)
-                .amount(amount.negate())
-                .received(BigDecimal.ZERO)
-                .change(BigDecimal.ZERO)
-                .reference("REFUND: " + (reason != null ? reason : "إرجاع فاتورة"))
-                .paidAt(Instant.now())
-                .cashier(cashier)
-                .build();
+        Payment refundPayment = new Payment();
+        refundPayment.setOrder(order);
+        refundPayment.setMethod(refundMethod);
+        refundPayment.setAmount(amount.negate());
+        refundPayment.setReceived(BigDecimal.ZERO);
+        refundPayment.setChange(BigDecimal.ZERO);
+        refundPayment.setReference("REFUND: " + (reason != null ? reason : "إرجاع فاتورة"));
+        refundPayment.setPaidAt(Instant.now());
+        refundPayment.setCashier(cashier);
         paymentRepository.save(refundPayment);
 
         if (amountRefunded.add(amount).compareTo(amountPaid.max(maxRefundable)) >= 0) {

@@ -18,7 +18,8 @@ import com.example.cafemangmentsystem.station.entity.Station;
 import com.example.cafemangmentsystem.station.entity.StationCode;
 import com.example.cafemangmentsystem.station.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,11 +35,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class PrintJobService {
+
+    private static final Logger log = LoggerFactory.getLogger(PrintJobService.class);
 
     private final PrintJobRepository printJobRepository;
     private final PrinterRepository printerRepository;
@@ -152,13 +154,12 @@ public class PrintJobService {
     }
 
     private void saveJob(Order order, Printer printer, TicketType ticketType, String payload, String idempotencyKey) {
-        PrintJob job = PrintJob.builder()
-                .order(order)
-                .printer(printer)
-                .ticketType(ticketType)
-                .payload(payload)
-                .idempotencyKey(idempotencyKey)
-                .build();
+        PrintJob job = new PrintJob();
+        job.setOrder(order);
+        job.setPrinter(printer);
+        job.setTicketType(ticketType);
+        job.setPayload(payload);
+        job.setIdempotencyKey(idempotencyKey);
         printJobRepository.save(job);
     }
 

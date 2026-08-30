@@ -66,4 +66,31 @@ public class LicenseKey extends BaseEntity {
     public boolean isUsable() {
         return !revoked && !isExpired() && !isFullyActivated();
     }
+
+    public String getKey() { return key; }
+    public void setKey(String key) { this.key = key; }
+
+    public SubscriptionPlan getPlan() { return plan; }
+    public void setPlan(SubscriptionPlan plan) { this.plan = plan; }
+
+    public int getMaxActivations() { return maxActivations; }
+    public void setMaxActivations(int maxActivations) { this.maxActivations = maxActivations; }
+
+    public int getActivationsCount() { return activationsCount; }
+    public void setActivationsCount(int activationsCount) { this.activationsCount = activationsCount; }
+
+    public Instant getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+
+    public Long getActivatedByTenantId() { return activatedByTenantId; }
+    public void setActivatedByTenantId(Long activatedByTenantId) { this.activatedByTenantId = activatedByTenantId; }
+
+    public Instant getActivatedAt() { return activatedAt; }
+    public void setActivatedAt(Instant activatedAt) { this.activatedAt = activatedAt; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public boolean isRevoked() { return revoked; }
+    public void setRevoked(boolean revoked) { this.revoked = revoked; }
 }

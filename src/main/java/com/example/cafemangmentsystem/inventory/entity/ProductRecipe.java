@@ -33,4 +33,13 @@ public class ProductRecipe extends TenantScopedEntity {
 
     @Column(name = "deduction_quantity", nullable = false)
     private Double deductionQuantity; // e.g. 15.0 (grams), 0.15 (liters)
+
+    public Product getProduct() { return product; }
+    public void setProduct(Product product) { this.product = product; }
+
+    public ShiftAuditItem getAuditItem() { return auditItem; }
+    public void setAuditItem(ShiftAuditItem auditItem) { this.auditItem = auditItem; }
+
+    public Double getDeductionQuantity() { return deductionQuantity; }
+    public void setDeductionQuantity(Double deductionQuantity) { this.deductionQuantity = deductionQuantity; }
 }
