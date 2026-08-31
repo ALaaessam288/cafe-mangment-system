@@ -34,6 +34,10 @@ export const platformApi = {
     const { data } = await client.get(`/admin/tenants/${tenantId}/activity-log`);
     return data;
   },
+  getPlatformActivityLog: async () => {
+    const { data } = await client.get('/admin/tenants/activity-log');
+    return data;
+  },
   getPlatformStats: async () => {
     const { data } = await client.get('/admin/tenants/stats');
     return data;

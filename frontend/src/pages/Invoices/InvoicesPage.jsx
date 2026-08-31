@@ -51,13 +51,14 @@ export default function InvoicesPage() {
 
   // Shift state
   const [shifts, setShifts] = useState([]);
-  const [filterShiftId, setFilterShiftId] = useState('ALL');
+  const [currentShift, setCurrentShift] = useState(null);
+  const [filterShiftId, setFilterShiftId] = useState('CURRENT');
   const [showDeleteShiftModal, setShowDeleteShiftModal] = useState(false);
   const [deletingShift, setDeletingShift] = useState(false);
 
   // Filters state
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterDate, setFilterDate] = useState('TODAY');
+  const [filterDate, setFilterDate] = useState('ALL');
   const [filterType, setFilterType] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('NEWEST');
@@ -86,20 +87,40 @@ export default function InvoicesPage() {
     }
   }, [toast]);
 
-  useEffect(() => {
-    loadOrders();
-    loadShifts();
-  }, [loadOrders]);
-
-  const loadShifts = async () => {
+  const loadShifts = useCallback(async () => {
     try {
       const data = await shiftsApi.findAll();
       const sorted = (data || []).sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
       setShifts(sorted);
+
+      let cur = null;
+      try {
+        cur = await shiftsApi.myCurrent();
+      } catch (e) {
+        // Fallback: check if any open shift exists in list
+        cur = sorted.find(s => !s.closedAt) || null;
+      }
+      
+      setCurrentShift(cur);
+
+      // Default filter to the current active shift if present
+      if (cur) {
+        setFilterShiftId(String(cur.id));
+      } else if (sorted.length > 0) {
+        // If no open shift, default to the latest shift
+        setFilterShiftId(String(sorted[0].id));
+      } else {
+        setFilterShiftId('ALL');
+      }
     } catch (err) {
       console.error('Failed to load shifts', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+    loadShifts();
+  }, [loadOrders, loadShifts]);
 
   const handleSelectOrder = async (orderOrId) => {
     sounds.playTap();
@@ -276,8 +297,11 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
       // 2. Type Filter (if more filters active)
       if (filterType !== 'ALL' && o.type !== filterType) return false;
 
-      // 3. Date Filter
-      if (filterDate !== 'ALL') {
+      // 3. Shift Filter (Takes precedence over general date filter)
+      if (filterShiftId !== 'ALL') {
+        if (o.shiftId != filterShiftId) return false;
+      } else if (filterDate !== 'ALL') {
+        // 4. Date Filter (only if no specific shift is selected)
         const orderDate = new Date(o.createdAt);
         const today = new Date();
         today.setHours(0,0,0,0);
@@ -295,7 +319,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
         }
       }
       
-      // 4. Search Query
+      // 5. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
         const matchNum = o.orderNumber?.toString().includes(q);
@@ -304,9 +328,6 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
         const matchPhone = o.customerPhone?.includes(q);
         if (!matchNum && !matchTable && !matchCustomer && !matchPhone) return false;
       }
-      
-      // 5. Shift Filter
-      if (filterShiftId !== 'ALL' && o.shiftId != filterShiftId) return false;
 
       return true;
     });
@@ -405,8 +426,25 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
             <div className="invoices-header__title-row">
               <h1 className="invoices-header__title">شاشة الفواتير والأوردرات</h1>
               <span className="invoices-header__count-badge">{filteredOrders.length} فاتورة</span>
+              {currentShift && (
+                <span 
+                  className={`invoices-header__shift-badge ${String(filterShiftId) === String(currentShift.id) ? 'invoices-header__shift-badge--active' : ''}`}
+                  onClick={() => {
+                    sounds.playTap();
+                    setFilterShiftId(String(currentShift.id));
+                  }}
+                  title="تفعيل فلترة الشيفت الحالي"
+                >
+                  <span className="live-pulse-dot" />
+                  <span>الشيفت الحالي #{currentShift.id}</span>
+                </span>
+              )}
             </div>
-            <p className="invoices-header__subtitle">مراجعة سريعة، تحصيل فوري، طباعة البون، وإرسال عبر واتساب</p>
+            <p className="invoices-header__subtitle">
+              {currentShift && String(filterShiftId) === String(currentShift.id)
+                ? `⚡ معروض فواتير الشيفت الحالي (#${currentShift.id}) المفتوح`
+                : 'مراجعة سريعة، تحصيل فوري، طباعة البون، وإرسال عبر واتساب'}
+            </p>
           </div>
         </div>
 
@@ -446,7 +484,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
           <button 
             type="button"
             className="action-btn action-btn--refresh" 
-            onClick={() => { sounds.playTap(); loadOrders(true); }}
+            onClick={() => { sounds.playTap(); loadOrders(true); loadShifts(); }}
             disabled={refreshing}
             title="تحديث البيانات لحظياً"
           >
@@ -553,13 +591,28 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
             )}
           </div>
 
+          {/* Quick Shift Filter Pill */}
+          {currentShift && (
+            <button
+              type="button"
+              className={`shift-quick-pill ${String(filterShiftId) === String(currentShift.id) ? 'shift-quick-pill--active' : ''}`}
+              onClick={() => {
+                sounds.playTap();
+                setFilterShiftId(String(currentShift.id));
+              }}
+            >
+              <span className="live-pulse-dot" />
+              <span>الشيفت الحالي (#{currentShift.id})</span>
+            </button>
+          )}
+
           {/* Date Selector */}
           <div className="date-pills">
             {[
+              { id: 'ALL', label: 'كل التواريخ' },
               { id: 'TODAY', label: 'اليوم' },
               { id: 'YESTERDAY', label: 'أمس' },
               { id: 'WEEK', label: 'آخر 7 أيام' },
-              { id: 'ALL', label: 'كل الأوقات' },
             ].map(d => (
               <button
                 key={d.id}
@@ -568,6 +621,9 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
                 onClick={() => {
                   sounds.playTap();
                   setFilterDate(d.id);
+                  if (d.id !== 'ALL' && filterShiftId !== 'ALL') {
+                    setFilterShiftId('ALL');
+                  }
                 }}
               >
                 {d.label}
@@ -588,15 +644,30 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
             </div>
 
             {shifts.length > 0 && (
-              <div className="select-pill-wrap">
+              <div className="select-pill-wrap select-pill-wrap--shift">
                 <Filter size={13} />
-                <select className="select-pill" value={filterShiftId} onChange={(e) => setFilterShiftId(e.target.value)}>
-                  <option value="ALL">كل الشيفتات</option>
-                  {shifts.slice(0, 10).map(s => (
-                    <option key={s.id} value={s.id}>
-                      شيفت #{s.id} ({s.closedAt ? 'مغلق' : 'مفتوح'})
+                <select 
+                  className="select-pill" 
+                  value={filterShiftId} 
+                  onChange={(e) => {
+                    sounds.playTap();
+                    setFilterShiftId(e.target.value);
+                  }}
+                >
+                  {currentShift && (
+                    <option value={String(currentShift.id)}>
+                      ⚡ الشيفت الحالي #{currentShift.id} (مفتوح)
                     </option>
-                  ))}
+                  )}
+                  <option value="ALL">كل الشيفتات (عرض الكل)</option>
+                  {shifts.map(s => {
+                    if (currentShift && s.id === currentShift.id) return null;
+                    return (
+                      <option key={s.id} value={String(s.id)}>
+                        شيفت #{s.id} ({s.closedAt ? 'مغلق' : 'مفتوح'})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}

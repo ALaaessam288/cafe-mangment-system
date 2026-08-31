@@ -26,6 +26,7 @@ export default function SuperAdminLayout({
     { id: 'tenants', label: 'إدارة المنشآت', icon: 'bi-buildings', badge: totalTenants > 0 ? totalTenants : null, badgeColor: 'bg-primary' },
     { id: 'plans', label: 'باقات الاشتراك', icon: 'bi-tags', badge: '4' },
     { id: 'subscriptions', label: 'التراخيص والاشتراكات', icon: 'bi-key', badge: expiringCount > 0 ? `${expiringCount} تنبيه` : null, badgeColor: 'bg-danger' },
+    { id: 'reports', label: 'تقارير المنصة', icon: 'bi-bar-chart-line', badge: null },
     { id: 'audit-logs', label: 'سجل النشاطات', icon: 'bi-journal-text', badge: null },
     { id: 'settings', label: 'إعدادات المنصة', icon: 'bi-gear', badge: null },
   ];
@@ -35,6 +36,7 @@ export default function SuperAdminLayout({
     tenants: 'إدارة المنشآت والمشتركين',
     plans: 'باقات الاشتراك والأسعار',
     subscriptions: 'إدارة التراخيص ومفاتيح التفعيل',
+    reports: 'تقارير النمو والاشتراكات',
     'audit-logs': 'سجل النشاطات والعمليات',
     settings: 'إعدادات ومعلومات النظام',
   };
@@ -44,6 +46,7 @@ export default function SuperAdminLayout({
     tenants: 'ابحث، راجع، فعّل أو أوقف أي منشأة من مكان واحد',
     plans: 'صمّم قيمة كل باقة وحدود استخدامها بوضوح',
     subscriptions: 'تابع التجديدات ومفاتيح التفعيل قبل انتهاء الخدمة',
+    reports: 'مؤشرات حقيقية قابلة للتصدير لدعم القرار',
     'audit-logs': 'أثر كامل لكل تغيير حساس تم على المنصة',
     settings: 'هوية المنصة وسياسات التشغيل والإعدادات العامة',
   };

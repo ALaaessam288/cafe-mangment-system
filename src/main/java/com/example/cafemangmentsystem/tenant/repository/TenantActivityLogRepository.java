@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface TenantActivityLogRepository extends JpaRepository<TenantActivityLog, Long> {
     List<TenantActivityLog> findByTenantIdOrderByCreatedAtDesc(Long tenantId);
+    List<TenantActivityLog> findTop200ByOrderByCreatedAtDesc();
 }

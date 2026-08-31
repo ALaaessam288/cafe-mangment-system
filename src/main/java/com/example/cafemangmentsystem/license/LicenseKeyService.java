@@ -26,6 +26,9 @@ public class LicenseKeyService {
 
     /** Generate a key like CAFF-A1B2-C3D4-E5F6 */
     public LicenseKey generate(SubscriptionPlan plan, int validDays, String notes) {
+        if (validDays < 0 || validDays > 3650) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "validDays must be between 0 and 3650");
+        }
         String key;
         do {
             key = "CAFF-" + randomBlock() + "-" + randomBlock() + "-" + randomBlock();

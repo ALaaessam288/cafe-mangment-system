@@ -89,15 +89,9 @@ public class TenantService {
         
         if (plan != null) {
             tenant.setSubscriptionPlan(plan);
-            if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO) {
-                tenant.setMaxTables(Integer.MAX_VALUE);
-                tenant.setMaxUsers(Integer.MAX_VALUE);
-                tenant.setMaxProducts(Integer.MAX_VALUE);
-            } else if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.STARTER) {
-                tenant.setMaxTables(20);
-                tenant.setMaxUsers(5);
-                tenant.setMaxProducts(100);
-            }
+            tenant.setMaxTables(plan.getMaxTables());
+            tenant.setMaxUsers(plan.getMaxUsers());
+            tenant.setMaxProducts(plan.getMaxProducts());
             action = "PLAN_UPGRADED";
             details = "Plan changed to " + plan;
         }
@@ -109,10 +103,19 @@ public class TenantService {
             }
         }
         if (extendDays != null && extendDays > 0) {
-            java.time.Instant current = tenant.getTrialEndsAt() != null ? tenant.getTrialEndsAt() : java.time.Instant.now();
-            tenant.setTrialEndsAt(current.plus(extendDays, java.time.temporal.ChronoUnit.DAYS));
-            action = "TRIAL_EXTENDED";
-            details = "Trial extended by " + extendDays + " days";
+            java.time.Instant now = java.time.Instant.now();
+            boolean trial = tenant.getStatus() == TenantStatus.TRIAL || tenant.getSubscriptionPlan() == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
+            java.time.Instant currentEnd = trial ? tenant.getTrialEndsAt() : tenant.getSubscriptionEndsAt();
+            java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
+            if (trial) {
+                tenant.setTrialEndsAt(base.plus(extendDays, java.time.temporal.ChronoUnit.DAYS));
+                action = "TRIAL_EXTENDED";
+                details = "Trial extended by " + extendDays + " days";
+            } else {
+                tenant.setSubscriptionEndsAt(base.plus(extendDays, java.time.temporal.ChronoUnit.DAYS));
+                action = "SUBSCRIPTION_EXTENDED";
+                details = "Subscription extended by " + extendDays + " days";
+            }
         }
 
         Tenant saved = tenantRepository.save(tenant);
@@ -134,32 +137,17 @@ public class TenantService {
 
         if (plan != null) {
             tenant.setSubscriptionPlan(plan);
-            if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE) {
-                tenant.setMaxTables(1000);
-                tenant.setMaxUsers(1000);
-                tenant.setMaxProducts(1000);
-                tenant.setStatus(TenantStatus.ACTIVE);
-                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
-            } else if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO) {
-                tenant.setMaxTables(25);
-                tenant.setMaxUsers(8);
-                tenant.setMaxProducts(1000);
-                tenant.setStatus(TenantStatus.ACTIVE);
-                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
-            } else if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.STARTER) {
-                tenant.setMaxTables(10);
-                tenant.setMaxUsers(4);
-                tenant.setMaxProducts(100);
-                tenant.setStatus(TenantStatus.ACTIVE);
-                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
-            } else {
-                tenant.setMaxTables(5);
-                tenant.setMaxUsers(2);
-                tenant.setMaxProducts(30);
+            tenant.setMaxTables(plan.getMaxTables());
+            tenant.setMaxUsers(plan.getMaxUsers());
+            tenant.setMaxProducts(plan.getMaxProducts());
+            if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL) {
                 tenant.setStatus(TenantStatus.TRIAL);
                 if (tenant.getTrialEndsAt() == null) {
                     tenant.setTrialEndsAt(java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS));
                 }
+            } else {
+                tenant.setStatus(TenantStatus.ACTIVE);
+                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
             }
         }
         tenant.setPlanSelected(true);
@@ -276,6 +264,9 @@ public class TenantService {
     public TenantResponse updateQuotas(Long tenantId, Integer maxTables, Integer maxUsers, Integer maxProducts) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        validateQuota("maxTables", maxTables);
+        validateQuota("maxUsers", maxUsers);
+        validateQuota("maxProducts", maxProducts);
         if (maxTables != null) tenant.setMaxTables(maxTables);
         if (maxUsers != null) tenant.setMaxUsers(maxUsers);
         if (maxProducts != null) tenant.setMaxProducts(maxProducts);
@@ -291,6 +282,12 @@ public class TenantService {
         }
         if (req.status() != null) {
             tenant.setStatus(req.status());
+        }
+        validateQuota("maxTables", req.maxTables());
+        validateQuota("maxUsers", req.maxUsers());
+        validateQuota("maxProducts", req.maxProducts());
+        if (req.serviceChargePercent() != null && (req.serviceChargePercent() < 0 || req.serviceChargePercent() > 100)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceChargePercent must be between 0 and 100");
         }
         if (req.maxTables() != null) {
             tenant.setMaxTables(req.maxTables());
@@ -314,7 +311,9 @@ public class TenantService {
             tenant.setTrialEndsAt(req.trialEndsAt());
         }
         if (req.extendDays() != null && req.extendDays() > 0) {
-            java.time.Instant base = tenant.getSubscriptionEndsAt() != null ? tenant.getSubscriptionEndsAt() : (tenant.getTrialEndsAt() != null ? tenant.getTrialEndsAt() : java.time.Instant.now());
+            java.time.Instant now = java.time.Instant.now();
+            java.time.Instant currentEnd = tenant.getSubscriptionEndsAt() != null ? tenant.getSubscriptionEndsAt() : tenant.getTrialEndsAt();
+            java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
             tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
             tenant.setStatus(TenantStatus.ACTIVE);
         }
@@ -330,6 +329,12 @@ public class TenantService {
         tenantActivityLogRepository.save(log);
 
         return TenantResponse.from(saved);
+    }
+
+    private void validateQuota(String field, Integer value) {
+        if (value != null && (value < 1 || value > 9999)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be between 1 and 9999");
+        }
     }
 
     public TenantResponse updateLogo(Long tenantId, String logoUrl) {
@@ -404,8 +409,12 @@ public class TenantService {
     public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getTenantActivityLogs(Long tenantId) {
         return tenantActivityLogRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
     }
-}
 
+    @Transactional(readOnly = true)
+    public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getPlatformActivityLogs() {
+        return tenantActivityLogRepository.findTop200ByOrderByCreatedAtDesc();
+    }
+}
 
 
 

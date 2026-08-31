@@ -96,4 +96,10 @@ public class PlatformAdminController {
     public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getActivityLogs(@PathVariable Long id) {
         return tenantService.getTenantActivityLogs(id);
     }
+
+    @GetMapping("/activity-log")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getPlatformActivityLogs() {
+        return tenantService.getPlatformActivityLogs();
+    }
 }

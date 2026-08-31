@@ -6,6 +6,7 @@ import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
 
 public record TenantResponse(
         Long id,
+        java.time.Instant createdAt,
         String name,
         String slug,
         BusinessType businessType,
@@ -19,6 +20,9 @@ public record TenantResponse(
         int maxTables,
         int maxUsers,
         int maxProducts,
+        Integer serviceChargePercent,
+        String ownerWhatsapp,
+        boolean whatsappAlertsEnabled,
         boolean includesKds,
         boolean includesExpenses,
         String logoUrl,
@@ -32,6 +36,7 @@ public record TenantResponse(
 
         return new TenantResponse(
                 tenant.getId(),
+                tenant.getCreatedAt(),
                 tenant.getName(),
                 tenant.getSlug(),
                 tenant.getBusinessType(),
@@ -45,6 +50,9 @@ public record TenantResponse(
                 tables,
                 users,
                 products,
+                tenant.getServiceChargePercent(),
+                tenant.getOwnerWhatsapp(),
+                Boolean.TRUE.equals(tenant.getWhatsappAlertsEnabled()),
                 plan.isIncludesKds(),
                 plan.isIncludesExpenses(),
                 tenant.getLogoUrl(),

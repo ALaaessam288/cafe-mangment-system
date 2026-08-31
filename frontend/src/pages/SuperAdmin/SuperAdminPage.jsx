@@ -4,6 +4,39 @@ import { useToast } from '../../context/ToastContext';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import './SuperAdminPage.css';
 
+const PLAN_PRICES = { TRIAL: 0, STARTER: 499, PRO: 899, ENTERPRISE: 1499, CUSTOM: 0 };
+const AUDIT_ACTIONS = {
+  CREATED: 'تأسيس منشأة',
+  PLAN_UPGRADED: 'تغيير الباقة',
+  PLAN_CUSTOMIZED: 'تخصيص الباقة',
+  SUSPENDED: 'إيقاف منشأة',
+  TRIAL_EXTENDED: 'تمديد التجربة',
+  SUBSCRIPTION_EXTENDED: 'تمديد الاشتراك',
+  LICENSE_ACTIVATED: 'تفعيل ترخيص',
+  LOGO_UPDATED: 'تحديث الشعار',
+  UPDATED: 'تحديث بيانات',
+};
+
+const tenantExpiry = (tenant) => tenant?.status === 'TRIAL' || tenant?.subscriptionPlan === 'TRIAL'
+  ? tenant?.trialEndsAt
+  : tenant?.subscriptionEndsAt;
+
+const daysUntil = (date) => date
+  ? Math.ceil((new Date(date).getTime() - Date.now()) / 86400000)
+  : null;
+
+const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+
+function SectionIntro({ eyebrow, title, description, icon, children }) {
+  return (
+    <div className="sa-section-intro">
+      <div className="sa-section-intro__icon"><i className={`bi ${icon}`} /></div>
+      <div className="sa-section-intro__copy"><span>{eyebrow}</span><h2>{title}</h2><p>{description}</p></div>
+      {children && <div className="sa-section-intro__actions">{children}</div>}
+    </div>
+  );
+}
+
 export default function SuperAdminPage() {
   const toast = useToast();
 
@@ -13,7 +46,9 @@ export default function SuperAdminPage() {
   // Core Data State
   const [tenants, setTenants] = useState([]);
   const [licenseKeys, setLicenseKeys] = useState([]);
+  const [platformActivityLogs, setPlatformActivityLogs] = useState([]);
   const [platformStats, setPlatformStats] = useState(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -26,6 +61,8 @@ export default function SuperAdminPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState('ALL');
 
   // Modals & Action States
   const [createModal, setCreateModal] = useState(false);
@@ -75,15 +112,22 @@ export default function SuperAdminPage() {
     else setLoading(true);
 
     try {
-      const [tenantsData, keysData, statsData] = await Promise.all([
-        platformApi.getAllTenants().catch(() => []),
-        platformApi.getLicenseKeys().catch(() => []),
-        platformApi.getPlatformStats().catch(() => null),
+      const [tenantsResult, keysResult, statsResult, logsResult] = await Promise.allSettled([
+        platformApi.getAllTenants(),
+        platformApi.getLicenseKeys(),
+        platformApi.getPlatformStats(),
+        platformApi.getPlatformActivityLog(),
       ]);
 
-      setTenants(tenantsData || []);
-      setLicenseKeys(keysData || []);
-      setPlatformStats(statsData);
+      if (tenantsResult.status === 'rejected') throw tenantsResult.reason;
+      setTenants(tenantsResult.value || []);
+      setLicenseKeys(keysResult.status === 'fulfilled' ? keysResult.value || [] : []);
+      setPlatformStats(statsResult.status === 'fulfilled' ? statsResult.value : null);
+      setPlatformActivityLogs(logsResult.status === 'fulfilled' ? logsResult.value || [] : []);
+      setLastUpdatedAt(new Date());
+
+      const optionalFailures = [keysResult, statsResult, logsResult].filter((result) => result.status === 'rejected').length;
+      if (optionalFailures > 0) toast.error('تم تحميل بيانات المنشآت، لكن بعض تقارير المنصة غير متاحة حالياً');
     } catch (err) {
       toast.error(err.message || 'فشل في تحميل بيانات المنصة');
     } finally {
@@ -187,6 +231,16 @@ export default function SuperAdminPage() {
   async function handleSaveCustomPlan(e) {
     if (e) e.preventDefault();
     if (!selectedTenant) return;
+    const quotas = [customPlanForm.maxTables, customPlanForm.maxUsers, customPlanForm.maxProducts].map(Number);
+    if (quotas.some((value) => !Number.isInteger(value) || value < 1 || value > 9999)) {
+      toast.error('حدود الطاولات والمستخدمين والأصناف يجب أن تكون بين 1 و9999');
+      return;
+    }
+    const servicePercent = Number(customPlanForm.serviceChargePercent);
+    if (!Number.isFinite(servicePercent) || servicePercent < 0 || servicePercent > 100) {
+      toast.error('نسبة الخدمة يجب أن تكون بين 0 و100');
+      return;
+    }
     setUpdating(true);
     try {
       const payload = {
@@ -235,20 +289,33 @@ export default function SuperAdminPage() {
     });
   }
 
-  async function handleBulkAction(action) {
+  async function handleBulkAction(action, confirmed = false) {
     if (selectedIds.length === 0) return;
+    if (action === 'SUSPENDED' && !confirmed) {
+      setConfirmModal({
+        open: true,
+        title: `إيقاف ${selectedIds.length} منشأة؟`,
+        message: 'سيتم منع مستخدمي المنشآت المحددة من تشغيل النظام. يمكنك إعادة تفعيلهم لاحقاً.',
+        onConfirm: () => {
+          setConfirmModal({ open: false, title: '', message: '', onConfirm: null });
+          handleBulkAction(action, true);
+        },
+      });
+      return;
+    }
     setUpdating(true);
     try {
-      for (const id of selectedIds) {
-        if (action === 'ACTIVE') await platformApi.updateSubscription(id, { status: 'ACTIVE' });
-        if (action === 'SUSPENDED') await platformApi.updateSubscription(id, { status: 'SUSPENDED' });
-        if (action === 'TRIAL_EXTEND') await platformApi.updateSubscription(id, { extendDays: 7 });
-      }
-      toast.success(`تم تنفيذ الإجراء على ${selectedIds.length} منشأة بنجاح`);
-      setSelectedIds([]);
-      loadData(true);
-    } catch (err) {
-      toast.error(err.message || 'حدث خطأ أثناء تنفيذ الإجراء الجماعي');
+      const results = await Promise.allSettled(selectedIds.map((id) => {
+        if (action === 'ACTIVE') return platformApi.updateSubscription(id, { status: 'ACTIVE' });
+        if (action === 'SUSPENDED') return platformApi.updateSubscription(id, { status: 'SUSPENDED' });
+        return platformApi.updateSubscription(id, { extendDays: 7 });
+      }));
+      const completed = results.filter((result) => result.status === 'fulfilled').length;
+      const failed = results.length - completed;
+      if (completed > 0) toast.success(`تم تنفيذ الإجراء على ${completed} منشأة`);
+      if (failed > 0) toast.error(`تعذر تنفيذ الإجراء على ${failed} منشأة؛ راجع حالتها وحاول مرة أخرى`);
+      if (failed === 0) setSelectedIds([]);
+      await loadData(true);
     } finally {
       setUpdating(false);
     }
@@ -279,14 +346,27 @@ export default function SuperAdminPage() {
 
   async function handleCreateTenant(e) {
     e.preventDefault();
-    if (!newTenantForm.name || !newTenantForm.slug || !newTenantForm.ownerUsername || !newTenantForm.ownerPassword) {
+    const normalizedSlug = newTenantForm.slug.trim().toLowerCase();
+    if (!newTenantForm.name.trim() || !normalizedSlug || !newTenantForm.ownerFullName.trim() || !newTenantForm.ownerUsername.trim() || !newTenantForm.ownerPassword) {
       toast.error('يرجى ملء كافة الحقول الإلزامية');
+      return;
+    }
+    if (!/^[a-z0-9-]+$/.test(normalizedSlug)) {
+      toast.error('رابط المنشأة يقبل حروف إنجليزية صغيرة وأرقام وشرطة (-) فقط');
+      return;
+    }
+    if (tenants.some((tenant) => tenant.slug?.toLowerCase() === normalizedSlug)) {
+      toast.error('رابط المنشأة مستخدم بالفعل؛ اختر رابطاً مختلفاً');
+      return;
+    }
+    if (newTenantForm.ownerPassword.length < 8) {
+      toast.error('كلمة المرور يجب ألا تقل عن 8 أحرف');
       return;
     }
 
     setUpdating(true);
     try {
-      await platformApi.provisionTenant(newTenantForm);
+      await platformApi.provisionTenant({ ...newTenantForm, slug: normalizedSlug });
       toast.success(`تم تأسيس وتفعيل منشأة (${newTenantForm.name}) بنجاح! 🚀`);
       
       const createdData = {
@@ -330,9 +410,14 @@ export default function SuperAdminPage() {
   // ── LICENSE KEY ACTIONS ────────────────────────────────────────────────────
   async function handleGenerateKey(e) {
     e.preventDefault();
+    const validDays = Number(keyForm.validDays);
+    if (!Number.isInteger(validDays) || validDays < 0 || validDays > 3650) {
+      toast.error('مدة الترخيص يجب أن تكون من 0 إلى 3650 يوم');
+      return;
+    }
     setGeneratingKey(true);
     try {
-      await platformApi.generateLicenseKey(keyForm.plan, Number(keyForm.validDays), keyForm.notes);
+      await platformApi.generateLicenseKey(keyForm.plan, validDays, keyForm.notes.trim());
       toast.success('تم إصدار مفتاح الترخيص بنجاح! 🔑');
       setKeyForm({ plan: 'PRO', validDays: 365, notes: '' });
       loadData(true);
@@ -365,7 +450,7 @@ export default function SuperAdminPage() {
   function copyToClipboard(text, label = 'النص') {
     navigator.clipboard.writeText(text).then(() => {
       toast.success(`تم نسخ ${label} إلى الحافظة ✓`);
-    });
+    }).catch(() => toast.error(`تعذر نسخ ${label}`));
   }
 
   // ── EXPORT DATA ────────────────────────────────────────────────────────────
@@ -393,6 +478,40 @@ export default function SuperAdminPage() {
     toast.success('تم تصدير ملف المشتركين (CSV) بنجاح');
   }
 
+  function exportPlatformReportCsv() {
+    const rows = [
+      ['تقرير منصة Caffio', new Date().toLocaleString('ar-EG')],
+      [],
+      ['المؤشر', 'القيمة'],
+      ['إجمالي المنشآت', totalTenants],
+      ['المنشآت النشطة', activeTenants],
+      ['التجارب', trialTenants],
+      ['الموقوفة', suspendedTenants],
+      ['المنتهية', expiredTenants.length],
+      ['تنتهي خلال 7 أيام', expiringTenants.length],
+      ['MRR تقديري', estimatedMRR],
+      [],
+      ['المنشأة', 'الرابط', 'الحالة', 'الباقة', 'تاريخ الانتهاء', 'أيام متبقية', 'قيمة شهرية تقديرية'],
+      ...tenants.map((tenant) => [
+        tenant.name,
+        tenant.slug,
+        tenant.status,
+        tenant.subscriptionPlan,
+        tenantExpiry(tenant) || '',
+        daysUntil(tenantExpiry(tenant)) ?? '',
+        tenant.status === 'ACTIVE' ? PLAN_PRICES[tenant.subscriptionPlan] || 0 : 0,
+      ]),
+    ];
+    const csv = '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `caffio_platform_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('تم تجهيز تقرير المنصة الحقيقي للتنزيل');
+  }
+
   // ── COMPUTED KPI METRICS ───────────────────────────────────────────────────
   const totalTenants = tenants.length;
   const activeTenants = tenants.filter((t) => t.status === 'ACTIVE').length;
@@ -400,13 +519,11 @@ export default function SuperAdminPage() {
   const suspendedTenants = tenants.filter((t) => t.status === 'SUSPENDED').length;
 
   const totalUsersEstimated = tenants.reduce((acc, t) => acc + (t.maxUsers || 2), 0);
-  const activeSubscriptions = tenants.filter((t) => t.subscriptionPlan === 'PRO' || t.subscriptionPlan === 'STARTER' || t.subscriptionPlan === 'ENTERPRISE').length;
+  const activeSubscriptions = tenants.filter((t) => t.status === 'ACTIVE' && ['PRO', 'STARTER', 'ENTERPRISE'].includes(t.subscriptionPlan)).length;
 
   const estimatedMRR = tenants.reduce((acc, t) => {
-    if (t.subscriptionPlan === 'ENTERPRISE') return acc + 1499;
-    if (t.subscriptionPlan === 'PRO') return acc + 899;
-    if (t.subscriptionPlan === 'STARTER') return acc + 499;
-    return acc;
+    if (t.status !== 'ACTIVE') return acc;
+    return acc + (PLAN_PRICES[t.subscriptionPlan] || 0);
   }, 0);
 
   // Expiring soon (< 7 days)
@@ -418,6 +535,31 @@ export default function SuperAdminPage() {
       return date && date > now && date <= sevenDaysLater;
     });
   }, [tenants]);
+
+  const expiredTenants = useMemo(() => tenants.filter((tenant) => {
+    const expiry = tenantExpiry(tenant);
+    return expiry && new Date(expiry) < new Date();
+  }), [tenants]);
+
+  const tenantById = useMemo(() => new Map(tenants.map((tenant) => [tenant.id, tenant])), [tenants]);
+  const filteredActivityLogs = useMemo(() => platformActivityLogs.filter((log) => {
+    const tenant = tenantById.get(log.tenantId);
+    const query = auditQuery.trim().toLowerCase();
+    const matchesQuery = !query || [tenant?.name, tenant?.slug, log.action, log.details, log.performedBy]
+      .some((value) => String(value || '').toLowerCase().includes(query));
+    return matchesQuery && (auditActionFilter === 'ALL' || log.action === auditActionFilter);
+  }), [platformActivityLogs, tenantById, auditQuery, auditActionFilter]);
+
+  const licenseMetrics = useMemo(() => {
+    const now = Date.now();
+    return licenseKeys.reduce((metrics, key) => {
+      if (key.revoked) metrics.revoked += 1;
+      else if (key.expiresAt && new Date(key.expiresAt).getTime() < now) metrics.expired += 1;
+      else if ((key.activationsCount || 0) >= (key.maxActivations || 1)) metrics.used += 1;
+      else metrics.available += 1;
+      return metrics;
+    }, { available: 0, used: 0, expired: 0, revoked: 0 });
+  }, [licenseKeys]);
 
   // Plan Distribution Count
   const planCounts = useMemo(() => {
@@ -434,8 +576,8 @@ export default function SuperAdminPage() {
     return tenants
       .filter((t) => {
         const matchesSearch =
-          t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.slug.toLowerCase().includes(searchQuery.toLowerCase());
+          String(t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          String(t.slug || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
         const matchesPlan = planFilter === 'ALL' || (t.subscriptionPlan || 'TRIAL') === planFilter;
         return matchesSearch && matchesStatus && matchesPlan;
@@ -467,7 +609,7 @@ export default function SuperAdminPage() {
       refreshing={refreshing}
       totalTenants={totalTenants}
       activeTenants={activeTenants}
-      expiringCount={expiringTenants.length}
+      expiringCount={expiringTenants.length + expiredTenants.length}
     >
       {/* ══════════════════════════════════════════════════════════════════════
           1. DASHBOARD OVERVIEW SECTION
@@ -519,25 +661,25 @@ export default function SuperAdminPage() {
           </section>
 
           {/* Attention Banner */}
-          {expiringTenants.length > 0 && (
+          {expiringTenants.length + expiredTenants.length > 0 && (
             <div className="alert alert-warning border-0 sa-alert-attention d-flex align-items-center justify-content-between mb-4 shadow-sm">
               <div className="d-flex align-items-center gap-3">
                 <div className="sa-alert-icon">
                   <i className="bi bi-exclamation-triangle-fill" />
                 </div>
                 <div>
-                  <h6 className="mb-0 fw-bold text-white">تنبيه اشتراكات تنتهي قريباً ({expiringTenants.length} منشآت)</h6>
+                  <h6 className="mb-0 fw-bold text-white">قائمة متابعة التجديد ({expiringTenants.length + expiredTenants.length} منشأة)</h6>
                   <p className="small mb-0 text-white opacity-75">
-                    يوجد {expiringTenants.length} مشتركين ستنتهي فترتهم خلال أقل من 7 أيام. يمكنك تمديد فترتهم أو ترقيتهم.
+                    {expiredTenants.length} منتهية بالفعل، و{expiringTenants.length} تنتهي خلال 7 أيام. رتّب التواصل قبل توقف الخدمة.
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 className="btn btn-sm btn-dark fw-bold px-3 py-2"
-                onClick={() => { setActiveSection('tenants'); setStatusFilter('ALL'); }}
+                onClick={() => setActiveSection('reports')}
               >
-                عرض المنشآت <i className="bi bi-arrow-left ms-1" />
+                فتح تقرير التجديد <i className="bi bi-arrow-left ms-1" />
               </button>
             </div>
           )}
@@ -616,9 +758,9 @@ export default function SuperAdminPage() {
               <div className="card sa-kpi-card shadow-sm h-100">
                 <div className="card-body d-flex align-items-center justify-content-between p-3">
                   <div>
-                    <span className="sa-kpi-label">الإيرادات الشهرية (MRR)</span>
+                    <span className="sa-kpi-label">الإيراد الشهري المتوقع (MRR)</span>
                     <h3 className="sa-kpi-val mb-0 text-amber">{estimatedMRR.toLocaleString()} <small className="fs-6 text-white opacity-75">ج.م</small></h3>
-                    <span className="sa-kpi-sub text-white opacity-75">دخل الاشتراكات الفعلي</span>
+                    <span className="sa-kpi-sub text-white opacity-75">بحسب أسعار الباقات النشطة</span>
                   </div>
                   <div className="sa-kpi-icon bg-amber-subtle">
                     <i className="bi bi-cash-coin" />
@@ -678,39 +820,35 @@ export default function SuperAdminPage() {
 
           {/* Analytics & Insights Row */}
           <div className="row g-4 mb-4">
-            {/* MRR Growth Trend Chart */}
+            {/* Real subscription distribution — no fabricated historical data. */}
             <div className="col-12 col-lg-8">
               <div className="card sa-card shadow-sm h-100">
                 <div className="card-header sa-card-header p-3 d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center gap-2">
-                    <i className="bi bi-graph-up-arrow text-amber" />
-                    <h5 className="mb-0 fw-bold text-white">نمو الإيرادات المتكررة (MRR Trend)</h5>
+                    <i className="bi bi-pie-chart-fill text-amber" />
+                    <h5 className="mb-0 fw-bold text-white">توزيع الاشتراكات الحالي</h5>
                   </div>
-                  <span className="badge bg-dark border text-light px-3 py-2">+18.5% نمو شهري</span>
+                  <span className="badge bg-dark border text-light px-3 py-2">بيانات فعلية الآن</span>
                 </div>
                 <div className="card-body p-4">
-                  <div className="d-flex align-items-end gap-3 sa-chart-bars pb-3 border-bottom border-secondary">
+                  <div className="sa-plan-distribution">
                     {[
-                      { month: 'يناير', val: 35, rev: '12,500' },
-                      { month: 'فبراير', val: 48, rev: '18,200' },
-                      { month: 'مارس', val: 58, rev: '24,000' },
-                      { month: 'أبريل', val: 70, rev: '32,500' },
-                      { month: 'مايو', val: 82, rev: '39,000' },
-                      { month: 'الشهر الحالي', val: 100, rev: `${estimatedMRR.toLocaleString()}`, active: true },
-                    ].map((b, idx) => (
-                      <div key={idx} className="flex-grow-1 text-center">
-                        <div
-                          className={`sa-bar ${b.active ? 'sa-bar--active' : ''}`}
-                          style={{ height: `${b.val * 1.4}px` }}
-                          title={`${b.month}: ${b.rev} ج.م`}
-                        />
-                        <span className="sa-bar-label mt-2 d-block text-white fw-bold">{b.month}</span>
+                      { id: 'TRIAL', label: 'تجريبي', color: '#94a3b8' },
+                      { id: 'STARTER', label: 'Starter', color: '#38bdf8' },
+                      { id: 'PRO', label: 'Pro', color: '#f59e0b' },
+                      { id: 'ENTERPRISE', label: 'Enterprise', color: '#10b981' },
+                    ].map((plan) => (
+                      <div className="sa-plan-distribution__row" key={plan.id}>
+                        <span>{plan.label}</span>
+                        <div><i style={{ width: `${totalTenants ? (planCounts[plan.id] / totalTenants) * 100 : 0}%`, background: plan.color }} /></div>
+                        <strong>{planCounts[plan.id]}</strong>
                       </div>
                     ))}
                   </div>
-                  <div className="d-flex justify-content-between align-items-center pt-3 text-white small">
-                    <span>متوسط إيراد المنشأة (ARPU): <strong className="text-amber">680 ج.م</strong></span>
-                    <span>معدل التحويل من التجريبي: <strong className="text-success">22.4%</strong></span>
+                  <div className="sa-report-facts">
+                    <span>متوسط الإيراد لكل اشتراك مدفوع <strong>{activeSubscriptions ? Math.round(estimatedMRR / activeSubscriptions).toLocaleString() : 0} ج.م</strong></span>
+                    <span>معدل النشاط <strong>{totalTenants ? Math.round((activeTenants / totalTenants) * 100) : 0}%</strong></span>
+                    <button type="button" onClick={() => setActiveSection('reports')}>فتح التقارير <i className="bi bi-arrow-left" /></button>
                   </div>
                 </div>
               </div>
@@ -779,6 +917,9 @@ export default function SuperAdminPage() {
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'tenants' && (
         <div className="sa-section">
+          <SectionIntro eyebrow="CUSTOMER OPERATIONS" title="المنشآت والعملاء" description="إدارة دورة حياة كل عميل من التجربة حتى التجديد أو الإيقاف." icon="bi-buildings">
+            <button type="button" onClick={() => setCreateModal(true)}><i className="bi bi-plus-lg" /> منشأة جديدة</button>
+          </SectionIntro>
           <div className="card sa-card shadow-sm">
             {/* Toolbar Header */}
             <div className="card-header sa-card-header p-3">
@@ -988,14 +1129,14 @@ export default function SuperAdminPage() {
                           </td>
                           <td>
                             <span className="small text-white fw-bold">
-                              {t.maxTables >= 1000 ? 'طاولات غير محدودة' : `${t.maxTables || 5} طاولات`}
+                              {t.maxTables >= 9999 ? 'طاولات غير محدودة' : `${t.maxTables || 5} طاولات`}
                               {' • '}
-                              {t.maxUsers >= 1000 ? 'كاشير غير محدود' : `${t.maxUsers || 2} كاشيرات`}
+                              {t.maxUsers >= 9999 ? 'كاشير غير محدود' : `${t.maxUsers || 2} كاشيرات`}
                             </span>
                           </td>
                           <td>
                             <span className="small text-white opacity-85">
-                              {t.trialEndsAt ? new Date(t.trialEndsAt).toLocaleDateString('ar-EG') : '—'}
+                              {tenantExpiry(t) ? new Date(tenantExpiry(t)).toLocaleDateString('ar-EG') : 'غير محدد'}
                             </span>
                           </td>
                           <td className="text-end">
@@ -1097,6 +1238,7 @@ export default function SuperAdminPage() {
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'plans' && (
         <div className="sa-section">
+          <SectionIntro eyebrow="PRODUCT & PRICING" title="الباقات وحدود الاستخدام" description="الحدود المعروضة هنا مطابقة لقواعد الاشتراك الفعلية في النظام." icon="bi-stars" />
           <div className="row g-4">
             {/* Plan 1: TRIAL */}
             <div className="col-12 col-md-6 col-xl-3">
@@ -1142,8 +1284,8 @@ export default function SuperAdminPage() {
                     {planCounts.STARTER} منشأة مشتركة حالياً
                   </div>
                   <ul className="list-unstyled d-flex flex-column gap-2 mb-4">
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 10 طاولات</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 4 مستخدمين وكاشيرات</li>
+                    <li><i className="bi bi-check2 text-success me-2" /> حتى 20 طاولة</li>
+                    <li><i className="bi bi-check2 text-success me-2" /> حتى 5 مستخدمين وكاشيرات</li>
                     <li><i className="bi bi-check2 text-success me-2" /> حتى 100 صنف بالمنيو</li>
                     <li><i className="bi bi-check2 text-success me-2" /> طباعة فواتير حرارية</li>
                     <li><i className="bi bi-check2 text-success me-2" /> تسجيل المصاريف ونثريات الشيفت</li>
@@ -1173,9 +1315,9 @@ export default function SuperAdminPage() {
                     {planCounts.PRO} منشأة مشتركة حالياً
                   </div>
                   <ul className="list-unstyled d-flex flex-column gap-2 mb-4">
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 25 طاولة كافيه</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 8 كاشيرات ومشرفين</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> أصناف منيو غير محدودة</li>
+                    <li><i className="bi bi-check2 text-success me-2" /> حتى 50 طاولة كافيه</li>
+                    <li><i className="bi bi-check2 text-success me-2" /> حتى 15 كاشير ومشرف</li>
+                    <li><i className="bi bi-check2 text-success me-2" /> حتى 500 صنف بالمنيو</li>
                     <li><i className="bi bi-check2 text-success me-2" /> شاشة تحضير المطبخ والبار (KDS)</li>
                     <li><i className="bi bi-check2 text-success me-2" /> سجل الديون والآجل ومسحوبات الموظفين</li>
                     <li><i className="bi bi-check2 text-success me-2" /> تقارير وإحصائيات متقدمة</li>
@@ -1229,19 +1371,26 @@ export default function SuperAdminPage() {
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'subscriptions' && (
         <div className="sa-section">
+          <SectionIntro eyebrow="LICENSE DESK" title="التراخيص والتفعيل" description="إصدار مفاتيح أحادية الاستخدام ومتابعة حالتها وصلاحيتها." icon="bi-key" />
+          <div className="sa-license-overview">
+            <article><i className="bi bi-key" /><span><small>جاهزة للتفعيل</small><strong>{licenseMetrics.available}</strong></span></article>
+            <article><i className="bi bi-check2-circle" /><span><small>تم استخدامها</small><strong>{licenseMetrics.used}</strong></span></article>
+            <article><i className="bi bi-clock-history" /><span><small>منتهية</small><strong>{licenseMetrics.expired}</strong></span></article>
+            <article><i className="bi bi-x-octagon" /><span><small>ملغاة</small><strong>{licenseMetrics.revoked}</strong></span></article>
+          </div>
           {/* Key Generator Card */}
           <div className="card sa-card shadow-sm mb-4">
             <div className="card-header sa-card-header p-3 d-flex align-items-center justify-content-between">
               <div className="d-flex align-items-center gap-2">
                 <i className="bi bi-key-fill text-amber" />
-                <h5 className="mb-0 fw-bold text-white">توليد مفتاح ترخيص جديد (License Key Generator)</h5>
+                <h5 className="mb-0 fw-bold text-white">إصدار مفتاح ترخيص جديد</h5>
               </div>
-              <span className="badge bg-dark border text-white px-3 py-2">تفعيل ذاتي أوفلاين/أونلاين</span>
+              <span className="badge bg-dark border text-white px-3 py-2">يُستخدم مرة واحدة</span>
             </div>
             <div className="card-body p-4">
               <form onSubmit={handleGenerateKey} className="row g-3 align-items-end">
                 <div className="col-12 col-md-3">
-                  <label className="form-label small text-white fw-bold">باقة الترخيص المرادة</label>
+                  <label className="form-label small text-white fw-bold">الباقة</label>
                   <select
                     className="form-select"
                     value={keyForm.plan}
@@ -1259,6 +1408,7 @@ export default function SuperAdminPage() {
                   <input
                     type="number"
                     min="0"
+                    max="3650"
                     className="form-control"
                     placeholder="365 (أو 0 لمدى الحياة)"
                     value={keyForm.validDays}
@@ -1268,7 +1418,7 @@ export default function SuperAdminPage() {
                 </div>
 
                 <div className="col-12 col-md-4">
-                  <label className="form-label small text-white fw-bold">ملاحظة الترخيص (اسم الكافيه أو رقم الإيصال)</label>
+                  <label className="form-label small text-white fw-bold">مرجع داخلي (اختياري)</label>
                   <input
                     type="text"
                     className="form-control"
@@ -1405,43 +1555,137 @@ export default function SuperAdminPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          5. AUDIT LOGS SECTION
+          5. PLATFORM REPORTS — calculated from live tenant data
+         ══════════════════════════════════════════════════════════════════════ */}
+      {activeSection === 'reports' && (
+        <div className="sa-section sa-reports">
+          <div className="sa-report-hero">
+            <div>
+              <span className="sa-report-hero__tag"><i className="bi bi-broadcast" /> تقرير مباشر</span>
+              <h2>صورة واضحة لأداء المنصة</h2>
+              <p>كل الأرقام أدناه محسوبة من المنشآت والاشتراكات الحالية، بدون بيانات تجريبية أو نسب افتراضية.</p>
+            </div>
+            <div className="sa-report-hero__actions">
+              <span>آخر تحديث {lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+              <button type="button" onClick={exportPlatformReportCsv}><i className="bi bi-download" /> تنزيل CSV</button>
+            </div>
+          </div>
+
+          <div className="sa-report-metric-grid">
+            <article><span>MRR المتوقع</span><strong>{estimatedMRR.toLocaleString()} <small>ج.م</small></strong><p>من {activeSubscriptions} اشتراك مدفوع نشط</p></article>
+            <article><span>معدل نشاط العملاء</span><strong>{totalTenants ? Math.round((activeTenants / totalTenants) * 100) : 0}<small>%</small></strong><p>{activeTenants} من إجمالي {totalTenants}</p></article>
+            <article className={expiringTenants.length ? 'is-warning' : ''}><span>تجديد خلال 7 أيام</span><strong>{expiringTenants.length}</strong><p>تحتاج تواصل ومتابعة</p></article>
+            <article className={expiredTenants.length ? 'is-danger' : ''}><span>اشتراكات منتهية</span><strong>{expiredTenants.length}</strong><p>تحتاج تجديد أو إيقاف</p></article>
+          </div>
+
+          <div className="sa-report-grid">
+            <section className="sa-report-panel">
+              <header><div><span>Revenue mix</span><h3>توزيع الإيراد حسب الباقة</h3></div><i className="bi bi-pie-chart" /></header>
+              <div className="sa-revenue-stack" aria-label="توزيع الإيراد الشهري المتوقع">
+                {['STARTER', 'PRO', 'ENTERPRISE'].map((plan) => {
+                  const count = tenants.filter((tenant) => tenant.status === 'ACTIVE' && tenant.subscriptionPlan === plan).length;
+                  const revenue = count * PLAN_PRICES[plan];
+                  return (
+                    <div key={plan} className={`sa-revenue-row sa-revenue-row--${plan.toLowerCase()}`}>
+                      <span><b>{plan}</b><small>{count} منشأة نشطة</small></span>
+                      <div><i style={{ width: `${estimatedMRR ? (revenue / estimatedMRR) * 100 : 0}%` }} /></div>
+                      <strong>{revenue.toLocaleString()} ج.م</strong>
+                    </div>
+                  );
+                })}
+              </div>
+              <footer>MRR قيمة تقديرية مبنية على السعر القياسي لكل باقة، وليست كشف تحصيل مالي.</footer>
+            </section>
+
+            <section className="sa-report-panel">
+              <header><div><span>Renewal queue</span><h3>أولوية التجديد والمتابعة</h3></div><i className="bi bi-calendar2-week" /></header>
+              <div className="sa-renewal-list">
+                {[...expiredTenants, ...expiringTenants]
+                  .sort((a, b) => new Date(tenantExpiry(a)) - new Date(tenantExpiry(b)))
+                  .slice(0, 8)
+                  .map((tenant) => {
+                    const days = daysUntil(tenantExpiry(tenant));
+                    return (
+                      <button type="button" key={tenant.id} onClick={() => handleOpenEditModal(tenant)}>
+                        <span className="sa-renewal-list__avatar">{tenant.name?.trim()?.charAt(0) || 'C'}</span>
+                        <span><strong>{tenant.name}</strong><small>{tenant.subscriptionPlan} · {tenant.slug}</small></span>
+                        <b className={days < 0 ? 'is-expired' : ''}>{days < 0 ? `منتهي من ${Math.abs(days)} يوم` : `متبقي ${days} يوم`}</b>
+                      </button>
+                    );
+                  })}
+                {expiredTenants.length + expiringTenants.length === 0 && <div className="sa-report-empty"><i className="bi bi-check2-circle" /> لا توجد تجديدات حرجة خلال 7 أيام</div>}
+              </div>
+            </section>
+          </div>
+
+          <div className="sa-report-grid sa-report-grid--secondary">
+            <section className="sa-report-panel">
+              <header><div><span>Customer health</span><h3>حالة قاعدة العملاء</h3></div><i className="bi bi-heart-pulse" /></header>
+              <div className="sa-health-matrix">
+                <button type="button" onClick={() => { setActiveSection('tenants'); setStatusFilter('ACTIVE'); }}><i className="bi bi-check-circle" /><span><b>{activeTenants}</b> نشطة</span></button>
+                <button type="button" onClick={() => { setActiveSection('tenants'); setStatusFilter('TRIAL'); }}><i className="bi bi-hourglass-split" /><span><b>{trialTenants}</b> تجريبية</span></button>
+                <button type="button" onClick={() => { setActiveSection('tenants'); setStatusFilter('SUSPENDED'); }}><i className="bi bi-pause-circle" /><span><b>{suspendedTenants}</b> موقوفة</span></button>
+                <button type="button" onClick={() => setActiveSection('subscriptions')}><i className="bi bi-key" /><span><b>{licenseMetrics.available}</b> ترخيص متاح</span></button>
+              </div>
+            </section>
+            <section className="sa-report-panel">
+              <header><div><span>Data quality</span><h3>جودة بيانات التشغيل</h3></div><i className="bi bi-shield-check" /></header>
+              <div className="sa-quality-list">
+                <span><i className={tenants.every((tenant) => tenant.slug && tenant.name) ? 'is-good' : 'is-warning'} /> بيانات المنشآت الأساسية <b>{tenants.filter((tenant) => tenant.slug && tenant.name).length}/{totalTenants}</b></span>
+                <span><i className={tenants.every((tenant) => tenantExpiry(tenant)) ? 'is-good' : 'is-warning'} /> تاريخ انتهاء محدد <b>{tenants.filter((tenant) => tenantExpiry(tenant)).length}/{totalTenants}</b></span>
+                <span><i className={platformActivityLogs.length ? 'is-good' : 'is-warning'} /> سجل تدقيق متاح <b>{platformActivityLogs.length} حدث</b></span>
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          6. AUDIT LOGS SECTION
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'audit-logs' && (
         <div className="sa-section">
+          <SectionIntro eyebrow="GOVERNANCE" title="الحوكمة وسجل التغييرات" description="كل تغيير حقيقي على المنشآت مع المنفذ والتوقيت والتفاصيل." icon="bi-shield-check" />
           <div className="card sa-card shadow-sm">
-            <div className="card-header sa-card-header p-3 d-flex align-items-center justify-content-between">
+            <div className="card-header sa-card-header p-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
               <div className="d-flex align-items-center gap-2">
                 <i className="bi bi-journal-text text-amber" />
-                <h5 className="mb-0 fw-bold text-white">سجل العمليات والنشاطات الإدارية (Audit Trail)</h5>
+                <div><h5 className="mb-0 fw-bold text-white">سجل نشاط المنصة</h5><small className="text-white opacity-50">آخر {platformActivityLogs.length} عملية مسجلة فعليًا</small></div>
               </div>
-              <span className="badge text-bg-dark border text-white px-3 py-2">تتبع فوري للأمان</span>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => loadData(true)}><i className="bi bi-arrow-clockwise me-1" /> تحديث</button>
             </div>
             <div className="card-body p-4">
-              <p className="text-white opacity-75 small mb-4">
-                يتم تسجيل كل إجراء تنفيذي على مستوى المنصة (تأسيس منشأة، تعديل اشتراك، إصدار ترخيص، إلغاء صلاحية) لحماية البيانات ومراجعة العمليات.
-              </p>
+              <div className="sa-audit-toolbar">
+                <div className="input-group">
+                  <span className="input-group-text"><i className="bi bi-search" /></span>
+                  <input className="form-control" value={auditQuery} onChange={(event) => setAuditQuery(event.target.value)} placeholder="ابحث باسم المنشأة، الرابط، المنفذ أو تفاصيل العملية..." />
+                </div>
+                <select className="form-select" value={auditActionFilter} onChange={(event) => setAuditActionFilter(event.target.value)}>
+                  <option value="ALL">كل العمليات</option>
+                  {[...new Set(platformActivityLogs.map((log) => log.action))].map((action) => <option value={action} key={action}>{AUDIT_ACTIONS[action] || action}</option>)}
+                </select>
+              </div>
 
-              <div className="sa-timeline">
-                {[
-                  { title: 'تم ترقية باقة كافيه روقان إلى PRO', user: 'superadmin', time: 'منذ 15 دقيقة', icon: 'bi-patch-check-fill', color: 'text-success' },
-                  { title: 'تم إصدار مفتاح ترخيص جديد (PRO - 365 يوم)', user: 'superadmin', time: 'منذ ساعتين', icon: 'bi-key-fill', color: 'text-amber' },
-                  { title: 'تأسيس منشأة جديدة: كافيه وناس (wanas-cafe)', user: 'superadmin', time: 'اليوم، 01:30 ص', icon: 'bi-building-fill-add', color: 'text-primary' },
-                  { title: 'تمديد الفترة التجريبية لمنشأة كافيو فرع 2 (+7 أيام)', user: 'superadmin', time: 'أمس، 09:15 م', icon: 'bi-clock-history', color: 'text-warning' },
-                ].map((item, idx) => (
-                  <div key={idx} className="sa-timeline-item d-flex gap-3 pb-3 mb-3 border-bottom border-secondary">
-                    <div className={`sa-timeline-icon ${item.color}`}>
-                      <i className={`bi ${item.icon} fs-5`} />
+              <div className="sa-timeline sa-timeline--real">
+                {filteredActivityLogs.map((log) => {
+                  const tenant = tenantById.get(log.tenantId);
+                  return (
+                  <div key={log.id} className="sa-timeline-item">
+                    <div className="sa-timeline-icon">
+                      <i className={`bi ${log.action === 'SUSPENDED' ? 'bi-pause-circle' : log.action?.includes('LICENSE') ? 'bi-key' : log.action === 'CREATED' ? 'bi-building-add' : 'bi-arrow-repeat'}`} />
                     </div>
-                    <div className="flex-grow-1">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <strong className="text-white fs-6">{item.title}</strong>
-                        <span className="text-white opacity-50 small">{item.time}</span>
+                    <div className="sa-timeline-content">
+                      <div>
+                        <strong>{AUDIT_ACTIONS[log.action] || log.action}</strong>
+                        <span>{tenant?.name || `منشأة #${log.tenantId}`} <small>{tenant?.slug || ''}</small></span>
                       </div>
-                      <span className="small text-white opacity-75">المنفذ: {item.user} • Root Authorization</span>
+                      <p>{log.details || 'بدون تفاصيل إضافية'}</p>
+                      <footer><span><i className="bi bi-person" /> {log.performedBy || 'SYSTEM'}</span><time>{log.createdAt ? new Date(log.createdAt).toLocaleString('ar-EG') : '—'}</time></footer>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
+                {filteredActivityLogs.length === 0 && <div className="sa-report-empty"><i className="bi bi-inbox" /> لا توجد عمليات مطابقة للبحث الحالي</div>}
               </div>
             </div>
           </div>
@@ -1453,28 +1697,29 @@ export default function SuperAdminPage() {
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'settings' && (
         <div className="sa-section">
+          <SectionIntro eyebrow="PLATFORM HEALTH" title="حالة المنصة والحماية" description="ملخص تشغيلي واضح بدون عرض أسرار أو معلومات حساسة داخل الواجهة." icon="bi-activity" />
           <div className="row g-4">
             <div className="col-12 col-md-6">
               <div className="card sa-card shadow-sm h-100">
                 <div className="card-header sa-card-header p-3">
                   <h5 className="mb-0 fw-bold text-white">
                     <i className="bi bi-hdd-network me-2 text-primary" />
-                    مواصفات الخوادم وقاعدة البيانات
+                    حالة تشغيل المنصة
                   </h5>
                 </div>
                 <div className="card-body p-4">
                   <dl className="row mb-0 small">
-                    <dt className="col-sm-5 text-white opacity-75 mb-2">محرك قاعدة البيانات</dt>
-                    <dd className="col-sm-7 text-white fw-bold mb-2">SQLite 3.53 (WAL Mode + 5s Busy Timeout)</dd>
+                    <dt className="col-sm-5 text-white opacity-75 mb-2">اتصال البيانات</dt>
+                    <dd className="col-sm-7 text-success fw-bold mb-2"><i className="bi bi-circle-fill me-1" style={{ fontSize: '6px' }} /> متصل</dd>
 
-                    <dt className="col-sm-5 text-white opacity-75 mb-2">إصدار منصة السحابة</dt>
-                    <dd className="col-sm-7 text-white fw-bold mb-2">Caffio Enterprise Platform v2.4</dd>
+                    <dt className="col-sm-5 text-white opacity-75 mb-2">المنشآت المحملة</dt>
+                    <dd className="col-sm-7 text-white fw-bold mb-2">{platformStats?.totalTenants ?? totalTenants} منشأة</dd>
 
-                    <dt className="col-sm-5 text-white opacity-75 mb-2">بروتوكول الأمان والتشفير</dt>
-                    <dd className="col-sm-7 text-white fw-bold mb-2">HMAC-SHA256 JWT + Refresh Rotation</dd>
+                    <dt className="col-sm-5 text-white opacity-75 mb-2">آخر مزامنة للوحة</dt>
+                    <dd className="col-sm-7 text-white fw-bold mb-2">{lastUpdatedAt ? lastUpdatedAt.toLocaleString('ar-EG') : 'جاري التحميل'}</dd>
 
-                    <dt className="col-sm-5 text-white opacity-75">عزل المشتركين (Multi-Tenancy)</dt>
-                    <dd className="col-sm-7 text-success fw-bold">Zero-Trust Schema Isolation</dd>
+                    <dt className="col-sm-5 text-white opacity-75">عزل بيانات العملاء</dt>
+                    <dd className="col-sm-7 text-success fw-bold">Tenant ID + صلاحيات مستقلة</dd>
                   </dl>
                 </div>
               </div>
@@ -1485,16 +1730,16 @@ export default function SuperAdminPage() {
                 <div className="card-header sa-card-header p-3">
                   <h5 className="mb-0 fw-bold text-white">
                     <i className="bi bi-shield-check me-2 text-success" />
-                    مفاتيح وأسرار النظام (Secret Material)
+                    الحماية والحوكمة
                   </h5>
                 </div>
                 <div className="card-body p-4">
                   <p className="text-white opacity-75 small mb-3">
-                    مفتاح التأسيس السري مخصص لكل بيئة تثبيت بشكل عشوائي ومشفر لمنع تزوير الجلسات.
+                    العمليات الحساسة مقيدة بصلاحية Super Admin، وتغييرات الباقات والإيقاف والتفعيل تُحفظ في سجل النشاط.
                   </p>
                   <div className="p-3 bg-dark rounded border border-secondary">
-                    <span className="small text-white opacity-75 d-block mb-1">حالة التشفير:</span>
-                    <span className="badge text-bg-success px-3 py-2 fw-bold">نشط ومشفر بنجاح (32-byte SecureRandom)</span>
+                    <span className="small text-white opacity-75 d-block mb-2">ضوابط مفعلة:</span>
+                    <div className="d-flex flex-wrap gap-2"><span className="badge text-bg-success px-3 py-2 fw-bold">JWT Sessions</span><span className="badge text-bg-success px-3 py-2 fw-bold">Role Guard</span><span className="badge text-bg-success px-3 py-2 fw-bold">Audit Log</span></div>
                   </div>
                 </div>
               </div>
@@ -1516,7 +1761,7 @@ export default function SuperAdminPage() {
               <div className="modal-header border-secondary p-3">
                 <h5 className="modal-title fw-bold text-light">
                   <i className="bi bi-building-add me-2 text-primary" />
-                  تأسيس منشأة جديدة ✦ Caffio Enterprise
+                  تأسيس منشأة جديدة
                 </h5>
                 <button
                   type="button"
@@ -1527,6 +1772,14 @@ export default function SuperAdminPage() {
 
               <form onSubmit={handleCreateTenant}>
                 <div className="modal-body p-4">
+                  <div className="sa-provision-steps">
+                    <span className="is-active"><b>1</b><i>بيانات المنشأة</i></span>
+                    <em />
+                    <span className="is-active"><b>2</b><i>الباقة والمالك</i></span>
+                    <em />
+                    <span><b>3</b><i>تأسيس وتسليم</i></span>
+                  </div>
+                  <div className="sa-provision-note"><i className="bi bi-info-circle" /><span><strong>سيتم إنشاء المنشأة وحساب المدير معًا.</strong> راجع الرابط وبيانات الدخول قبل التأكيد؛ ستظهر لك بطاقة جاهزة للإرسال للمالك.</span></div>
                   <div className="row g-3">
                     <div className="col-12 col-md-6">
                       <label className="form-label small text-white fw-bold">اسم المنشأة / الكافيه بالكامل</label>
@@ -1556,8 +1809,10 @@ export default function SuperAdminPage() {
                         placeholder="rawqan-cafe"
                         value={newTenantForm.slug}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, slug: e.target.value.toLowerCase().trim() })}
+                        pattern="[a-z0-9-]+"
                         required
                       />
+                      <span className="sa-field-hint">الرابط: /{newTenantForm.slug || 'your-cafe'}/login</span>
                     </div>
 
                     <div className="col-12 col-md-6">
@@ -1631,8 +1886,10 @@ export default function SuperAdminPage() {
                         placeholder="كلمة السر"
                         value={newTenantForm.ownerPassword}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerPassword: e.target.value })}
+                        minLength="8"
                         required
                       />
+                      <span className={`sa-field-hint ${newTenantForm.ownerPassword && newTenantForm.ownerPassword.length < 8 ? 'is-danger' : ''}`}>8 أحرف على الأقل</span>
                     </div>
                   </div>
                 </div>
@@ -1651,7 +1908,7 @@ export default function SuperAdminPage() {
                     disabled={updating}
                   >
                     {updating ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-rocket-takeoff me-1" />}
-                    تأكيد وتأسيس المنشأة 🚀
+                    تأسيس المنشأة وإنشاء حساب المدير
                   </button>
                 </div>
               </form>
@@ -1810,9 +2067,11 @@ export default function SuperAdminPage() {
                               type="button"
                               className="btn btn-sm btn-outline-info flex-grow-1"
                               onClick={() => {
-                                const current = customPlanForm.subscriptionEndsAt ? new Date(customPlanForm.subscriptionEndsAt) : new Date();
+                                const now = new Date();
+                                const selectedEnd = customPlanForm.subscriptionEndsAt ? new Date(customPlanForm.subscriptionEndsAt) : now;
+                                const current = selectedEnd > now ? selectedEnd : now;
                                 current.setDate(current.getDate() + b.days);
-                                setCustomPlanForm({ ...customPlanForm, subscriptionEndsAt: current.toISOString().slice(0, 10), extendDays: b.days });
+                                setCustomPlanForm({ ...customPlanForm, subscriptionEndsAt: current.toISOString().slice(0, 10), extendDays: 0 });
                               }}
                             >
                               {b.label}

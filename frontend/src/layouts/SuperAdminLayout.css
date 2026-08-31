@@ -553,3 +553,12 @@ html, body {
 .sa-server-badge{border-radius:10px;padding:5px 8px;background:rgba(16,185,129,.055)}
 .sa-main-content{padding:18px!important;position:relative}
 @media(max-width:900px){.sa-main-content{padding:10px!important}}
+
+/* The application root is intentionally fixed-height; scroll only the content pane. */
+html,body,#root{height:100%!important;min-height:0!important;overflow:hidden!important}
+.sa-app{height:100dvh!important;min-height:0!important;overflow:hidden!important}
+.sa-wrapper{height:100%;min-height:0!important;overflow:hidden!important}
+.sa-header{flex:0 0 68px;position:relative;top:auto}
+.sa-main-content{flex:1;min-height:0!important;max-width:none;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;scrollbar-gutter:stable}
+.sa-main-content::-webkit-scrollbar,.sa-sidebar__body::-webkit-scrollbar{width:7px}.sa-main-content::-webkit-scrollbar-track,.sa-sidebar__body::-webkit-scrollbar-track{background:rgba(255,255,255,.015)}.sa-main-content::-webkit-scrollbar-thumb,.sa-sidebar__body::-webkit-scrollbar-thumb{border-radius:10px;background:#26364e}.sa-main-content::-webkit-scrollbar-thumb:hover{background:#40526e}
+@media(max-width:991.98px){.sa-app{height:100dvh!important}.sa-wrapper{height:100%}.sa-main-content{padding-bottom:28px!important}}
