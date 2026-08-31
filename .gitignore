@@ -38,3 +38,5 @@ dist/
 *.log
 *.original
 cafe.db
+.m2-superadmin/
+.m2*/
