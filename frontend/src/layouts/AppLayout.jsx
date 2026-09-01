@@ -167,7 +167,7 @@ export default function AppLayout({ children }) {
 
           <div className="app-topbar__brand">
             <img
-              src={user?.logoUrl || '/caffio-logo.png'}
+              src={user?.logoUrl || '/caffio-logo-mark.png'}
               alt="Logo"
               style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: 6, filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4))' }}
             />
@@ -268,7 +268,7 @@ export default function AppLayout({ children }) {
         {/* Logo & Close Button */}
         <div className="sidebar__logo">
           <img
-            src={user?.logoUrl || '/caffio-logo.png'}
+            src={user?.logoUrl || '/caffio-logo-mark.png'}
             alt="Logo"
             style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 8, filter: 'drop-shadow(0 3px 8px rgba(245, 158, 11, 0.45))' }}
           />

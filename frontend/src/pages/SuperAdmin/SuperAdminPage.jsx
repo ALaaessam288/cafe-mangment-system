@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { platformApi } from '../../api/platformApi';
 import { useToast } from '../../context/ToastContext';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
+import ProvisionTenantModal from './components/ProvisionTenantModal';
+import ProvisionSuccessModal from './components/ProvisionSuccessModal';
 import './SuperAdminPage.css';
 
 const PLAN_PRICES = { TRIAL: 0, STARTER: 499, PRO: 899, ENTERPRISE: 1499, CUSTOM: 0 };
@@ -107,20 +109,6 @@ export default function SuperAdminPage() {
   // License Generator State
   const [generatingKey, setGeneratingKey] = useState(false);
   const [keyForm, setKeyForm] = useState({ plan: 'PRO', validDays: 365, notes: '' });
-
-  // Direct Provisioning Form State
-  const [newTenantForm, setNewTenantForm] = useState({
-    name: '',
-    slug: '',
-    businessType: 'CAFE_AND_RESTAURANT',
-    subscriptionPlan: 'PRO',
-    ownerWhatsapp: '',
-    ownerUsername: '',
-    ownerPassword: '',
-    ownerFullName: '',
-    timezone: 'Africa/Cairo',
-    currency: 'EGP',
-  });
 
   const [createdTenantModal, setCreatedTenantModal] = useState(null);
 
@@ -365,64 +353,26 @@ export default function SuperAdminPage() {
     toast.success('تم فتح تطبيق واتساب لإرسال بيانات الحساب 📲');
   }
 
-  async function handleCreateTenant(e) {
-    e.preventDefault();
-    const normalizedSlug = newTenantForm.slug.trim().toLowerCase();
-    if (!newTenantForm.name.trim() || !normalizedSlug || !newTenantForm.ownerFullName.trim() || !newTenantForm.ownerUsername.trim() || !newTenantForm.ownerPassword) {
-      toast.error('يرجى ملء كافة الحقول الإلزامية');
-      return;
-    }
-    if (!/^[a-z0-9-]+$/.test(normalizedSlug)) {
-      toast.error('رابط المنشأة يقبل حروف إنجليزية صغيرة وأرقام وشرطة (-) فقط');
-      return;
-    }
-    if (tenants.some((tenant) => tenant.slug?.toLowerCase() === normalizedSlug)) {
-      toast.error('رابط المنشأة مستخدم بالفعل؛ اختر رابطاً مختلفاً');
-      return;
-    }
-    if (newTenantForm.ownerPassword.length < 8) {
-      toast.error('كلمة المرور يجب ألا تقل عن 8 أحرف');
-      return;
-    }
-
+  async function handleCreateTenant(formData) {
+    const normalizedSlug = formData.slug.trim().toLowerCase();
     setUpdating(true);
     try {
-      await platformApi.provisionTenant({ ...newTenantForm, slug: normalizedSlug });
-      toast.success(`تم تأسيس وتفعيل منشأة (${newTenantForm.name}) بنجاح! 🚀`);
-      
+      const provisioned = await platformApi.provisionTenant({ ...formData, slug: normalizedSlug });
       const createdData = {
-        name: newTenantForm.name,
-        slug: newTenantForm.slug,
-        ownerFullName: newTenantForm.ownerFullName,
-        ownerUsername: newTenantForm.ownerUsername,
-        ownerPassword: newTenantForm.ownerPassword,
-        subscriptionPlan: newTenantForm.subscriptionPlan,
-        ownerWhatsapp: newTenantForm.ownerWhatsapp,
+        ...formData,
+        tenantId: provisioned?.tenantId,
+        slug: provisioned?.slug || normalizedSlug,
+        ownerUsername: provisioned?.ownerUsername || formData.ownerUsername,
+        loginUrl: `${window.location.origin}/${provisioned?.slug || normalizedSlug}/login`,
       };
 
       setCreatedTenantModal(createdData);
       setCreateModal(false);
-
-      // Auto-open WhatsApp if number is provided
-      if (newTenantForm.ownerWhatsapp) {
-        sendWhatsappCredentials(createdData);
-      }
-
-      setNewTenantForm({
-        name: '',
-        slug: '',
-        businessType: 'CAFE_AND_RESTAURANT',
-        subscriptionPlan: 'PRO',
-        ownerWhatsapp: '',
-        ownerUsername: '',
-        ownerPassword: '',
-        ownerFullName: '',
-        timezone: 'Africa/Cairo',
-        currency: 'EGP',
-      });
-      loadData(true);
+      toast.success(`تم تأسيس ${formData.name} وأصبحت مساحة التشغيل جاهزة`);
+      await loadData(true);
     } catch (err) {
       toast.error(err.message || 'فشل في إضافة المنشأة');
+      throw err;
     } finally {
       setUpdating(false);
     }
@@ -1950,173 +1900,13 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          MODAL 1: DIRECT TENANT PROVISIONING MODAL
-         ══════════════════════════════════════════════════════════════════════ */}
       {createModal && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={(e) => { if (e.target === e.currentTarget) setCreateModal(false); }}
-        >
-          <div className="modal-dialog modal-dialog-centered modal-lg w-100">
-            <div className="modal-content border-secondary shadow-lg">
-              <div className="modal-header border-secondary p-3">
-                <h5 className="modal-title fw-bold text-light">
-                  <i className="bi bi-building-add me-2 text-primary" />
-                  تأسيس منشأة جديدة
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setCreateModal(false)}
-                />
-              </div>
-
-              <form onSubmit={handleCreateTenant}>
-                <div className="modal-body p-4">
-                  <div className="sa-provision-steps">
-                    <span className="is-active"><b>1</b><i>بيانات المنشأة</i></span>
-                    <em />
-                    <span className="is-active"><b>2</b><i>الباقة والمالك</i></span>
-                    <em />
-                    <span><b>3</b><i>تأسيس وتسليم</i></span>
-                  </div>
-                  <div className="sa-provision-note"><i className="bi bi-info-circle" /><span><strong>سيتم إنشاء المنشأة وحساب المدير معًا.</strong> راجع الرابط وبيانات الدخول قبل التأكيد؛ ستظهر لك بطاقة جاهزة للإرسال للمالك.</span></div>
-                  <div className="row g-3">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">اسم المنشأة / الكافيه بالكامل</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="مثال: روقان كافيه"
-                        value={newTenantForm.name}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          const autoSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                          setNewTenantForm({
-                            ...newTenantForm,
-                            name,
-                            slug: newTenantForm.slug || autoSlug,
-                          });
-                        }}
-                        required
-                      />
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">رابط المنشأة (Slug المعرف)</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="rawqan-cafe"
-                        value={newTenantForm.slug}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, slug: e.target.value.toLowerCase().trim() })}
-                        pattern="[a-z0-9-]+"
-                        required
-                      />
-                      <span className="sa-field-hint">الرابط: /{newTenantForm.slug || 'your-cafe'}/login</span>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">اسم المالك / المدير العام</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="مثال: أحمد محمود"
-                        value={newTenantForm.ownerFullName}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerFullName: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">نوع النشاط التجاري</label>
-                      <select
-                        className="form-select"
-                        value={newTenantForm.businessType}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, businessType: e.target.value })}
-                      >
-                        <option value="CAFE_AND_RESTAURANT">كافيه ومطعم (شامل)</option>
-                        <option value="CAFE">كافيه ومشروبات فقط</option>
-                        <option value="RESTAURANT">مطعم ومأكولات</option>
-                      </select>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">خطة الاشتراك المحددة من المنصة ⭐</label>
-                      <select
-                        className="form-select border-warning"
-                        value={newTenantForm.subscriptionPlan}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, subscriptionPlan: e.target.value })}
-                      >
-                        <option value="TRIAL">TRIAL — فترة تجريبية مجانية (14 يوم)</option>
-                        <option value="STARTER">STARTER — باقة البداية (499 ج.م / شهر)</option>
-                        <option value="PRO">PRO — باقة المحترفين ⭐ (899 ج.م / شهر)</option>
-                        <option value="ENTERPRISE">ENTERPRISE — الشركات والكافيهات الكبرى (1499 ج.م / شهر)</option>
-                      </select>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">اسم مستخدم الحساب</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="admin"
-                        value={newTenantForm.ownerUsername}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerUsername: e.target.value.trim() })}
-                        required
-                      />
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">رقم واتساب المالك لإرسال البيانات 📲</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="مثال: 01061967618"
-                        value={newTenantForm.ownerWhatsapp}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerWhatsapp: e.target.value })}
-                      />
-                      <span className="small text-muted" style={{ fontSize: '0.75rem' }}>سيتم فتح واتساب تلقائياً لإرسال بيانات الحساب فور الإنشاء</span>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-white fw-bold">كلمة مرور الحساب الأولى</label>
-                      <input
-                        type="password"
-                        className="form-control"
-                        placeholder="كلمة السر"
-                        value={newTenantForm.ownerPassword}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerPassword: e.target.value })}
-                        minLength="8"
-                        required
-                      />
-                      <span className={`sa-field-hint ${newTenantForm.ownerPassword && newTenantForm.ownerPassword.length < 8 ? 'is-danger' : ''}`}>8 أحرف على الأقل</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="modal-footer border-secondary p-3">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setCreateModal(false)}
-                  >
-                    إلغاء
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary fw-bold px-4"
-                    disabled={updating}
-                  >
-                    {updating ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-rocket-takeoff me-1" />}
-                    تأسيس المنشأة وإنشاء حساب المدير
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <ProvisionTenantModal
+          tenants={tenants}
+          updating={updating}
+          onClose={() => setCreateModal(false)}
+          onProvision={handleCreateTenant}
+        />
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -2433,105 +2223,14 @@ export default function SuperAdminPage() {
           </div>
         </div>
       )}
-      {/* ══════════════════════════════════════════════════════════════════════
-          MODAL 4: CREATED TENANT CREDENTIALS & WHATSAPP MODAL
-         ══════════════════════════════════════════════════════════════════════ */}
       {createdTenantModal && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={(e) => { if (e.target === e.currentTarget) setCreatedTenantModal(null); }}
-        >
-          <div className="modal-dialog modal-dialog-centered w-100" style={{ maxWidth: '520px' }}>
-            <div className="modal-content border-success shadow-lg">
-              <div className="modal-header border-secondary p-3 bg-success-subtle">
-                <h5 className="modal-title fw-bold text-success">
-                  <i className="bi bi-check-circle-fill me-2" />
-                  تم تأسيس المنشأة وتفعيلها بنجاح 🎉
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setCreatedTenantModal(null)}
-                />
-              </div>
-              <div className="modal-body p-4">
-                <div className="p-3 bg-dark rounded border border-secondary mb-3">
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-white opacity-75 small">اسم المنشأة:</span>
-                    <span className="text-white fw-bold">{createdTenantModal.name}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-white opacity-75 small">المعرف المختصر (Slug):</span>
-                    <span className="badge bg-secondary">{createdTenantModal.slug}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-white opacity-75 small">باقة الاشتراك:</span>
-                    <span className="badge bg-warning text-dark fw-bold">{createdTenantModal.subscriptionPlan}</span>
-                  </div>
-                  <hr className="border-secondary my-2" />
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="text-white opacity-75 small">اسم المستخدم:</span>
-                    <div className="d-flex align-items-center gap-1">
-                      <code className="text-info fw-bold">{createdTenantModal.ownerUsername}</code>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-link text-white p-0"
-                        onClick={() => copyToClipboard(createdTenantModal.ownerUsername, 'اسم المستخدم')}
-                      >
-                        <i className="bi bi-clipboard small" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center">
-                    <span className="text-white opacity-75 small">كلمة المرور:</span>
-                    <div className="d-flex align-items-center gap-1">
-                      <code className="text-warning fw-bold">{createdTenantModal.ownerPassword}</code>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-link text-white p-0"
-                        onClick={() => copyToClipboard(createdTenantModal.ownerPassword, 'كلمة المرور')}
-                      >
-                        <i className="bi bi-clipboard small" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="alert alert-dark border-secondary p-3 d-flex align-items-center justify-content-between mb-0">
-                  <div>
-                    <span className="small text-white d-block fw-bold">رقم واتساب المالك:</span>
-                    <span className="small text-white opacity-75">{createdTenantModal.ownerWhatsapp || 'غير محدد'}</span>
-                  </div>
-                  {createdTenantModal.ownerWhatsapp && (
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-success fw-bold px-3"
-                      onClick={() => sendWhatsappCredentials(createdTenantModal)}
-                    >
-                      <i className="bi bi-whatsapp me-1" /> فتح واتساب 📲
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="modal-footer border-secondary p-3 d-flex justify-content-between">
-                <button
-                  type="button"
-                  className="btn btn-outline-light btn-sm fw-bold"
-                  onClick={() => copyToClipboard(formatWhatsappMessage(createdTenantModal), 'رسالة الواتساب بالكامل')}
-                >
-                  <i className="bi bi-copy me-1" /> نسخ نص الرسالة 📋
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary fw-bold px-4"
-                  onClick={() => setCreatedTenantModal(null)}
-                >
-                  تم / متابعة ✓
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProvisionSuccessModal
+          data={createdTenantModal}
+          onClose={() => setCreatedTenantModal(null)}
+          onCopy={copyToClipboard}
+          onWhatsapp={sendWhatsappCredentials}
+          formatMessage={formatWhatsappMessage}
+        />
       )}
     </SuperAdminLayout>
   );

@@ -19,7 +19,7 @@ export default function WelcomePage() {
       <div className="welcome-page__content">
         <header className="welcome-page__header">
           <div className="welcome-page__logo">
-            <img src="/caffio-logo.png" alt="Caffio Logo" className="welcome-page__logo-img" />
+            <img src="/caffio-logo-mark.png" alt="Caffio Logo" className="welcome-page__logo-img" />
           </div>
           <h1 className="welcome-page__title">Caffio</h1>
           <p className="welcome-page__tagline">CAFÉ BUSINESS SIMPLIFIED</p>

@@ -13,6 +13,8 @@
 @media(max-width:520px){.super-login-page{align-items:start;padding:18px 14px;overflow-y:auto}.super-login-topbar{flex-direction:column;align-items:flex-start;gap:8px}.super-login-stage{border-radius:22px 5px 22px 22px}.super-login-card{margin:12px;padding:25px 18px;border-radius:5px 18px 18px 18px}.super-login-header h2{font-size:20px}.super-login-card-footer{flex-direction:column}.super-login-footer-info{font-size:6.5px;gap:6px}}
 @media(prefers-reduced-motion:reduce){.super-login-page *{animation:none!important;transition:none!important}}
 
+.super-login-intel-brand img{width:168px;height:56px;filter:drop-shadow(0 8px 18px rgba(239,169,86,.12))}
+
 /* Clear Arabic copy and a single, balanced primary action. */
 .super-login-intel-copy{color:#a0aabe}
 .super-login-stats strong{color:#c5ccda;font:800 8.5px 'Cairo',sans-serif;direction:rtl}

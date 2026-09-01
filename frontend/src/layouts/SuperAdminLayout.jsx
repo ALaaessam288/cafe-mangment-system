@@ -74,7 +74,7 @@ export default function SuperAdminLayout({
         <div className="sa-sidebar__header">
           <div className="sa-brand">
             <div className="sa-brand__logo">
-              <img src="/caffio-logo.png" alt="Caffio Logo" className="sa-brand__logo-img" />
+              <img src="/caffio-logo-mark.png" alt="Caffio Logo" className="sa-brand__logo-img" />
             </div>
             {!collapsed && (
               <div className="sa-brand__text">

@@ -41,7 +41,7 @@ export default function SplashScreen() {
         {/* Logo mark */}
         <div className="splash__logo">
           <img
-            src="/caffio-logo.png"
+            src="/caffio-logo-mark.png"
             alt="Caffio Logo"
             className="splash__logo-img"
           />
