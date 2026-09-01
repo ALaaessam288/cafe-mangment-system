@@ -12,6 +12,7 @@ import MenuPanel     from './MenuPanel';
 import OrderPanel    from './OrderPanel';
 import PaymentModal  from './PaymentModal';
 import ModifierDialog from './ModifierDialog';
+import SugarModal from './SugarModal';
 import ShiftStrip    from './ShiftStrip';
 import ShiftAuditModal from '../../components/ShiftAuditModal/ShiftAuditModal';
 import { fallbackTopSellers } from './menuGroups';
@@ -180,6 +181,11 @@ export default function POSPage() {
   const [posOptionsProduct, setPosOptionsProduct] = useState(null);
   const [posOptionsList, setPosOptionsList] = useState([]);
   const [selectedOptionIds, setSelectedOptionIds] = useState([]);
+
+  // Sugar selection modal for drinks
+  const [showSugarModal, setShowSugarModal] = useState(false);
+  const [sugarProduct, setSugarProduct] = useState(null);
+
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [targetTableId, setTargetTableId] = useState('');
   const [showOpeningAudit, setShowOpeningAudit] = useState(false);
@@ -733,6 +739,23 @@ export default function POSPage() {
       });
       toast.error(err.message, 'فشل في إضافة الصنف');
     }
+  }
+
+  /* Helper to detect if a product is a beverage/drink that should prompt for sugar */
+  function isDrinkProduct(prod) {
+    if (!prod) return false;
+    if (prod.revenueLine === 'BEVERAGE') return true;
+    if (prod.stationCode === 'BAR') return true;
+    const n = (prod.name || prod.nameAr || '').toLowerCase();
+    const c = (prod.categoryNameAr || prod.categoryName || '').toLowerCase();
+    const drinkKeywords = [
+      'شاي', 'قهوة', 'اسبريسو', 'إسبريسو', 'لاتيه', 'كابتشينو', 'موكا', 'كركديه', 
+      'ينسون', 'نعناع', 'قرفة', 'زنجبيل', 'سحلب', 'شوكليت', 'كاكاو', 'أمريكانو', 
+      'فلات وايت', 'ماتشا', 'مشروب', 'مشروبات', 'عصير', 'سموذي', 'موهيتو', 'ميلك شيك',
+      'حلبة', 'كراوية', 'ليمون', 'برتقال', 'مانجو', 'فراولة', 'جوافة', 'موز', 'كوكتيل',
+      'tea', 'coffee', 'espresso', 'latte', 'cappuccino', 'mocha', 'drink', 'beverage', 'juice'
+    ];
+    return drinkKeywords.some((k) => n.includes(k) || c.includes(k));
   }
 
   /* Reads a product's options, cached - the second tap on the same drink
@@ -1747,6 +1770,21 @@ export default function POSPage() {
             setAddNote('');
           }}
           onConfirm={handleAddProductWithOptions}
+        />
+      )}
+
+      {/* Sugar selection modal for drinks */}
+      {showSugarModal && sugarProduct && (
+        <SugarModal
+          product={sugarProduct}
+          quantity={addQuantity}
+          onQuantityChange={setAddQuantity}
+          onCancel={() => {
+            setShowSugarModal(false);
+            setSugarProduct(null);
+            setAddQuantity(1);
+          }}
+          onConfirm={handleAddProductWithSugar}
         />
       )}
 

@@ -1,0 +1,277 @@
+.sugar-modal {
+  width: min(520px, 94vw) !important;
+  max-width: 520px !important;
+  padding: 0 !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  background: linear-gradient(150deg, #1b1714 0%, #110e0c 100%) !important;
+  border: 1px solid rgba(239, 169, 86, 0.25) !important;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  direction: rtl;
+  animation: sugarPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes sugarPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.sugar-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sugar-modal__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent, #f59e0b);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sugar-modal__title {
+  margin: 3px 0 0;
+  font-size: 19px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.sugar-modal__price {
+  display: inline-block;
+  margin-top: 2px;
+  color: #5fd2b7;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sugar-modal__close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #a39589;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sugar-modal__close:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.sugar-modal__body {
+  padding: 18px 20px;
+}
+
+.sugar-modal__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.sugar-modal__section-head span {
+  font-size: 13px;
+  font-weight: 800;
+  color: #e5d8cc;
+}
+
+.sugar-modal__section-head small {
+  font-size: 11px;
+  color: #8c7a6b;
+}
+
+.sugar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.sugar-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 84px;
+  padding: 8px 4px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #e6dad0;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  user-select: none;
+}
+
+.sugar-btn__shortcut {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  font-size: 9px;
+  font-weight: 900;
+  opacity: 0.45;
+  color: #fff;
+  font-family: monospace;
+}
+
+.sugar-btn__icon {
+  font-size: 20px;
+  margin-bottom: 3px;
+}
+
+.sugar-btn__label {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.sugar-btn__desc {
+  font-size: 9px;
+  color: #8a7a6c;
+  margin-top: 2px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.sugar-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(239, 169, 86, 0.4);
+  background: rgba(239, 169, 86, 0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.sugar-btn--neutral:hover { border-color: #94a3b8; background: rgba(148, 163, 184, 0.12); }
+.sugar-btn--amber:hover { border-color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+.sugar-btn--green:hover { border-color: #10b981; background: rgba(16, 185, 129, 0.15); }
+.sugar-btn--gold:hover { border-color: #eab308; background: rgba(234, 179, 8, 0.15); }
+.sugar-btn--orange:hover { border-color: #f97316; background: rgba(249, 115, 22, 0.15); }
+
+.sugar-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sugar-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #b3a294;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.sugar-tag:hover {
+  color: #fff;
+  border-color: rgba(239, 169, 86, 0.3);
+  background: rgba(239, 169, 86, 0.08);
+}
+
+.sugar-tag.is-active {
+  color: #12100e;
+  background: #5fd2b7;
+  border-color: #5fd2b7;
+  font-weight: 850;
+  box-shadow: 0 0 14px rgba(95, 210, 183, 0.35);
+}
+
+.sugar-modal__footer-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sugar-modal__qty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sugar-modal__qty span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #a8988a;
+}
+
+.sugar-modal__qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 3px 6px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sugar-modal__qty-value {
+  min-width: 22px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.sugar-modal__custom-input {
+  height: 38px;
+  width: 100%;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  padding: 0 12px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sugar-modal__custom-input:focus {
+  border-color: var(--accent, #f59e0b);
+}
+
+.sugar-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 540px) {
+  .sugar-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .sugar-btn {
+    min-height: 70px;
+  }
+  .sugar-modal__footer-row {
+    grid-template-columns: 1fr;
+  }
+}

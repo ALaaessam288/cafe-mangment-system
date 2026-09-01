@@ -99,6 +99,35 @@ export default function ModifierDialog({
           </div>
         </div>
 
+        <div style={{ margin: '12px 0 6px', display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center' }}>
+          <span style={{ fontSize: '11px', color: '#9c8c7f', fontWeight: 800 }}>🍬 سكر سريع:</span>
+          {['سادة', 'ع الريحة', 'مظبوط', 'زيادة', 'فوق الزيادة', 'سكر برة', 'سكر دايت'].map((s) => (
+            <button
+              key={s}
+              type="button"
+              style={{
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '6px',
+                padding: '3px 7px',
+                fontSize: '11px',
+                background: (note || '').includes(s) ? '#5fd2b7' : 'rgba(255,255,255,0.04)',
+                color: (note || '').includes(s) ? '#110e0c' : '#dcd1c6',
+                fontWeight: (note || '').includes(s) ? 800 : 600,
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                if ((note || '').includes(s)) {
+                  onNoteChange((note || '').replace(s, '').replace(/\s*-\s*$/, '').trim());
+                } else {
+                  onNoteChange(note ? `${note} - ${s}` : s);
+                }
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
         <textarea
           className="modifier-dialog__note"
           placeholder="ملاحظة للمطبخ / البار (اختياري)"
