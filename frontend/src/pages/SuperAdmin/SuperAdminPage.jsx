@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { platformApi } from '../../api/platformApi';
 import { useToast } from '../../context/ToastContext';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
@@ -21,6 +21,23 @@ const tenantExpiry = (tenant) => tenant?.status === 'TRIAL' || tenant?.subscript
   ? tenant?.trialEndsAt
   : tenant?.subscriptionEndsAt;
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toEndOfLocalDayInstant = (value) => {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day, 23, 59, 59, 999);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
 const daysUntil = (date) => date
   ? Math.ceil((new Date(date).getTime() - Date.now()) / 86400000)
   : null;
@@ -39,6 +56,7 @@ function SectionIntro({ eyebrow, title, description, icon, children }) {
 
 export default function SuperAdminPage() {
   const toast = useToast();
+  const expiryNoticeSignatureRef = useRef('');
 
   // Navigation State
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -158,7 +176,7 @@ export default function SuperAdminPage() {
 
   const handleOpenEditModal = async (t) => {
     setSelectedTenant(t);
-    const subEnd = t.subscriptionEndsAt ? new Date(t.subscriptionEndsAt).toISOString().slice(0, 10) : '';
+    const effectiveEnd = toDateInputValue(tenantExpiry(t));
     setCustomPlanForm({
       plan: t.subscriptionPlan || 'PRO',
       status: t.status || 'ACTIVE',
@@ -167,7 +185,7 @@ export default function SuperAdminPage() {
       maxProducts: t.maxProducts ?? 500,
       serviceChargePercent: t.serviceChargePercent ?? 0,
       whatsappAlertsEnabled: Boolean(t.whatsappAlertsEnabled),
-      subscriptionEndsAt: subEnd,
+      subscriptionEndsAt: effectiveEnd,
       extendDays: 0,
     });
     setEditModal(true);
@@ -243,6 +261,8 @@ export default function SuperAdminPage() {
     }
     setUpdating(true);
     try {
+      const isTrial = customPlanForm.status === 'TRIAL' || customPlanForm.plan === 'TRIAL';
+      const effectiveExpiry = toEndOfLocalDayInstant(customPlanForm.subscriptionEndsAt);
       const payload = {
         plan: customPlanForm.plan,
         status: customPlanForm.status,
@@ -251,7 +271,8 @@ export default function SuperAdminPage() {
         maxProducts: Number(customPlanForm.maxProducts),
         serviceChargePercent: Number(customPlanForm.serviceChargePercent) || 0,
         whatsappAlertsEnabled: customPlanForm.whatsappAlertsEnabled,
-        subscriptionEndsAt: customPlanForm.subscriptionEndsAt ? new Date(customPlanForm.subscriptionEndsAt).toISOString() : null,
+        subscriptionEndsAt: isTrial ? null : effectiveExpiry,
+        trialEndsAt: isTrial ? effectiveExpiry : null,
         extendDays: Number(customPlanForm.extendDays) || null,
       };
       await platformApi.customizeTenantPlan(selectedTenant.id, payload);
@@ -531,15 +552,46 @@ export default function SuperAdminPage() {
     const now = new Date();
     const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     return tenants.filter((t) => {
-      const date = t.subscriptionEndsAt ? new Date(t.subscriptionEndsAt) : t.trialEndsAt ? new Date(t.trialEndsAt) : null;
-      return date && date > now && date <= sevenDaysLater;
+      const expiry = tenantExpiry(t);
+      if (!expiry) return false;
+      const date = new Date(expiry);
+      return !Number.isNaN(date.getTime()) && date > now && date <= sevenDaysLater;
     });
   }, [tenants]);
 
   const expiredTenants = useMemo(() => tenants.filter((tenant) => {
     const expiry = tenantExpiry(tenant);
-    return expiry && new Date(expiry) < new Date();
+    if (!expiry) return false;
+    const date = new Date(expiry);
+    return !Number.isNaN(date.getTime()) && date <= new Date();
   }), [tenants]);
+
+  useEffect(() => {
+    if (loading || tenants.length === 0) return;
+
+    const signature = [
+      ...expiredTenants.map((tenant) => `expired:${tenant.id}:${tenantExpiry(tenant)}`),
+      ...expiringTenants.map((tenant) => `expiring:${tenant.id}:${tenantExpiry(tenant)}`),
+    ].sort().join('|');
+
+    if (!signature) {
+      expiryNoticeSignatureRef.current = '';
+      return;
+    }
+    if (expiryNoticeSignatureRef.current === signature) return;
+    expiryNoticeSignatureRef.current = signature;
+
+    if (expiredTenants.length > 0) {
+      const names = expiredTenants.slice(0, 2).map((tenant) => tenant.name).join('، ');
+      const more = expiredTenants.length > 2 ? ` و${expiredTenants.length - 2} أخرى` : '';
+      toast.error(`انتهت باقة ${names}${more}. راجع التجديد أو أوقف الخدمة.`);
+      return;
+    }
+
+    const names = expiringTenants.slice(0, 2).map((tenant) => tenant.name).join('، ');
+    const more = expiringTenants.length > 2 ? ` و${expiringTenants.length - 2} أخرى` : '';
+    toast.warning(`تنبيه تجديد: باقة ${names}${more} تنتهي خلال 7 أيام.`);
+  }, [expiredTenants, expiringTenants, loading, tenants.length, toast]);
 
   const tenantById = useMemo(() => new Map(tenants.map((tenant) => [tenant.id, tenant])), [tenants]);
   const filteredActivityLogs = useMemo(() => platformActivityLogs.filter((log) => {
@@ -570,6 +622,21 @@ export default function SuperAdminPage() {
       ENTERPRISE: tenants.filter((t) => t.subscriptionPlan === 'ENTERPRISE').length,
     };
   }, [tenants]);
+
+  const activeRate = totalTenants ? Math.round((activeTenants / totalTenants) * 100) : 0;
+  const renewalRiskCount = expiringTenants.length + expiredTenants.length;
+  const activePlanCounts = tenants.reduce((counts, tenant) => {
+    if (tenant.status === 'ACTIVE' && Object.prototype.hasOwnProperty.call(counts, tenant.subscriptionPlan)) {
+      counts[tenant.subscriptionPlan] += 1;
+    }
+    return counts;
+  }, { STARTER: 0, PRO: 0, ENTERPRISE: 0 });
+  const planRevenue = {
+    STARTER: activePlanCounts.STARTER * PLAN_PRICES.STARTER,
+    PRO: activePlanCounts.PRO * PLAN_PRICES.PRO,
+    ENTERPRISE: activePlanCounts.ENTERPRISE * PLAN_PRICES.ENTERPRISE,
+  };
+  const latestPlatformActivity = platformActivityLogs.slice(0, 4);
 
   // Filtered & Sorted Tenants
   const filteredTenants = useMemo(() => {
@@ -615,6 +682,141 @@ export default function SuperAdminPage() {
           1. DASHBOARD OVERVIEW SECTION
          ══════════════════════════════════════════════════════════════════════ */}
       {activeSection === 'dashboard' && (
+        <div className="sa-section sa-control-room">
+          <section className="sa-control-stage">
+            <div className="sa-control-stage__story">
+              <span className="sa-control-kicker"><i /> CAFFIO BUSINESS OS / LIVE</span>
+              <h1>شايف المنصة كلها.<br /><em>وعارف قرارك الجاي.</em></h1>
+              <p>مساحة قيادة واحدة تجمع النمو، صحة العملاء، التجديدات والتراخيص بدون أرقام مشتتة.</p>
+              <div className="sa-control-stage__actions">
+                <button type="button" className="sa-control-cta" onClick={() => setCreateModal(true)}>
+                  <span><i className="bi bi-building-add" /></span>
+                  <b>ابدأ عميل جديد<small>أنشئ المنشأة وجهّز الباقة</small></b>
+                  <i className="bi bi-arrow-left" />
+                </button>
+                <button type="button" className="sa-control-ghost" onClick={() => setActiveSection('reports')}>
+                  مركز التقارير <i className="bi bi-graph-up-arrow" />
+                </button>
+              </div>
+              <div className="sa-control-stage__ticker">
+                <span><i className="bi bi-broadcast" /> البيانات محدثة</span>
+                <span><b>{activeTenants}</b> منشأة تعمل الآن</span>
+                <span><b>{activeSubscriptions}</b> اشتراك مدفوع</span>
+              </div>
+            </div>
+
+            <div className="sa-control-stage__radar">
+              <div className="sa-health-radar" style={{ '--sa-health-angle': `${activeRate * 3.6}deg` }}>
+                <div><strong>{activeRate}%</strong><span>صحة المنصة</span></div>
+                <i className="sa-health-radar__satellite" />
+              </div>
+              <div className="sa-radar-caption">
+                <span>PLATFORM PULSE</span>
+                <strong>{renewalRiskCount ? `${renewalRiskCount} يحتاج تدخلك` : 'كل شيء تحت السيطرة'}</strong>
+                <small>{expiredTenants.length} منتهي · {expiringTenants.length} قريب التجديد</small>
+              </div>
+            </div>
+          </section>
+
+          {renewalRiskCount > 0 && (
+            <button type="button" className="sa-priority-signal" onClick={() => setActiveSection('reports')}>
+              <span className="sa-priority-signal__icon"><i className="bi bi-exclamation-diamond" /></span>
+              <span><small>أولوية اليوم</small><strong>{expiredTenants.length} اشتراك منتهي و{expiringTenants.length} يقترب من التجديد</strong></span>
+              <span className="sa-priority-signal__action">افتح قائمة المتابعة <i className="bi bi-arrow-left" /></span>
+            </button>
+          )}
+
+          <section className="sa-command-bento" aria-label="مؤشرات المنصة الرئيسية">
+            <article className="sa-bento-tile sa-bento-tile--revenue">
+              <header><span><i className="bi bi-stars" /> REVENUE ENGINE</span><button type="button" onClick={() => setActiveSection('reports')}>التفاصيل <i className="bi bi-arrow-up-left" /></button></header>
+              <div className="sa-revenue-focus">
+                <small>الإيراد الشهري المتوقع</small>
+                <strong>{estimatedMRR.toLocaleString()} <b>ج.م</b></strong>
+                <p>محسوب من أسعار الباقات النشطة، وليس تحصيلًا نقديًا.</p>
+              </div>
+              <div className="sa-revenue-composition" aria-label="مساهمة الباقات في الإيراد">
+                {['STARTER', 'PRO', 'ENTERPRISE'].map((plan) => (
+                  <i key={plan} className={`is-${plan.toLowerCase()}`} style={{ width: `${estimatedMRR ? (planRevenue[plan] / estimatedMRR) * 100 : 0}%` }} />
+                ))}
+              </div>
+              <footer>
+                {['STARTER', 'PRO', 'ENTERPRISE'].map((plan) => <span key={plan}><i className={`is-${plan.toLowerCase()}`} />{plan} <b>{activePlanCounts[plan]}</b></span>)}
+              </footer>
+            </article>
+
+            <article className="sa-bento-tile sa-bento-tile--health">
+              <header><span>CUSTOMER HEALTH</span><i className="bi bi-heart-pulse" /></header>
+              <strong>{activeTenants}<small> / {totalTenants}</small></strong>
+              <p>منشأة نشطة على المنصة</p>
+              <div className="sa-mini-meter"><i style={{ width: `${activeRate}%` }} /></div>
+              <button type="button" onClick={() => setActiveSection('tenants')}>إدارة العملاء <i className="bi bi-arrow-left" /></button>
+            </article>
+
+            <article className={`sa-bento-tile sa-bento-tile--renewals ${renewalRiskCount ? 'has-risk' : ''}`}>
+              <header><span>RENEWAL RADAR</span><i className="bi bi-radar" /></header>
+              <div className="sa-renewal-numbers"><strong>{renewalRiskCount}</strong><span><b>{expiredTenants.length}</b> منتهي<small><b>{expiringTenants.length}</b> خلال 7 أيام</small></span></div>
+              <button type="button" onClick={() => setActiveSection('reports')}>{renewalRiskCount ? 'رتّب تواصل التجديد' : 'عرض تقرير التجديد'} <i className="bi bi-arrow-left" /></button>
+            </article>
+
+            <article className="sa-bento-tile sa-bento-tile--licenses">
+              <header><span>LICENSE VAULT</span><i className="bi bi-key" /></header>
+              <div className="sa-license-orbs">
+                <span><strong>{licenseMetrics.available}</strong><small>جاهز</small></span>
+                <span><strong>{licenseMetrics.used}</strong><small>مستخدم</small></span>
+                <span><strong>{licenseMetrics.expired + licenseMetrics.revoked}</strong><small>غير صالح</small></span>
+              </div>
+              <button type="button" onClick={() => setActiveSection('subscriptions')}>إدارة التراخيص <i className="bi bi-arrow-left" /></button>
+            </article>
+
+            <article className="sa-bento-tile sa-bento-tile--capacity">
+              <header><span>NETWORK CAPACITY</span><i className="bi bi-diagram-3" /></header>
+              <strong>{totalUsersEstimated.toLocaleString()}</strong>
+              <p>سعة مستخدمين متاحة عبر العملاء</p>
+              <div className="sa-capacity-tags"><span>{trialTenants} تجريبي</span><span>{suspendedTenants} موقوف</span></div>
+            </article>
+
+            <article className="sa-bento-tile sa-bento-tile--actions">
+              <header><span>QUICK COMMANDS</span><i className="bi bi-command" /></header>
+              <button type="button" onClick={() => setCreateModal(true)}><i className="bi bi-plus-lg" /><span><b>منشأة جديدة</b><small>Provision account</small></span><i className="bi bi-arrow-left" /></button>
+              <button type="button" onClick={() => setActiveSection('subscriptions')}><i className="bi bi-key" /><span><b>مفتاح ترخيص</b><small>Generate license</small></span><i className="bi bi-arrow-left" /></button>
+              <button type="button" onClick={() => setActiveSection('plans')}><i className="bi bi-sliders" /><span><b>إدارة الباقات</b><small>Plans & limits</small></span><i className="bi bi-arrow-left" /></button>
+            </article>
+          </section>
+
+          <section className="sa-command-lower">
+            <article className="sa-command-journey">
+              <header><span><small>OPERATING FLOW</small><strong>رحلة العميل على المنصة</strong></span><i className="bi bi-bezier2" /></header>
+              <div>
+                {[
+                  { n: '01', title: 'تأسيس الحساب', hint: 'المنشأة والمالك', icon: 'bi-building-add', action: () => setCreateModal(true) },
+                  { n: '02', title: 'اختيار القيمة', hint: 'الباقة والحدود', icon: 'bi-box-seam', action: () => setActiveSection('plans') },
+                  { n: '03', title: 'التفعيل', hint: 'الترخيص والدخول', icon: 'bi-fingerprint', action: () => setActiveSection('subscriptions') },
+                  { n: '04', title: 'النمو والتجديد', hint: 'متابعة العميل', icon: 'bi-graph-up-arrow', action: () => setActiveSection('reports') },
+                ].map((step) => (
+                  <button type="button" key={step.n} onClick={step.action}>
+                    <span>{step.n}</span><i className={`bi ${step.icon}`} /><b>{step.title}<small>{step.hint}</small></b><i className="bi bi-chevron-left" />
+                  </button>
+                ))}
+              </div>
+            </article>
+
+            <article className="sa-command-feed">
+              <header><span><small>LIVE FEED</small><strong>آخر حركة على المنصة</strong></span><button type="button" onClick={() => setActiveSection('audit-logs')}>عرض الكل</button></header>
+              <div>
+                {latestPlatformActivity.length ? latestPlatformActivity.map((log) => (
+                  <button type="button" key={log.id} onClick={() => setActiveSection('audit-logs')}>
+                    <i className="bi bi-lightning-charge" />
+                    <span><b>{AUDIT_ACTIONS[log.action] || log.action}</b><small>{tenantById.get(log.tenantId)?.name || 'عملية على المنصة'}</small></span>
+                    <time>{log.createdAt ? new Date(log.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'الآن'}</time>
+                  </button>
+                )) : <div className="sa-command-feed__empty"><i className="bi bi-inboxes" /><span>لا توجد عمليات حديثة بعد</span></div>}
+              </div>
+            </article>
+          </section>
+        </div>
+      )}
+
+      {activeSection === 'dashboard-legacy' && (
         <div className="sa-section">
           <section className="sa-command-hero">
             <div className="sa-command-hero__copy">
@@ -2038,19 +2240,24 @@ export default function SuperAdminPage() {
                   <div className="p-3 bg-dark rounded border border-secondary">
                     <h6 className="fw-bold text-white small mb-3">
                       <i className="bi bi-calendar-check text-info me-2" />
-                      صلاحية وتاريخ انتهاء الاشتراك:
+                      صلاحية وتاريخ انتهاء الباقة:
                     </h6>
 
                     <div className="row g-3">
                       {/* Subscription End Date */}
                       <div className="col-12 col-md-6">
-                        <label className="form-label small text-white opacity-75">تاريخ الانتهاء المحدد</label>
+                        <label className="form-label small text-white opacity-75">
+                          {customPlanForm.status === 'TRIAL' || customPlanForm.plan === 'TRIAL'
+                            ? 'تاريخ انتهاء الفترة التجريبية'
+                            : 'تاريخ انتهاء الاشتراك'}
+                        </label>
                         <input
                           type="date"
                           className="form-control"
                           value={customPlanForm.subscriptionEndsAt}
                           onChange={(e) => setCustomPlanForm({ ...customPlanForm, subscriptionEndsAt: e.target.value, extendDays: 0 })}
                         />
+                        <span className="small text-muted" style={{ fontSize: '0.75rem' }}>تظل الباقة فعّالة حتى نهاية اليوم المحدد.</span>
                       </div>
 
                       {/* Quick Extend Buttons */}

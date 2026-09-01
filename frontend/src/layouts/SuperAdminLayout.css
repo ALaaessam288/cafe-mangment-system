@@ -562,3 +562,102 @@ html,body,#root{height:100%!important;min-height:0!important;overflow:hidden!imp
 .sa-main-content{flex:1;min-height:0!important;max-width:none;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;scrollbar-gutter:stable}
 .sa-main-content::-webkit-scrollbar,.sa-sidebar__body::-webkit-scrollbar{width:7px}.sa-main-content::-webkit-scrollbar-track,.sa-sidebar__body::-webkit-scrollbar-track{background:rgba(255,255,255,.015)}.sa-main-content::-webkit-scrollbar-thumb,.sa-sidebar__body::-webkit-scrollbar-thumb{border-radius:10px;background:#26364e}.sa-main-content::-webkit-scrollbar-thumb:hover{background:#40526e}
 @media(max-width:991.98px){.sa-app{height:100dvh!important}.sa-wrapper{height:100%}.sa-main-content{padding-bottom:28px!important}}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CAFFIO BUSINESS OS — warm, editorial control-room direction
+   ════════════════════════════════════════════════════════════════════════════ */
+:root{
+  --sa-sidebar-w:252px;
+  --sa-sidebar-collapsed-w:76px;
+  --sa-bg-body:#0a0807;
+  --sa-bg-surface:#14100e;
+  --sa-bg-card:#1b1512;
+  --sa-bg-card-hover:#241b16;
+  --sa-bg-input:#211915;
+  --sa-border:#33261f;
+  --sa-border-strong:#51392b;
+  --sa-gold:#efa956;
+  --sa-gold-hover:#ffc477;
+  --sa-text-primary:#fbf4e9;
+  --sa-text-secondary:#cfbfae;
+  --sa-text-muted:#897a6d;
+}
+
+.sa-app{
+  background:
+    radial-gradient(circle at 14% -5%,rgba(239,169,86,.11),transparent 25%),
+    radial-gradient(circle at 85% 108%,rgba(95,210,183,.07),transparent 28%),
+    linear-gradient(135deg,#0b0908 0%,#0d0a09 48%,#080706 100%)!important;
+}
+.sa-app::before{
+  opacity:.55;
+  background-image:radial-gradient(rgba(255,240,220,.1) .65px,transparent .65px)!important;
+  background-size:18px 18px!important;
+  mask-image:linear-gradient(115deg,#000,transparent 72%)!important;
+}
+.sa-app::after{
+  content:'CAFFIO / BUSINESS OS';position:fixed;z-index:0;left:28px;bottom:15px;pointer-events:none;
+  color:rgba(255,255,255,.025);font:900 10px ui-monospace,monospace;letter-spacing:3px;direction:ltr;
+}
+
+.sa-sidebar{
+  top:14px!important;right:14px!important;height:calc(100dvh - 28px)!important;
+  border:1px solid rgba(239,169,86,.14)!important;border-radius:25px!important;
+  background:linear-gradient(180deg,rgba(28,21,17,.98),rgba(13,10,9,.99))!important;
+  box-shadow:-18px 0 55px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.035)!important;
+  overflow:hidden;
+}
+.sa-sidebar::before{content:'';position:absolute;z-index:-1;top:-85px;right:-75px;width:210px;height:210px;border-radius:50%;background:radial-gradient(circle,rgba(239,169,86,.12),transparent 68%)}
+.sa-wrapper{margin-inline-start:calc(var(--sa-sidebar-w) + 28px)!important;position:relative;z-index:1}
+.sa-app--collapsed .sa-wrapper{margin-inline-start:calc(var(--sa-sidebar-collapsed-w) + 28px)!important}
+.sa-sidebar__header{height:78px!important;padding:0 16px!important;border-color:rgba(255,255,255,.06)!important}
+.sa-brand__logo{width:40px;height:40px;border:1px solid rgba(239,169,86,.18);border-radius:13px;background:rgba(239,169,86,.055)}
+.sa-brand__logo::after{inset:-5px!important;border-style:dashed!important;border-color:rgba(239,169,86,.12)!important;border-radius:17px!important}
+.sa-brand__logo-img{width:36px;height:36px}
+.sa-brand__title{color:#fff7eb;font-size:15px;letter-spacing:.1px}
+.sa-brand__badge{margin-top:3px;color:#9c8068;font:800 6.5px ui-monospace,monospace;letter-spacing:.8px}
+.sa-sidebar__body{padding:17px 10px 10px!important}
+.sa-nav-group-title{padding:0 12px 10px!important;color:#725e4f!important;font:900 8px 'Cairo',sans-serif!important;letter-spacing:0!important}
+.sa-nav{gap:7px!important}
+.sa-nav__item{min-height:48px!important;gap:9px!important;padding:7px 9px!important;border-radius:13px!important;color:#a99889!important}
+.sa-nav__item::after{display:none!important}
+.sa-nav__item:hover{border-color:rgba(239,169,86,.12)!important;background:rgba(239,169,86,.04)!important;color:#f7eadb!important;transform:translateX(-2px)}
+.sa-nav__item--active{border:1px solid rgba(239,169,86,.2)!important;border-inline-start:1px solid rgba(239,169,86,.2)!important;background:linear-gradient(100deg,rgba(239,169,86,.17),rgba(239,169,86,.025))!important;color:#ffd39a!important;box-shadow:0 12px 28px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.035)!important}
+.sa-nav__sequence{width:21px;color:#604f43;font:800 7px ui-monospace,monospace;direction:ltr}
+.sa-nav__item--active .sa-nav__sequence{color:#d08e47}
+.sa-nav__icon{width:27px;height:27px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.045);border-radius:8px;background:rgba(255,255,255,.02);font-size:13px!important}
+.sa-nav__item--active .sa-nav__icon{color:#17100b!important;background:#efa956;border-color:#efa956;filter:none!important;box-shadow:0 7px 16px rgba(239,169,86,.2)}
+.sa-nav__label{font-size:11px;font-weight:850}
+.sa-nav__badge{margin-inline-start:auto!important;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.055)!important;color:#cdbdab!important;font-size:7px!important}
+.sa-nav__item--active .sa-nav__badge{color:#1b120c!important;background:#efa956!important}
+.sa-sidebar__divider{margin:13px 5px!important;border-color:rgba(255,255,255,.075)!important}
+.sa-sidebar__kpi-pill{margin:6px 2px 0!important;padding:12px!important;border-color:rgba(95,210,183,.12)!important;border-radius:14px!important;background:linear-gradient(145deg,rgba(95,210,183,.055),rgba(255,255,255,.012))!important}
+.sa-sidebar__kpi-pill .progress{height:3px!important;background:#2b2420!important}.sa-sidebar__kpi-pill .progress-bar{background:#5fd2b7!important;box-shadow:0 0 12px rgba(95,210,183,.5)}
+.sa-sidebar__footer{padding:10px!important;border-color:rgba(255,255,255,.06)!important;background:rgba(0,0,0,.14)!important}
+.sa-collapse-btn,.sa-logout-btn{min-height:36px;border-radius:10px!important;font-size:9px!important}
+
+.sa-header{
+  flex:0 0 64px!important;height:64px!important;margin:14px 16px 0!important;padding:0 14px!important;
+  border:1px solid rgba(255,255,255,.07)!important;border-radius:18px!important;
+  background:rgba(22,17,14,.82)!important;box-shadow:0 14px 40px rgba(0,0,0,.18)!important;
+}
+.sa-header__eyebrow{color:#806a58!important;letter-spacing:2px!important}
+.sa-header__section-line strong{color:#fff5e7!important;font-size:12px!important}
+.sa-header__section-line span{color:#806f61!important}
+.sa-server-badge{border:1px solid rgba(95,210,183,.1);background:rgba(95,210,183,.04)!important}
+.sa-server-badge strong{color:#9ee7d6}.sa-server-badge small{color:#4e897b!important}
+.sa-icon-action-btn{width:37px;height:37px;border-color:#3a2d25!important;border-radius:11px!important;color:#b9a99a!important;background:#1b1512!important}
+.sa-add-btn{height:38px!important;padding-inline:13px!important;border:0!important;border-radius:11px!important;color:#1b1109!important;background:linear-gradient(135deg,#ffd08d,#e99a44)!important;box-shadow:0 9px 22px rgba(239,169,86,.15)!important;font-size:9px!important;font-weight:950!important}
+.sa-vr{color:#3d3028!important}.sa-profile-btn{height:40px;padding:4px 7px!important;border-color:transparent!important;border-radius:12px!important;background:rgba(255,255,255,.025)!important}
+.sa-profile-avatar{width:31px;height:31px;border-radius:10px!important;background:linear-gradient(145deg,#f1b56d,#b86d32)!important;color:#1b1109!important}
+.sa-profile-name{color:#f7ecdf!important;font-size:10px!important}.sa-profile-role{color:#a78262!important;font:800 7px ui-monospace,monospace!important}
+.sa-main-content{padding:14px 16px 30px!important}
+.sa-main-content::-webkit-scrollbar-thumb{background:#4a3427!important;border:2px solid #110d0b}.sa-main-content::-webkit-scrollbar-thumb:hover{background:#7a5135!important}
+
+@media(max-width:991.98px){
+  .sa-sidebar{top:0!important;right:0!important;height:100dvh!important;border-radius:0 24px 24px 0!important}
+  .sa-wrapper,.sa-app--collapsed .sa-wrapper{margin-inline-start:0!important}
+  .sa-header{margin:9px 9px 0!important;padding-inline:10px!important}
+  .sa-main-content{padding:10px 9px 28px!important}
+}
+@media(max-width:600px){.sa-header__section-line strong{font-size:10px!important}.sa-add-btn span{display:none}.sa-add-btn{width:37px;padding:0!important}.sa-profile-info{display:none!important}}

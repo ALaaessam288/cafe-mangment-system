@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Plus, Edit2, Search, Sliders, Trash2, ArrowUpDown } from 'lucide-react';
+import { 
+  Plus, Edit2, Search, Sliders, Trash2, ArrowUpDown, 
+  LayoutGrid, Table as TableIcon, Package, Coffee, ChefHat, Tag, CheckCircle2, XCircle
+} from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { stationsApi } from '../../api/stationsApi';
 import { auditApi } from '../../api/auditApi';
@@ -14,6 +17,8 @@ import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import QuotaExceededModal from '../../components/QuotaExceededModal/QuotaExceededModal';
 import { ROLES } from '../../utils/constants';
+import { sounds } from '../../utils/soundEffects';
+import './ProductsPage.css';
 
 const stationNames = {
   'KITCHEN': 'المطبخ',
@@ -28,6 +33,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('GRID'); // 'GRID' | 'TABLE'
   const [quotaModal, setQuotaModal] = useState({ open: false, message: '' });
 
   // Filters
@@ -364,125 +370,254 @@ export default function ProductsPage() {
     }
   }
 
+  const stats = useMemo(() => {
+    const total = products.length;
+    const availableCount = products.filter(p => p.available && p.active).length;
+    const barCount = products.filter(p => p.stationCode === 'BAR').length;
+    const kitchenCount = products.filter(p => p.stationCode === 'KITCHEN').length;
+    return { total, availableCount, barCount, kitchenCount };
+  }, [products]);
+
   return (
-    <div className="page">
+    <div className="page products-creative">
       <ObserverBanner />
-      <div className="page__header">
-        <div>
-          <h1 className="page__title">المنتجات</h1>
-          <p className="page__subtitle">إدارة المنتجات والأسعار والتوافر</p>
+
+      {/* ── Creative Header ── */}
+      <div className="page__header products-header">
+        <div className="products-header__info">
+          <div className="products-header__icon-box">
+            <Package size={24} className="text-accent" />
+          </div>
+          <div>
+            <div className="products-header__title-row">
+              <h1 className="page__title">قائمة المنتجات والمنيو</h1>
+              <span className="products-count-badge">{filteredProducts.length} صنف</span>
+            </div>
+            <p className="page__subtitle">إدارة الأصناف، الأسعار، التوافر ومحطات التجهيز</p>
+          </div>
         </div>
-        <div className="page__actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {currentUser?.maxProducts && (
-            <span
-              className="badge"
-              style={{
-                background: products.length >= currentUser.maxProducts ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.15)',
-                color: products.length >= currentUser.maxProducts ? '#ef4444' : '#f59e0b',
-                border: `1px solid ${products.length >= currentUser.maxProducts ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.3)'}`,
-                padding: '6px 12px',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontSize: '0.85rem'
-              }}
+
+        <div className="page__actions products-header__actions">
+          {/* Dual View Toggle */}
+          <div className="products-view-toggle">
+            <button
+              type="button"
+              className={`view-mode-btn ${viewMode === 'GRID' ? 'view-mode-btn--active' : ''}`}
+              onClick={() => { sounds.playTap(); setViewMode('GRID'); }}
             >
-              السعة: {products.length} / {currentUser.maxProducts} صنف
-            </span>
+              <LayoutGrid size={15} />
+              <span>كروت (3D)</span>
+            </button>
+            <button
+              type="button"
+              className={`view-mode-btn ${viewMode === 'TABLE' ? 'view-mode-btn--active' : ''}`}
+              onClick={() => { sounds.playTap(); setViewMode('TABLE'); }}
+            >
+              <TableIcon size={15} />
+              <span>جدول منظم</span>
+            </button>
+          </div>
+
+          {currentUser?.maxProducts && (
+            <div className="tables-quota-pill">
+              <span>السعة:</span>
+              <strong className="font-mono">{products.length} / {currentUser.maxProducts}</strong>
+            </div>
           )}
+
           {role === ROLES.SUPERVISOR && (
-            <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()}>
-              إضافة منتج
+            <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()} variant="primary">
+              إضافة منتج جديد
             </Button>
           )}
         </div>
       </div>
 
-      {/* Quota Limit Reached Modal */}
-      <QuotaExceededModal
-        isOpen={quotaModal.open}
-        onClose={() => setQuotaModal({ open: false, message: '' })}
-        resourceName="الأصناف والمنتجات"
-        currentCount={products.length}
-        maxLimit={currentUser?.maxProducts || products.length}
-        customMessage={quotaModal.message}
-      />
-
-      <div className="page-filters">
-        <Input
-          placeholder="دور على منتج..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          rightIcon={<Search size={16} />}
-          className="page-filters__search"
-        />
-        <div className="field-select">
-          <select
-            className="field-select__control"
-            value={filterCatId}
-            onChange={(e) => setFilterCatId(e.target.value)}
-          >
-            <option value="">كل الأقسام</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+      {/* ── KPI Summary Strip ── */}
+      <div className="products-kpi-strip">
+        <div className="product-kpi-item">
+          <span className="product-kpi-item__label">إجمالي المنيو</span>
+          <strong className="product-kpi-item__val">{stats.total} صنف</strong>
         </div>
-        <div className="field-select">
-          <select
-            className="field-select__control"
-            value={filterStationId}
-            onChange={(e) => setFilterStationId(e.target.value)}
-          >
-            <option value="">كل أماكن التجهيز</option>
-            {stations.map((s) => (
-              <option key={s.id} value={s.id}>{s.nameAr}</option>
-            ))}
-          </select>
+        <div className="product-kpi-item">
+          <span className="product-kpi-item__label">متاح للطلب الآن</span>
+          <strong className="product-kpi-item__val text-emerald">{stats.availableCount} متاح</strong>
         </div>
-        <div className="field-select">
-          <select
-            className="field-select__control"
-            value={filterAvailable}
-            onChange={(e) => setFilterAvailable(e.target.value)}
-          >
-            <option value="ALL">كل حالات التوافر</option>
-            <option value="AVAILABLE">متاح فقط</option>
-            <option value="UNAVAILABLE">غير متاح فقط</option>
-          </select>
+        <div className="product-kpi-item">
+          <span className="product-kpi-item__label">مشروبات وبوفيه</span>
+          <strong className="product-kpi-item__val text-accent font-mono">{stats.barCount} صنف</strong>
         </div>
-        <div className="field-select">
-          <select
-            className="field-select__control"
-            value={filterActive}
-            onChange={(e) => setFilterActive(e.target.value)}
-          >
-            <option value="ALL">كل الحالات</option>
-            <option value="ACTIVE">نشط فقط</option>
-            <option value="INACTIVE">غير نشط فقط</option>
-          </select>
-        </div>
-        <div className="field-select">
-          <select
-            className="field-select__control"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            title="الترتيب"
-          >
-            <option value="NAME_ASC">الاسم (أ-ي)</option>
-            <option value="NAME_DESC">الاسم (ي-أ)</option>
-            <option value="PRICE_ASC">السعر (الأقل أولاً)</option>
-            <option value="PRICE_DESC">السعر (الأعلى أولاً)</option>
-            <option value="CATEGORY">القسم</option>
-          </select>
+        <div className="product-kpi-item">
+          <span className="product-kpi-item__label">مأكولات ومطبخ</span>
+          <strong className="product-kpi-item__val text-cyan font-mono">{stats.kitchenCount} صنف</strong>
         </div>
       </div>
 
-      <div className="data-table-wrap">
-        {loading ? (
-          <div className="data-table-empty"><Spinner /></div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="data-table-empty">مفيش منتجات مطابقة لخيارات البحث والفلترة.</div>
-        ) : (
+      {/* ── Category Pill Bar & Search Strip ── */}
+      <div className="products-filter-strip">
+        <div className="products-cat-pills">
+          <button
+            type="button"
+            className={`cat-pill ${filterCatId === '' ? 'cat-pill--active' : ''}`}
+            onClick={() => { sounds.playTap(); setFilterCatId(''); }}
+          >
+            <span>كل الأقسام</span>
+            <span className="cat-pill__count">{products.length}</span>
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`cat-pill ${filterCatId === String(c.id) || filterCatId === c.id ? 'cat-pill--active' : ''}`}
+              onClick={() => { sounds.playTap(); setFilterCatId(c.id); }}
+            >
+              <span>{c.name}</span>
+              <span className="cat-pill__count">{products.filter(p => p.categoryId === c.id).length}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="products-controls-row">
+          <div className="products-search-box">
+            <Search size={14} className="products-search-icon" />
+            <input
+              type="text"
+              className="products-search-input"
+              placeholder="بحث بالاسم، الباركود، أو السعر..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button type="button" className="products-search-clear" onClick={() => setSearch('')}>✕</button>
+            )}
+          </div>
+
+          <div className="products-filters-group">
+            <div className="field-select">
+              <select
+                className="field-select__control"
+                value={filterStationId}
+                onChange={(e) => setFilterStationId(e.target.value)}
+              >
+                <option value="">كل أماكن التجهيز</option>
+                {stations.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nameAr}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field-select">
+              <select
+                className="field-select__control"
+                value={filterAvailable}
+                onChange={(e) => setFilterAvailable(e.target.value)}
+              >
+                <option value="ALL">كل حالات التوافر</option>
+                <option value="AVAILABLE">متاح فقط</option>
+                <option value="UNAVAILABLE">غير متاح فقط</option>
+              </select>
+            </div>
+            <div className="field-select">
+              <select
+                className="field-select__control"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="NAME_ASC">الاسم (أ-ي)</option>
+                <option value="NAME_DESC">الاسم (ي-أ)</option>
+                <option value="PRICE_ASC">السعر (الأقل أولاً)</option>
+                <option value="PRICE_DESC">السعر (الأعلى أولاً)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content Stream ── */}
+      {loading ? (
+        <div className="page page-center"><Spinner /></div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="tables-empty-state">
+          <Package size={48} className="tables-empty-icon" />
+          <h3>لا توجد أصناف مطابقة</h3>
+          <p>أضف أصناف جديدة للمنيو أو عدل خيارات البحث</p>
+          {role === ROLES.SUPERVISOR && (
+            <Button variant="primary" rightIcon={<Plus size={16} />} onClick={() => handleOpenModal()}>
+              إضافة صنف جديد
+            </Button>
+          )}
+        </div>
+      ) : viewMode === 'GRID' ? (
+        /* ═════ 3D Product Cards Grid ═════ */
+        <div className="products-cards-grid">
+          {filteredProducts.map((prod) => {
+            const cat = categories.find((c) => c.id === prod.categoryId);
+            const isBar = prod.stationCode === 'BAR';
+            return (
+              <div 
+                key={prod.id} 
+                className={`product-3d-card ${prod.active ? '' : 'product-3d-card--disabled'}`}
+              >
+                <div>
+                  <div className="product-3d-card__head">
+                    <span className="product-category-chip">{cat?.name || 'قسم عام'}</span>
+                    <span className={`product-station-badge ${isBar ? 'product-station-badge--bar' : 'product-station-badge--kitchen'}`}>
+                      {isBar ? '☕ بار' : '🍳 مطبخ'}
+                    </span>
+                  </div>
+
+                  <h3 className="product-3d-card__title">{prod.name}</h3>
+
+                  <div className="product-3d-card__price-row">
+                    <strong className="product-price-val font-mono">{formatCurrency(prod.price)}</strong>
+                    <Badge variant={prod.active ? 'success' : 'danger'}>
+                      {prod.active ? 'نشط' : 'معطل'}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="product-3d-card__footer">
+                  <label className="product-avail-switch" title="تبديل التوافر الفوري للطلب">
+                    <input
+                      type="checkbox"
+                      checked={prod.available}
+                      onChange={() => toggleAvailability(prod)}
+                      style={{ display: 'none' }}
+                    />
+                    <div className={`toggle__track ${prod.available ? 'toggle__track--on' : ''}`}>
+                      <div className="toggle__thumb" />
+                    </div>
+                    <span className="text-xs text-muted">{prod.available ? 'متاح' : 'نافد'}</span>
+                  </label>
+
+                  {role === ROLES.SUPERVISOR && (
+                    <div className="product-3d-card__actions">
+                      <button
+                        type="button"
+                        className="product-action-btn product-action-btn--edit"
+                        onClick={() => handleOpenModal(prod)}
+                        title="تعديل المنتج والوصفة"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="product-action-btn"
+                        onClick={() => handleDeactivate(prod)}
+                        title={prod.active ? 'تعطيل الصنف' : 'تفعيل الصنف'}
+                        style={{ color: prod.active ? 'var(--danger)' : 'var(--success)' }}
+                      >
+                        {prod.active ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ═════ Data Table View ═════ */
+        <div className="data-table-wrap">
           <table className="data-table">
             <thead>
               <tr>
@@ -490,7 +625,7 @@ export default function ProductsPage() {
                 <th>القسم</th>
                 <th>السعر</th>
                 <th>مكان التجهيز</th>
-                <th>متاح</th>
+                <th>متاح للطلب</th>
                 <th>الحالة</th>
                 {role === ROLES.SUPERVISOR && <th style={{ textAlign: 'left' }}>تحكم</th>}
               </tr>
@@ -500,9 +635,9 @@ export default function ProductsPage() {
                 const cat = categories.find((c) => c.id === prod.categoryId);
                 return (
                   <tr key={prod.id}>
-                    <td style={{ fontWeight: 500 }}>{prod.name}</td>
-                    <td>{cat?.name || 'غير معروف'}</td>
-                    <td className="data-table__number">{formatCurrency(prod.price)}</td>
+                    <td style={{ fontWeight: 700, color: '#fff' }}>{prod.name}</td>
+                    <td><span className="table-zone-chip">{cat?.name || 'غير معروف'}</span></td>
+                    <td className="data-table__number font-mono fw-bold text-accent">{formatCurrency(prod.price)}</td>
                     <td>
                       <Badge variant="neutral">{stationNames[prod.stationCode] || prod.stationCode}</Badge>
                     </td>
@@ -526,9 +661,10 @@ export default function ProductsPage() {
                     </td>
                     {role === ROLES.SUPERVISOR && (
                       <td>
-                        <div className="data-table__actions" style={{ justifyContent: 'flex-end', gap: '4px' }}>
+                        <div className="data-table__actions" style={{ justifyContent: 'flex-end', gap: '6px' }}>
                           <Button variant="ghost" size="sm" onClick={() => handleOpenModal(prod)} title="تعديل المنتج والاختيارات">
-                            <Edit2 size={15} />
+                            <Edit2 size={14} />
+                            <span>تعديل</span>
                           </Button>
                           <Button
                             variant="ghost"
@@ -546,8 +682,18 @@ export default function ProductsPage() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Quota Limit Reached Modal */}
+      <QuotaExceededModal
+        isOpen={quotaModal.open}
+        onClose={() => setQuotaModal({ open: false, message: '' })}
+        resourceName="الأصناف والمنتجات"
+        currentCount={products.length}
+        maxLimit={currentUser?.maxProducts || products.length}
+        customMessage={quotaModal.message}
+      />
 
       {role === ROLES.SUPERVISOR && (
         <Modal

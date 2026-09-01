@@ -1,61 +1,166 @@
-/* ═══════════════════════════════════════
-   DEBTS KPI SUMMARY BOXES
-═══════════════════════════════════════ */
-.debts-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
+/* ═══════════════════════════════════════════════
+   CREATIVE DEBTS & CUSTOMER CREDIT STYLING
+   ═══════════════════════════════════════════════ */
 
-.kpi-box {
+.debts-creative {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  transition: transform var(--transition-fast);
+  gap: 16px;
+  padding: 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.kpi-box:hover {
-  transform: translateY(-2px);
-}
-
-.kpi-box__label {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
-.kpi-box__val {
-  font-size: var(--text-lg);
-  font-weight: var(--fw-bold);
-  color: var(--text-primary);
-}
-
-.kpi-box--deduction .kpi-box__val { color: #ef4444; }
-.kpi-box--advance .kpi-box__val { color: #f59e0b; }
-.kpi-box--net {
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
-}
-.kpi-box--net .kpi-box__val { color: var(--accent); }
-
-/* ═══════════════════════════════════════
-   SETTLE MODAL SUMMARY
-═══════════════════════════════════════ */
-.payout-summary-box {
+.debts-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--space-4);
-  background: rgba(16, 185, 129, 0.1);
-  border-right: 4px solid #10b981;
-  border-radius: var(--radius-md);
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 20px;
+  background: rgba(18, 24, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+  flex-wrap: wrap;
 }
 
-.payout-amount {
-  font-size: var(--text-xl);
-  color: #10b981;
+.debts-header__info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.debts-header__icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ef4444;
+}
+
+.debts-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debts-count-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+/* ── KPI Grid ── */
+.debts-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .debts-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 550px) {
+  .debts-kpi-grid { grid-template-columns: 1fr; }
+}
+
+.debts-kpi-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(18, 24, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.debts-kpi-card__label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.debts-kpi-card__val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  font-family: monospace;
+}
+
+.debts-kpi-card--unpaid .debts-kpi-card__val { color: #ef4444; }
+.debts-kpi-card--paid .debts-kpi-card__val { color: #10b981; }
+.debts-kpi-card--total .debts-kpi-card__val { color: var(--accent); }
+
+/* ── Filter Strip ── */
+.debts-filter-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(18, 24, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  flex-wrap: wrap;
+}
+
+.debts-status-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debt-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.debt-status-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.debt-status-pill--active {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(239, 68, 68, 0.1) 100%) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  color: #fca5a5 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+.debt-progress-bar {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.debt-progress-bar__fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 999px;
 }

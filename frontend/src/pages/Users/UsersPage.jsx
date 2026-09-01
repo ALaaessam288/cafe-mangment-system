@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Edit2, KeyRound } from 'lucide-react';
+import { 
+  Plus, Edit2, KeyRound, LayoutGrid, Table as TableIcon, 
+  Users, Shield, UserCheck, CheckCircle2, XCircle 
+} from 'lucide-react';
 import { usersApi } from '../../api/usersApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -11,12 +14,15 @@ import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import QuotaExceededModal from '../../components/QuotaExceededModal/QuotaExceededModal';
 import { ROLES } from '../../utils/constants';
+import { sounds } from '../../utils/soundEffects';
+import './UsersPage.css';
 
 export default function UsersPage() {
   const toast = useToast();
   const { role, user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('GRID');
 
   const canManageUsers = role === ROLES.ADMIN || role === ROLES.SUPERVISOR;
 
@@ -36,7 +42,7 @@ export default function UsersPage() {
     setLoading(true);
     try {
       const data = await usersApi.findAll();
-      setUsers(data);
+      setUsers(data || []);
     } catch (err) {
       toast.error(err.message, 'Failed to load users');
     } finally {
@@ -47,6 +53,7 @@ export default function UsersPage() {
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
   function handleOpenEdit(user = null) {
+    sounds.playTap();
     if (user) {
       setEditingUser(user);
       setForm({ fullName: user.fullName, username: user.username, role: user.role, password: '', pin: '' });
@@ -66,6 +73,7 @@ export default function UsersPage() {
   }
 
   function handleOpenPassword(user) {
+    sounds.playTap();
     setEditingUser(user);
     setPasswordForm({ newPassword: '' });
     setIsPasswordModalOpen(true);
@@ -106,7 +114,7 @@ export default function UsersPage() {
         setIsEditModalOpen(false);
         setQuotaModal({ open: true, message: err.message });
       } else {
-        toast.error(err.message, 'فشل حفظ بيانات المستخدم');
+        toast.error(err.message, 'فشل حفظ المستخدم');
       }
     } finally {
       setIsSaving(false);
@@ -132,6 +140,7 @@ export default function UsersPage() {
   }
 
   async function handleToggleActive(user) {
+    sounds.playTap();
     if (user.id === currentUser.id) {
       toast.warning('لا يمكنك تعطيل حسابك الشخصي الحالي.');
       return;
@@ -149,37 +158,57 @@ export default function UsersPage() {
     }
   }
 
-  function getRoleBadgeVariant(r) {
-    if (r === 'ADMIN') return 'accent';
-    if (r === 'SUPERVISOR') return 'info';
-    return 'neutral';
+  function getRoleTitle(r) {
+    if (r === 'ADMIN') return '👑 مالك المنشأة';
+    if (r === 'SUPERVISOR') return '⚡ مدير العمليات (Supervisor)';
+    return '🛒 كاشير';
   }
 
   return (
-    <div className="page">
+    <div className="page users-page users-creative">
       {!canManageUsers && <ObserverBanner />}
-      <div className="page__header">
-        <div>
-          <h1 className="page__title">إدارة المستخدمين 👤</h1>
-          <p className="page__subtitle">إدارة حسابات الموظفين، تحديد الصلاحيات وتغيير كلمات المرور</p>
+
+      <div className="page__header users-header">
+        <div className="users-header__info">
+          <div className="users-header__icon-box">
+            <Users size={24} />
+          </div>
+          <div>
+            <div className="users-header__title-row">
+              <h1 className="page__title">المستخدمين وصلاحيات الفريق</h1>
+              <span className="users-count-badge">{users.length} مستخدم</span>
+            </div>
+            <p className="page__subtitle">إدارة حسابات الكاشير، المشرفين، كلمات المرور ورموز الـ PIN</p>
+          </div>
         </div>
-        <div className="page__actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {currentUser?.maxUsers && (
-            <span
-              className="badge"
-              style={{
-                background: users.length >= currentUser.maxUsers ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.15)',
-                color: users.length >= currentUser.maxUsers ? '#ef4444' : '#f59e0b',
-                border: `1px solid ${users.length >= currentUser.maxUsers ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.3)'}`,
-                padding: '6px 12px',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontSize: '0.85rem'
-              }}
+
+        <div className="page__actions users-header__actions">
+          <div className="tables-view-toggle">
+            <button
+              type="button"
+              className={`view-mode-btn ${viewMode === 'GRID' ? 'view-mode-btn--active' : ''}`}
+              onClick={() => { sounds.playTap(); setViewMode('GRID'); }}
             >
-              السعة: {users.length} / {currentUser.maxUsers} مستخدم
-            </span>
+              <LayoutGrid size={15} />
+              <span>كروت (3D)</span>
+            </button>
+            <button
+              type="button"
+              className={`view-mode-btn ${viewMode === 'TABLE' ? 'view-mode-btn--active' : ''}`}
+              onClick={() => { sounds.playTap(); setViewMode('TABLE'); }}
+            >
+              <TableIcon size={15} />
+              <span>جدول منظم</span>
+            </button>
+          </div>
+
+          {currentUser?.maxUsers && (
+            <div className="tables-quota-pill">
+              <span>السعة:</span>
+              <strong className="font-mono">{users.length} / {currentUser.maxUsers}</strong>
+            </div>
           )}
+
           {canManageUsers && (
             <Button rightIcon={<Plus size={16} />} onClick={() => handleOpenEdit()} variant="primary">
               إضافة مستخدم جديد
@@ -188,7 +217,6 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Quota Limit Reached Modal */}
       <QuotaExceededModal
         isOpen={quotaModal.open}
         onClose={() => setQuotaModal({ open: false, message: '' })}
@@ -198,12 +226,70 @@ export default function UsersPage() {
         customMessage={quotaModal.message}
       />
 
-      <div className="data-table-wrap">
-        {loading ? (
-          <div className="data-table-empty"><Spinner /></div>
-        ) : users.length === 0 ? (
-          <div className="data-table-empty">لا يوجد مستخدمين حالياً.</div>
-        ) : (
+      {loading ? (
+        <div className="page page-center"><Spinner /></div>
+      ) : users.length === 0 ? (
+        <div className="tables-empty-state">
+          <Users size={48} className="tables-empty-icon" />
+          <h3>لا يوجد مستخدمين مضافين</h3>
+          <p>أضف حسابات جديدة للكاشير أو المشرفين للبدء</p>
+          {canManageUsers && (
+            <Button variant="primary" rightIcon={<Plus size={16} />} onClick={() => handleOpenEdit()}>
+              إضافة مستخدم الآن
+            </Button>
+          )}
+        </div>
+      ) : viewMode === 'GRID' ? (
+        <div className="users-grid">
+          {users.map((u) => {
+            const roleClass = u.role === 'ADMIN' ? 'user-card__role-pill--admin' : u.role === 'SUPERVISOR' ? 'user-card__role-pill--supervisor' : 'user-card__role-pill--cashier';
+            const initials = u.fullName ? u.fullName.trim().charAt(0) : u.username.charAt(0);
+            return (
+              <div key={u.id} className={`user-card ${u.active ? '' : 'user-card--disabled'}`}>
+                <div className="user-card__head">
+                  <div className="user-avatar-circle">{initials}</div>
+                  <span className={`user-card__role-pill ${roleClass}`}>
+                    {getRoleTitle(u.role)}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="user-card__name">{u.fullName || u.username}</h3>
+                  <div className="user-card__username">@{u.username}</div>
+                </div>
+
+                <div className="user-card__footer">
+                  <Badge variant={u.active ? 'success' : 'neutral'}>
+                    {u.active ? 'نشط' : 'معطل'}
+                  </Badge>
+
+                  {canManageUsers && (
+                    <div className="user-card__actions">
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
+                        <KeyRound size={14} />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)} title="تعديل البيانات">
+                        <Edit2 size={14} />
+                      </Button>
+                      {u.id !== currentUser?.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleActive(u)}
+                          style={{ color: u.active ? 'var(--danger)' : 'var(--success)' }}
+                        >
+                          {u.active ? 'تعطيل' : 'تفعيل'}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="data-table-wrap">
           <table className="data-table">
             <thead>
               <tr>
@@ -217,36 +303,39 @@ export default function UsersPage() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td style={{ fontWeight: 600 }}>
-                    {u.fullName} {u.id === currentUser.id && <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>(حسابك الحالي)</span>}
-                  </td>
-                  <td className="data-table__mono">{u.username}</td>
+                  <td style={{ fontWeight: 700, color: '#fff' }}>{u.fullName}</td>
+                  <td><code className="font-mono" style={{ color: '#94a3b8' }}>@{u.username}</code></td>
                   <td>
-                    <Badge variant={getRoleBadgeVariant(u.role)} size="sm">{u.role}</Badge>
+                    <span className="table-zone-chip font-bold">
+                      {getRoleTitle(u.role)}
+                    </span>
                   </td>
                   <td>
-                    <Badge variant={u.active ? 'success' : 'danger'}>
-                      {u.active ? 'نشط' : 'غير نشط'}
+                    <Badge variant={u.active ? 'success' : 'neutral'}>
+                      {u.active ? 'نشط' : 'معطل'}
                     </Badge>
                   </td>
                   {canManageUsers && (
                     <td>
-                      <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
+                      <div className="data-table__actions" style={{ justifyContent: 'flex-end', gap: '6px' }}>
                         <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
-                          <KeyRound size={15} />
+                          <KeyRound size={14} />
+                          <span>كلمة المرور</span>
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)} title="تعديل المستخدم">
-                          <Edit2 size={15} />
+                          <Edit2 size={14} />
+                          <span>تعديل</span>
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleActive(u)}
-                          disabled={u.id === currentUser.id}
-                          style={{ color: u.active ? 'var(--danger)' : 'var(--success)' }}
-                        >
-                          {u.active ? 'تعطيل' : 'تفعيل'}
-                        </Button>
+                        {u.id !== currentUser?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleActive(u)}
+                            style={{ color: u.active ? 'var(--danger)' : 'var(--success)' }}
+                          >
+                            {u.active ? 'تعطيل' : 'تفعيل'}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   )}
@@ -254,8 +343,8 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Edit / Create User Modal */}
       {canManageUsers && (

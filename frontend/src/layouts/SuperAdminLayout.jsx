@@ -22,13 +22,13 @@ export default function SuperAdminLayout({
   const [searchQuery, setSearchQuery] = useState('');
 
   const NAV_ITEMS = [
-    { id: 'dashboard', label: 'لوحة المؤشرات', icon: 'bi-speedometer2', badge: null },
-    { id: 'tenants', label: 'إدارة المنشآت', icon: 'bi-buildings', badge: totalTenants > 0 ? totalTenants : null, badgeColor: 'bg-primary' },
-    { id: 'plans', label: 'باقات الاشتراك', icon: 'bi-tags', badge: '4' },
-    { id: 'subscriptions', label: 'التراخيص والاشتراكات', icon: 'bi-key', badge: expiringCount > 0 ? `${expiringCount} تنبيه` : null, badgeColor: 'bg-danger' },
-    { id: 'reports', label: 'تقارير المنصة', icon: 'bi-bar-chart-line', badge: null },
-    { id: 'audit-logs', label: 'سجل النشاطات', icon: 'bi-journal-text', badge: null },
-    { id: 'settings', label: 'إعدادات المنصة', icon: 'bi-gear', badge: null },
+    { id: 'dashboard', label: 'الرئيسية', icon: 'bi-grid-1x2', badge: null },
+    { id: 'tenants', label: 'العملاء', icon: 'bi-buildings', badge: totalTenants > 0 ? totalTenants : null, badgeColor: 'bg-primary' },
+    { id: 'plans', label: 'الباقات', icon: 'bi-box-seam', badge: '4' },
+    { id: 'subscriptions', label: 'الاشتراكات', icon: 'bi-key', badge: expiringCount > 0 ? `${expiringCount}` : null, badgeColor: 'bg-danger' },
+    { id: 'reports', label: 'التقارير', icon: 'bi-bar-chart-line', badge: null },
+    { id: 'audit-logs', label: 'سجل النشاط', icon: 'bi-journal-text', badge: null },
+    { id: 'settings', label: 'الإعدادات', icon: 'bi-sliders', badge: null },
   ];
 
   const SECTION_TITLES = {
@@ -95,9 +95,9 @@ export default function SuperAdminLayout({
 
         {/* Navigation List */}
         <div className="sa-sidebar__body">
-          <div className="sa-nav-group-title">{!collapsed && 'إدارة المنصة المركزية'}</div>
+          <div className="sa-nav-group-title">{!collapsed && 'مساحات العمل'}</div>
           <nav className="sa-nav">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.map((item, index) => {
               const isActive = activeSection === item.id;
               return (
                 <button
@@ -107,6 +107,7 @@ export default function SuperAdminLayout({
                   onClick={() => handleNavClick(item.id)}
                   title={collapsed ? item.label : undefined}
                 >
+                  {!collapsed && <span className="sa-nav__sequence">{String(index + 1).padStart(2, '0')}</span>}
                   <i className={`bi ${item.icon} sa-nav__icon`} />
                   {!collapsed && <span className="sa-nav__label">{item.label}</span>}
                   {!collapsed && item.badge && (
@@ -125,7 +126,7 @@ export default function SuperAdminLayout({
           {!collapsed && (
             <div className="sa-sidebar__kpi-pill">
               <div className="d-flex justify-content-between align-items-center mb-1">
-                <span className="text-secondary small">حالة المنشآت</span>
+                <span className="text-secondary small">نبض العملاء</span>
                 <span className="text-success small fw-bold">
                   <i className="bi bi-circle-fill me-1" style={{ fontSize: '6px' }} />
                   {activeTenants} نشط

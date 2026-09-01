@@ -304,18 +304,30 @@ public class TenantService {
         if (req.whatsappAlertsEnabled() != null) {
             tenant.setWhatsappAlertsEnabled(req.whatsappAlertsEnabled());
         }
-        if (req.subscriptionEndsAt() != null) {
-            tenant.setSubscriptionEndsAt(req.subscriptionEndsAt());
-        }
-        if (req.trialEndsAt() != null) {
-            tenant.setTrialEndsAt(req.trialEndsAt());
+        boolean trial = tenant.getStatus() == TenantStatus.TRIAL
+                || tenant.getSubscriptionPlan() == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
+
+        // Route the requested date to the effective lifecycle field. The fallback keeps
+        // older clients safe: they used to send a trial date as subscriptionEndsAt.
+        java.time.Instant requestedEnd = trial
+                ? (req.trialEndsAt() != null ? req.trialEndsAt() : req.subscriptionEndsAt())
+                : (req.subscriptionEndsAt() != null ? req.subscriptionEndsAt() : req.trialEndsAt());
+        if (requestedEnd != null) {
+            if (trial) {
+                tenant.setTrialEndsAt(requestedEnd);
+            } else {
+                tenant.setSubscriptionEndsAt(requestedEnd);
+            }
         }
         if (req.extendDays() != null && req.extendDays() > 0) {
             java.time.Instant now = java.time.Instant.now();
-            java.time.Instant currentEnd = tenant.getSubscriptionEndsAt() != null ? tenant.getSubscriptionEndsAt() : tenant.getTrialEndsAt();
+            java.time.Instant currentEnd = trial ? tenant.getTrialEndsAt() : tenant.getSubscriptionEndsAt();
             java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
-            tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
-            tenant.setStatus(TenantStatus.ACTIVE);
+            if (trial) {
+                tenant.setTrialEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
+            } else {
+                tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
+            }
         }
         tenant.setPlanSelected(true);
 
@@ -415,7 +427,6 @@ public class TenantService {
         return tenantActivityLogRepository.findTop200ByOrderByCreatedAtDesc();
     }
 }
-
 
 
 
