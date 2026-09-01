@@ -1,13 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   ShoppingCart, Table2, TrendingUp, Coffee,
-  RefreshCw, ArrowLeft, Clock, AlertTriangle, ChevronRight, Zap, FileText, 
+  RefreshCw, Clock, AlertTriangle, ChevronRight, Zap, FileText,
   DollarSign, Package, Eye, Users, ChefHat, Sparkles, LayoutGrid, CheckCircle2,
-  Percent, ArrowUpRight, ArrowDownRight, Tag, ShieldCheck, ShieldAlert
+  ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import Badge from '../../components/Badge/Badge';
-import Spinner from '../../components/Spinner/Spinner';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import { ordersApi } from '../../api/ordersApi';
 import { tablesApi } from '../../api/tablesApi';
@@ -86,6 +84,47 @@ export default function DashboardPage() {
   );
 
   const occupancyRate = tables.length > 0 ? Math.round((occupiedTables.length / tables.length) * 100) : 0;
+  const delayedOrders = openOrders.filter((order) => {
+    const openedAt = order.createdAt || order.openedAt;
+    return openedAt && Date.now() - new Date(openedAt).getTime() > 15 * 60 * 1000;
+  });
+  const averageTicket = closedOrders.length > 0 ? todayRevenue / closedOrders.length : 0;
+  const operationalStatus = delayedOrders.length > 0 ? 'يحتاج تدخل' : openOrders.length > 0 ? 'نشط وطبيعي' : 'هادئ';
+
+  const attentionItems = [
+    delayedOrders.length > 0 && {
+      tone: 'danger',
+      icon: Clock,
+      title: `${delayedOrders.length} أوردر متأخر أكثر من 15 دقيقة`,
+      detail: 'راجع شاشة التحضير وحدد سبب التأخير قبل أن يتأثر العميل.',
+      action: 'فتح شاشة التحضير',
+      route: ROUTES.KDS,
+    },
+    lowStockProducts.length > 0 && {
+      tone: 'warning',
+      icon: Package,
+      title: `${lowStockProducts.length} صنف وصل إلى حد إعادة الطلب`,
+      detail: lowStockProducts.slice(0, 3).map((product) => product.name).join('، '),
+      action: 'مراجعة المخزون',
+      route: ROUTES.INVENTORY,
+    },
+    !shift && {
+      tone: 'neutral',
+      icon: ShieldAlert,
+      title: 'لا يوجد شيفت مفتوح حالياً',
+      detail: isSupervisor ? 'افتح الكاشير وابدأ شيفت التشغيل.' : 'لا توجد حركة تحصيل مباشرة في هذه اللحظة.',
+      action: isSupervisor ? 'فتح الكاشير' : 'عرض التقارير',
+      route: isSupervisor ? ROUTES.POS : ROUTES.REPORTS,
+    },
+    voidOrders.length > 0 && isAdmin && {
+      tone: 'warning',
+      icon: ShieldAlert,
+      title: `${voidOrders.length} أوردر ملغي يحتاج مراجعة`,
+      detail: 'راجع الإلغاءات للتأكد من أسبابها وسلامة دورة التحصيل.',
+      action: 'مراجعة الفواتير',
+      route: ROUTES.INVOICES,
+    },
+  ].filter(Boolean).slice(0, 4);
 
   return (
     <div className="page dashboard-creative">
@@ -148,6 +187,24 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ── Caffio Pulse: one-glance operating health ── */}
+      <section className="caffio-pulse" aria-label="نبض كافيو اللحظي">
+        <div className="caffio-pulse__lead">
+          <span className="caffio-pulse__live"><span /> مباشر</span>
+          <div>
+            <strong>نبض كافيو</strong>
+            <small>{isAdmin ? 'صحة المنشأة اليوم' : 'حالة التشغيل الآن'}</small>
+          </div>
+        </div>
+        <div className="caffio-pulse__metrics">
+          <div><span>المبيعات</span><strong>{formatCurrency(todayRevenue)}</strong></div>
+          <div><span>متوسط الفاتورة</span><strong>{formatCurrency(averageTicket)}</strong></div>
+          <div><span>الصالة</span><strong>{occupancyRate}% إشغال</strong></div>
+          <div><span>المطبخ</span><strong className={delayedOrders.length ? 'is-danger' : 'is-success'}>{operationalStatus}</strong></div>
+          <div><span>التنبيهات</span><strong className={attentionItems.length ? 'is-warning' : 'is-success'}>{attentionItems.length || 'لا يوجد'}</strong></div>
+        </div>
+      </section>
 
       {/* ── Creative 4-Grid Glass KPIs ── */}
       <div className="dash-kpi-grid">
@@ -236,6 +293,98 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Role-specific decision workspace ── */}
+      <div className="dash-workspace">
+        {isSupervisor && (
+          <section className="dash-focus-card dash-floor-pulse">
+            <div className="dash-focus-card__head">
+              <div>
+                <span className="dash-eyebrow">LIVE FLOOR PULSE</span>
+                <h2>حركة الصالة الآن</h2>
+              </div>
+              <Link to={ROUTES.TABLES} className="dash-link">إدارة الطاولات <ChevronRight size={14} /></Link>
+            </div>
+            <div className="dash-floor-summary">
+              <div><strong>{occupiedTables.length}</strong><span>مشغولة</span></div>
+              <div><strong>{freeTables.length}</strong><span>متاحة</span></div>
+              <div><strong>{delayedOrders.length}</strong><span>متأخرة</span></div>
+            </div>
+            <div className="dash-floor-grid">
+              {tables.filter((table) => table.active).slice(0, 12).map((table) => {
+                const tableOrder = openOrders.find((order) => order.tableId === table.id);
+                const isDelayed = tableOrder && delayedOrders.some((order) => order.id === tableOrder.id);
+                return (
+                  <button
+                    type="button"
+                    key={table.id}
+                    className={`dash-floor-table ${isDelayed ? 'is-delayed' : tableOrder ? 'is-occupied' : 'is-free'}`}
+                    onClick={() => navigate(ROUTES.POS)}
+                  >
+                    <Table2 size={17} />
+                    <strong>{table.name || `طاولة ${table.number || table.id}`}</strong>
+                    <span>{isDelayed ? 'متأخرة' : tableOrder ? 'طلب مفتوح' : 'متاحة'}</span>
+                  </button>
+                );
+              })}
+              {tables.filter((table) => table.active).length === 0 && (
+                <div className="dash-inline-empty">لا توجد طاولات مفعلة في الصالة.</div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {isAdmin && (
+          <section className="dash-focus-card dash-owner-view">
+            <div className="dash-focus-card__head">
+              <div>
+                <span className="dash-eyebrow">BUSINESS CONTROL</span>
+                <h2>صورة اليوم التنفيذية</h2>
+              </div>
+              <Link to={ROUTES.REPORTS} className="dash-link">التحليل الكامل <ChevronRight size={14} /></Link>
+            </div>
+            <div className="dash-owner-score">
+              <div className="dash-owner-score__ring" style={{ '--score': `${Math.max(8, 100 - (attentionItems.length * 18)) * 3.6}deg` }}>
+                <span>{Math.max(8, 100 - (attentionItems.length * 18))}</span>
+              </div>
+              <div>
+                <strong>{attentionItems.length === 0 ? 'التشغيل مستقر' : 'توجد نقاط تحتاج انتباهك'}</strong>
+                <p>المؤشر يجمع حالة الشيفت، تأخير الطلبات، المخزون والإلغاءات في قراءة واحدة.</p>
+              </div>
+            </div>
+            <div className="dash-owner-facts">
+              <div><span>فواتير مدفوعة</span><strong>{closedOrders.length}</strong></div>
+              <div><span>أوردرات ملغاة</span><strong>{voidOrders.length}</strong></div>
+              <div><span>أصناف منخفضة</span><strong>{lowStockProducts.length}</strong></div>
+            </div>
+          </section>
+        )}
+
+        <section className="dash-focus-card dash-attention">
+          <div className="dash-focus-card__head">
+            <div>
+              <span className="dash-eyebrow">ACTION QUEUE</span>
+              <h2>{attentionItems.length ? `${attentionItems.length} أمور تحتاج انتباهك` : 'كل شيء تحت السيطرة'}</h2>
+            </div>
+            <span className={`dash-health-dot ${attentionItems.length ? 'has-alerts' : ''}`} />
+          </div>
+          <div className="dash-attention__list">
+            {attentionItems.map((item) => {
+              const ItemIcon = item.icon;
+              return (
+                <button type="button" className={`dash-attention-item is-${item.tone}`} key={item.title} onClick={() => navigate(item.route)}>
+                  <span className="dash-attention-item__icon"><ItemIcon size={17} /></span>
+                  <span className="dash-attention-item__copy"><strong>{item.title}</strong><small>{item.detail}</small></span>
+                  <span className="dash-attention-item__action">{item.action} <ChevronRight size={13} /></span>
+                </button>
+              );
+            })}
+            {attentionItems.length === 0 && (
+              <div className="dash-attention-empty"><CheckCircle2 size={28} /><strong>لا توجد مشكلات عاجلة</strong><span>يمكنك متابعة التشغيل بثقة.</span></div>
+            )}
+          </div>
+        </section>
       </div>
 
       {/* ── Supervisor / Admin Quick Operational Launcher Dock ── */}

@@ -14,8 +14,10 @@ public record PaymentResponse(
         BigDecimal received,
         BigDecimal change,
         String reference,
+        String note,
         Instant paidAt,
-        Long cashierId
+        Long cashierId,
+        String cashierName
 ) {
     public static PaymentResponse from(Payment payment) {
         return new PaymentResponse(
@@ -26,7 +28,9 @@ public record PaymentResponse(
                 payment.getReceived(),
                 payment.getChange(),
                 payment.getReference(),
+                payment.getNote(),
                 payment.getPaidAt(),
-                payment.getCashier().getId());
+                payment.getCashier() != null ? payment.getCashier().getId() : null,
+                payment.getCashier() != null ? payment.getCashier().getFullName() : null);
     }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
-  Plus, Edit2, Search, Sliders, Trash2, ArrowUpDown, 
-  LayoutGrid, Table as TableIcon, Package, Coffee, ChefHat, Tag, CheckCircle2, XCircle
+  Plus, Edit2, Search, Trash2,
+  LayoutGrid, Table as TableIcon, Package, CheckCircle2, XCircle
 } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { stationsApi } from '../../api/stationsApi';
@@ -375,7 +375,11 @@ export default function ProductsPage() {
     const availableCount = products.filter(p => p.available && p.active).length;
     const barCount = products.filter(p => p.stationCode === 'BAR').length;
     const kitchenCount = products.filter(p => p.stationCode === 'KITCHEN').length;
-    return { total, availableCount, barCount, kitchenCount };
+    const unavailableCount = products.filter(p => !p.available || !p.active).length;
+    const uncategorizedCount = products.filter(p => !p.categoryId).length;
+    const averagePrice = total > 0 ? products.reduce((sum, p) => sum + Number(p.price || 0), 0) / total : 0;
+    const menuHealth = total > 0 ? Math.round((availableCount / total) * 100) : 100;
+    return { total, availableCount, barCount, kitchenCount, unavailableCount, uncategorizedCount, averagePrice, menuHealth };
   }, [products]);
 
   return (
@@ -432,6 +436,27 @@ export default function ProductsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Menu health command strip ── */}
+      <section className="menu-health-panel">
+        <div className="menu-health-panel__score" style={{ '--menu-health': `${stats.menuHealth * 3.6}deg` }}>
+          <div><strong>{stats.menuHealth}%</strong><span>جاهزية المنيو</span></div>
+        </div>
+        <div className="menu-health-panel__copy">
+          <span className="menu-health-panel__eyebrow">MENU HEALTH</span>
+          <h2>{stats.unavailableCount === 0 ? 'المنيو جاهز بالكامل للطلب' : `${stats.unavailableCount} أصناف تحتاج مراجعة`}</h2>
+          <p>صورة سريعة لجاهزية الأصناف، جودة التصنيف، وتوازن التشغيل بين البار والمطبخ.</p>
+        </div>
+        <div className="menu-health-panel__signals">
+          <button type="button" onClick={() => setFilterAvailable('UNAVAILABLE')} className={stats.unavailableCount ? 'has-warning' : ''}>
+            <span>غير متاح</span><strong>{stats.unavailableCount}</strong><small>اضغط للمراجعة</small>
+          </button>
+          <button type="button" onClick={() => setFilterCatId('')} className={stats.uncategorizedCount ? 'has-warning' : ''}>
+            <span>بدون تصنيف</span><strong>{stats.uncategorizedCount}</strong><small>يؤثر على رحلة الطلب</small>
+          </button>
+          <div><span>متوسط السعر</span><strong>{formatCurrency(stats.averagePrice)}</strong><small>عبر كل المنيو</small></div>
+        </div>
+      </section>
 
       {/* ── KPI Summary Strip ── */}
       <div className="products-kpi-strip">
@@ -553,10 +578,11 @@ export default function ProductsPage() {
             const cat = categories.find((c) => c.id === prod.categoryId);
             const isBar = prod.stationCode === 'BAR';
             return (
-              <div 
+              <article
                 key={prod.id} 
                 className={`product-3d-card ${prod.active ? '' : 'product-3d-card--disabled'}`}
               >
+                <div className={`product-3d-card__status-rail ${prod.available && prod.active ? 'is-ready' : 'is-offline'}`} />
                 <div>
                   <div className="product-3d-card__head">
                     <span className="product-category-chip">{cat?.name || 'قسم عام'}</span>
@@ -611,7 +637,7 @@ export default function ProductsPage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>

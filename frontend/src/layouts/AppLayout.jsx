@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, Tag, Table2,
-  Users, Receipt, BarChart3, Settings, LogOut, Coffee, Contact, Landmark, ChefHat, Crown,
-  ChevronDown, Menu, X, Maximize, Minimize, Clock, Search, Bell, Keyboard
+  Users, Receipt, BarChart3, Settings, LogOut, Contact, Landmark, ChefHat,
+  ChevronDown, Menu, X, Maximize, Minimize, Clock, Search, Bell, Keyboard, ChevronLeft, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ROLES, ROUTES } from '../utils/constants';
 import { useToast } from '../context/ToastContext';
-import TrialBanner from '../components/TrialBanner/TrialBanner';
 import OnboardingTour from '../components/OnboardingTour/OnboardingTour';
 import CommandPalette from '../components/CommandPalette/CommandPalette';
 import ShortcutsModal from '../components/ShortcutsModal/ShortcutsModal';
@@ -19,33 +18,49 @@ import './AppLayout.css';
 /* Sections the sidebar folds into. Each one collapses independently and the
    state sticks, so a cashier can keep الكاشير open and everything else shut. */
 const NAV_SECTIONS = [
-  { id: 'OPS',     label: 'التشغيل' },
-  { id: 'MONEY',   label: 'الفلوس والموظفين' },
-  { id: 'CATALOG', label: 'المنيو والإدارة' },
-  { id: 'SYSTEM',  label: 'النظام' },
+  { id: 'OVERVIEW', label: 'نظرة عامة' },
+  { id: 'OPS',      label: 'التشغيل اليومي' },
+  { id: 'MONEY',    label: 'المالية والفريق' },
+  { id: 'CATALOG',  label: 'المنيو والمخزون' },
+  { id: 'SYSTEM',   label: 'الإدارة والنظام' },
 ];
 
 const NAV_ITEMS = [
-  { label: 'الرئيسية',     icon: LayoutDashboard, route: ROUTES.DASHBOARD, section: 'OPS',     roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
+  { label: 'مركز التحكم',   icon: LayoutDashboard, route: ROUTES.DASHBOARD, section: 'OVERVIEW', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
   { label: 'الكاشير',      icon: ShoppingCart,    route: ROUTES.POS,       section: 'OPS',     roles: [ROLES.SUPERVISOR, ROLES.CASHIER] },
   { label: 'شاشة التحضير', icon: ChefHat,         route: ROUTES.KDS,       section: 'OPS',     roles: [ROLES.SUPERVISOR, ROLES.CASHIER] },
   { label: 'الفواتير',     icon: Receipt,         route: ROUTES.INVOICES,  section: 'OPS',     roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.CASHIER] },
 
-  { label: 'المصاريف',     icon: Tag,             route: ROUTES.EXPENSES,  section: 'MONEY',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.CASHIER] },
-  { label: 'الموظفين',     icon: Contact,         route: ROUTES.EMPLOYEES, section: 'MONEY',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.CASHIER] },
+  { label: 'المصاريف والعهد', icon: Tag,           route: ROUTES.EXPENSES,  section: 'MONEY',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.CASHIER] },
+  { label: 'الفريق والرواتب', icon: Contact,       route: ROUTES.EMPLOYEES, section: 'MONEY',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.CASHIER] },
   { label: 'المديونية',    icon: Landmark,        route: ROUTES.DEBTS,     section: 'MONEY',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
   { label: 'التقارير',     icon: BarChart3,       route: ROUTES.REPORTS,   section: 'MONEY',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
 
   { label: 'المنتجات',     icon: Package,         route: ROUTES.PRODUCTS,  section: 'CATALOG', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
   { label: 'التقسيمات',    icon: Tag,             route: ROUTES.CATEGORIES,section: 'CATALOG', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
   { label: 'الطاولات',     icon: Table2,          route: ROUTES.TABLES,    section: 'CATALOG', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
-  { label: 'الجرد',        icon: Package,         route: ROUTES.INVENTORY, section: 'CATALOG', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
+  { label: 'المخزون والجرد', icon: Package,       route: ROUTES.INVENTORY, section: 'CATALOG', roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
 
   { label: 'المستخدمين',   icon: Users,           route: ROUTES.USERS,     section: 'SYSTEM',  roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
   { label: 'الإعدادات',    icon: Settings,        route: ROUTES.SETTINGS,  section: 'SYSTEM',  roles: [ROLES.ADMIN] },
 ];
 
 const SECTIONS_KEY  = 'caffio_sidebar_sections';
+
+const ADMIN_PAGE_META = {
+  [ROUTES.DASHBOARD]:  ['مركز التحكم', 'ملخص أداء المنشأة وما يحتاج قرارك الآن'],
+  [ROUTES.INVOICES]:   ['العمليات والفواتير', 'مراجعة دورة الطلب والتحصيل وخدمة العملاء'],
+  [ROUTES.EXPENSES]:   ['المصاريف والعهد', 'متابعة التدفقات الخارجة والمسؤوليات المالية'],
+  [ROUTES.EMPLOYEES]:  ['الفريق والرواتب', 'إدارة مستحقات الفريق وحركة الحسابات'],
+  [ROUTES.DEBTS]:      ['المديونية', 'متابعة الآجل والتسويات والتحصيلات المستحقة'],
+  [ROUTES.REPORTS]:    ['التقارير والتحليل', 'قرارات مبنية على أداء المبيعات والشيفتات'],
+  [ROUTES.PRODUCTS]:   ['المنتجات والمنيو', 'الأسعار والتوافر وتجربة الطلب'],
+  [ROUTES.CATEGORIES]: ['أقسام المنيو', 'هيكلة العرض وترتيب رحلة اختيار العميل'],
+  [ROUTES.TABLES]:     ['الصالة والطاولات', 'تخطيط الطاقة الاستيعابية وتوزيع الخدمة'],
+  [ROUTES.INVENTORY]:  ['المخزون والجرد', 'حماية الهامش وتقليل الهدر والنواقص'],
+  [ROUTES.USERS]:      ['المستخدمون والصلاحيات', 'حوكمة الوصول ومسؤوليات فريق التشغيل'],
+  [ROUTES.SETTINGS]:   ['إعدادات المنشأة', 'الهوية والاشتراك والطباعة والأمان'],
+};
 
 function readJson(key, fallback) {
   try {
@@ -59,7 +74,10 @@ function readJson(key, fallback) {
 export default function AppLayout({ children }) {
   const { user, role, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
+  const isAdminWorkspace = role === ROLES.ADMIN;
+  const adminPageMeta = ADMIN_PAGE_META[location.pathname] || ['مساحة الإدارة', 'إدارة وتشغيل منشأتك من مكان واحد'];
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
 
@@ -131,7 +149,7 @@ export default function AppLayout({ children }) {
   const dateStr = time.toLocaleDateString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${isAdminWorkspace ? 'app-layout--admin' : ''}`}>
       {/* ── Sleek Topbar Header ── */}
       <header className="app-topbar">
         {/* Right side in RTL: Menu Toggle & Brand */}
@@ -333,6 +351,22 @@ export default function AppLayout({ children }) {
 
       {/* ── Main content ── */}
       <main className="app-main">
+        {isAdminWorkspace && (
+          <div className="admin-context-bar">
+            <div className="admin-context-bar__identity">
+              <span className="admin-context-bar__mark"><ShieldCheck size={15} /></span>
+              <div>
+                <div className="admin-context-bar__trail">
+                  <span>مساحة المالك</span><ChevronLeft size={11} /><strong>{adminPageMeta[0]}</strong>
+                </div>
+                <span className="admin-context-bar__description">{adminPageMeta[1]}</span>
+              </div>
+            </div>
+            <button type="button" className="admin-context-bar__command" onClick={() => setIsCmdOpen(true)}>
+              <Search size={13} /><span>انتقل لأي شاشة أو نفّذ إجراء</span><kbd>Ctrl+K</kbd>
+            </button>
+          </div>
+        )}
         {children}
       </main>
 

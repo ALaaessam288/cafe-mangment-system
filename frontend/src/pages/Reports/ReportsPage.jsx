@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
   Calendar, DollarSign, Clock, RefreshCw, Printer, Award, 
-  CreditCard, ShoppingBag, Trash2, Download, Filter, 
-  TrendingUp, TrendingDown, Layers, Search, ChevronLeft, 
-  CheckCircle2, FileText, BarChart2, Activity
+  CreditCard, ShoppingBag, Trash2, Download,
+  TrendingUp, TrendingDown, Layers, Search,
+  FileText, BarChart2, Activity
 } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { reportsApi } from '../../api/reportsApi';
@@ -404,6 +404,14 @@ export default function ReportsPage() {
   const totalRev = financialData ? (financialData.totalCafeRevenue + financialData.totalRestaurantRevenue) : 0;
   const cafePct = totalRev > 0 ? ((financialData.totalCafeRevenue / totalRev) * 100).toFixed(1) : 0;
   const restPct = totalRev > 0 ? ((financialData.totalRestaurantRevenue / totalRev) * 100).toFixed(1) : 0;
+  const totalGrossRevenue = financialData
+    ? (financialData.totalCafeRevenue || 0) + (financialData.totalRestaurantRevenue || 0) + (financialData.totalSnacksNet || 0)
+    : 0;
+  const totalOperatingCosts = financialData
+    ? (financialData.totalCafeExpenses || 0) + (financialData.totalRestaurantExpenses || 0) + (financialData.totalGeneralExpenses || 0) + (financialData.totalWages || 0)
+    : 0;
+  const profitMargin = totalGrossRevenue > 0 ? ((financialData?.netProfit || 0) / totalGrossRevenue) * 100 : 0;
+  const soldItemsCount = financialData?.productSales?.reduce((sum, product) => sum + (product.quantity || 0), 0) || 0;
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -437,12 +445,16 @@ export default function ReportsPage() {
     <div className="page reports-page">
       
       {/* Page Header */}
-      <div className="page__header">
-        <div>
-          <h1 className="page__title">مركز التقارير والإحصائيات 📊</h1>
-          <p className="page__subtitle">تحليل وتصفية المبيعات والأرباح وطباعة التقارير الدورية</p>
+      <div className="page__header reports-page-header">
+        <div className="reports-page-header__identity">
+          <span className="reports-page-header__icon"><BarChart2 size={21} /></span>
+          <div>
+            <span className="reports-page-header__eyebrow">CAFFIO BUSINESS INTELLIGENCE</span>
+            <h1 className="page__title">مركز التقارير والتحليل</h1>
+            <p className="page__subtitle">حوّل حركة التشغيل والمبيعات إلى قرارات واضحة وقابلة للتنفيذ</p>
+          </div>
         </div>
-        <div className="page__actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div className="page__actions reports-page-header__actions">
           {canViewReports && activeTab === 'FINANCIAL' && (
             <>
               <Button 
@@ -451,7 +463,7 @@ export default function ReportsPage() {
                 onClick={handlePrintPeriodicReport}
                 title="طباعة التقرير الحالي"
               >
-                طباعة تقرير الفترة (80mm)
+                طباعة
               </Button>
               <Button 
                 variant="secondary" 
@@ -459,7 +471,7 @@ export default function ReportsPage() {
                 onClick={handleExportExcel}
                 title="تصدير كشف إكسيل منسق"
               >
-                تصدير إكسيل منسق (.xls)
+                تصدير Excel
               </Button>
             </>
           )}
@@ -471,38 +483,43 @@ export default function ReportsPage() {
 
       {/* Navigation Tabs */}
       {canViewReports && (
-        <div className="reports-tabs">
+        <nav className="reports-tabs" aria-label="أنواع التقارير">
           <button 
             className={`reports-tab-btn ${activeTab === 'FINANCIAL' ? 'reports-tab-btn--active' : ''}`}
             onClick={() => { sounds.playTap(); setActiveTab('FINANCIAL'); }}
           >
-            <TrendingUp size={16} /> تقرير المبيعات والأرباح الشامل
+            <span className="reports-tab-btn__icon"><TrendingUp size={16} /></span>
+            <span><strong>الأداء المالي</strong><small>المبيعات، المصاريف والربح</small></span>
           </button>
           <button 
             className={`reports-tab-btn ${activeTab === 'PAYROLL' ? 'reports-tab-btn--active' : ''}`}
             onClick={() => { sounds.playTap(); setActiveTab('PAYROLL'); }}
           >
-            <DollarSign size={16} /> مسير رواتب الموظفين (أسبوعياً)
+            <span className="reports-tab-btn__icon"><DollarSign size={16} /></span>
+            <span><strong>الرواتب</strong><small>مستحقات وحركة الفريق</small></span>
           </button>
           <button
             className={`reports-tab-btn ${activeTab === 'BESTSELLERS' ? 'reports-tab-btn--active' : ''}`}
             onClick={() => { sounds.playTap(); setActiveTab('BESTSELLERS'); loadAnalytics(); }}
           >
-            <BarChart2 size={16} /> الأصناف الأكثر مبيعاً
+            <span className="reports-tab-btn__icon"><BarChart2 size={16} /></span>
+            <span><strong>الأصناف</strong><small>الأكثر مبيعاً وتأثيراً</small></span>
           </button>
           <button
             className={`reports-tab-btn ${activeTab === 'HOURLY' ? 'reports-tab-btn--active' : ''}`}
             onClick={() => { sounds.playTap(); setActiveTab('HOURLY'); loadAnalytics(); }}
           >
-            <Activity size={16} /> خريطة المبيعات بالساعة
+            <span className="reports-tab-btn__icon"><Activity size={16} /></span>
+            <span><strong>ساعات الذروة</strong><small>توزيع الحركة بالساعة</small></span>
           </button>
           <button
             className={`reports-tab-btn ${activeTab === 'RECIPES' ? 'reports-tab-btn--active' : ''}`}
             onClick={() => { sounds.playTap(); setActiveTab('RECIPES'); loadRecipeData(); }}
           >
-            <Layers size={16} /> ربحية الوصفات والمواد الخام ☕
+            <span className="reports-tab-btn__icon"><Layers size={16} /></span>
+            <span><strong>ربحية الوصفات</strong><small>التكلفة والهامش والخامات</small></span>
           </button>
-        </div>
+        </nav>
       )}
 
       {/* Advanced Date Range & Filter Bar */}
@@ -642,6 +659,30 @@ export default function ReportsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Executive reading of the selected period */}
+      {canViewReports && financialData && activeTab === 'FINANCIAL' && (
+        <section className="reports-executive-strip" aria-label="الملخص التنفيذي للفترة">
+          <div className="reports-executive-strip__intro">
+            <span className="reports-executive-strip__live"><span /> ملخص الفترة</span>
+            <strong>{periodLabel}</strong>
+            <small>آخر تحديث {new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</small>
+          </div>
+          <div className="reports-executive-metric is-revenue">
+            <span>إجمالي الإيراد</span><strong>{formatCurrency(totalGrossRevenue)}</strong><small>{soldItemsCount} وحدة مباعة</small>
+          </div>
+          <div className="reports-executive-metric is-cost">
+            <span>تكلفة التشغيل</span><strong>{formatCurrency(totalOperatingCosts)}</strong><small>{totalGrossRevenue > 0 ? `${((totalOperatingCosts / totalGrossRevenue) * 100).toFixed(1)}% من الإيراد` : 'لا توجد حركة'}</small>
+          </div>
+          <div className={`reports-executive-metric ${profitMargin >= 0 ? 'is-profit' : 'is-loss'}`}>
+            <span>هامش صافي الربح</span><strong>{profitMargin.toFixed(1)}%</strong><small>{formatCurrency(financialData.netProfit)}</small>
+          </div>
+          <div className="reports-executive-verdict">
+            {profitMargin >= 20 ? <TrendingUp size={19} /> : <Activity size={19} />}
+            <div><span>قراءة كافيو</span><strong>{profitMargin >= 20 ? 'هامش صحي للفترة' : profitMargin >= 0 ? 'الهامش يحتاج متابعة' : 'التكاليف تتجاوز الإيراد'}</strong></div>
+          </div>
+        </section>
       )}
 
       {/* Main Financial Report Content */}

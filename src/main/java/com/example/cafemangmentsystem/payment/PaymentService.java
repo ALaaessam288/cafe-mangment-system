@@ -78,6 +78,7 @@ public class PaymentService {
         payment.setReceived(received);
         payment.setChange(change);
         payment.setReference(reference);
+        payment.setNote(request.note());
         payment.setPaidAt(Instant.now());
         payment.setCashier(cashier);
 

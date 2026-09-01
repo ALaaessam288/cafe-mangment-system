@@ -60,6 +60,7 @@ public class ShiftService {
     private final OrderRepository orderRepository;
     private final DebtRepository debtRepository;
     private final EmployeeTransactionRepository employeeTransactionRepository;
+    private final com.example.cafemangmentsystem.cashmovement.repository.CashMovementRepository cashMovementRepository;
 
     @Transactional
     public ShiftResponse open(Long userId, OpenShiftRequest request) {
@@ -160,7 +161,19 @@ public class ShiftService {
         BigDecimal drawerExpenses = expenseRepository.sumDrawerAmountByShiftId(shift.getId());
         BigDecimal exp = drawerExpenses != null ? drawerExpenses : BigDecimal.ZERO;
 
-        BigDecimal expected = openFloat.add(cash).subtract(exp);
+        BigDecimal cashIn = cashMovementRepository != null ?
+                cashMovementRepository.sumAmountByShiftIdAndType(shift.getId(), com.example.cafemangmentsystem.cashmovement.entity.CashMovementType.CASH_IN) : BigDecimal.ZERO;
+        if (cashIn == null) cashIn = BigDecimal.ZERO;
+
+        BigDecimal safeDrops = cashMovementRepository != null ?
+                cashMovementRepository.sumAmountByShiftIdAndType(shift.getId(), com.example.cafemangmentsystem.cashmovement.entity.CashMovementType.SAFE_DROP) : BigDecimal.ZERO;
+        if (safeDrops == null) safeDrops = BigDecimal.ZERO;
+
+        BigDecimal cashOut = cashMovementRepository != null ?
+                cashMovementRepository.sumAmountByShiftIdAndType(shift.getId(), com.example.cafemangmentsystem.cashmovement.entity.CashMovementType.CASH_OUT) : BigDecimal.ZERO;
+        if (cashOut == null) cashOut = BigDecimal.ZERO;
+
+        BigDecimal expected = openFloat.add(cash).add(cashIn).subtract(safeDrops).subtract(cashOut).subtract(exp);
         shift.setExpectedCash(expected);
 
         BigDecimal counted = request != null && request.countedCash() != null ? request.countedCash() : BigDecimal.ZERO;

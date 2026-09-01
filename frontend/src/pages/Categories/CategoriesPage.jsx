@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, LayoutGrid, Eye, EyeOff, ArrowUpLeft, Layers3 } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import Button from '../../components/Button/Button';
-import Badge from '../../components/Badge/Badge';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Spinner from '../../components/Spinner/Spinner';
@@ -94,10 +93,14 @@ export default function CategoriesPage() {
   return (
     <div className="page cats-page">
       <ObserverBanner />
-      <div className="page__header">
-        <div>
-          <h1 className="page__title">الأقسام</h1>
-          <p className="page__subtitle">إدارة أقسام المنيو وترتيبها</p>
+      <div className="page__header categories-hero">
+        <div className="categories-hero__identity">
+          <span className="categories-hero__icon"><Layers3 size={22} /></span>
+          <div>
+            <span className="categories-hero__eyebrow">MENU ARCHITECTURE</span>
+            <h1 className="page__title">هندسة أقسام المنيو</h1>
+            <p className="page__subtitle">رتّب رحلة الاختيار كما يراها العميل والكاشير في نقطة البيع</p>
+          </div>
         </div>
         <div className="page__actions">
           {role === ROLES.SUPERVISOR && (
@@ -108,47 +111,38 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      <div className="data-table-wrap">
+      <section className="categories-story-strip">
+        <div><span>إجمالي الأقسام</span><strong>{categories.length}</strong><small>في هيكل المنيو</small></div>
+        <div><span>ظاهر في التشغيل</span><strong>{categories.filter(cat => cat.active).length}</strong><small>أقسام نشطة</small></div>
+        <div><span>غير نشط</span><strong>{categories.filter(cat => !cat.active).length}</strong><small>يحتاج مراجعة</small></div>
+        <p><LayoutGrid size={18} /><span><strong>الترتيب يصنع رحلة الطلب</strong><small>الأرقام الأقل تظهر أولاً في تبويبات الكاشير.</small></span></p>
+      </section>
+
+      <div className="categories-workspace">
         {loading ? (
-          <div className="data-table-empty"><Spinner /></div>
+          <div className="categories-empty"><Spinner /></div>
         ) : categories.length === 0 ? (
-          <div className="data-table-empty">مفيش أقسام. ضيف قسم عشان تبدأ.</div>
+          <div className="categories-empty"><Layers3 size={38} /><h3>ابدأ بهيكل منيو واضح</h3><p>أضف أول قسم مثل المشروبات الساخنة أو الوجبات.</p></div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>الاسم</th>
-                <th>الترتيب</th>
-                <th>الحالة</th>
-                {role === ROLES.SUPERVISOR && <th style={{ textAlign: 'left' }}>تحكم</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {categories.sort((a, b) => a.displayOrder - b.displayOrder).map((cat) => (
-                <tr key={cat.id}>
-                  <td style={{ fontWeight: 500 }}>{cat.name}</td>
-                  <td>{cat.displayOrder}</td>
-                  <td>
-                    <Badge variant={cat.active ? 'success' : 'neutral'}>
-                      {cat.active ? 'نشط' : 'غير نشط'}
-                    </Badge>
-                  </td>
-                  {role === ROLES.SUPERVISOR && (
-                    <td>
-                      <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(cat)}>
-                          <Edit2 size={15} />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(cat.id)} style={{ color: 'var(--danger)' }}>
-                          <Trash2 size={15} />
-                        </Button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="category-card-grid">
+            {[...categories].sort((a, b) => a.displayOrder - b.displayOrder).map((cat, index) => (
+              <article className={`category-editorial-card ${cat.active ? '' : 'is-inactive'}`} key={cat.id}>
+                <div className="category-editorial-card__order"><span>POSITION</span><strong>{String(cat.displayOrder ?? index + 1).padStart(2, '0')}</strong></div>
+                <div className="category-editorial-card__body">
+                  <span className="category-editorial-card__sequence">القسم {index + 1} من {categories.length}</span>
+                  <h2>{cat.name}</h2>
+                  <span className={`category-editorial-card__status ${cat.active ? 'is-live' : ''}`}>{cat.active ? <Eye size={12} /> : <EyeOff size={12} />}{cat.active ? 'ظاهر في المنيو' : 'مخفي من المنيو'}</span>
+                </div>
+                {role === ROLES.SUPERVISOR && (
+                  <div className="category-editorial-card__actions">
+                    <button type="button" onClick={() => handleOpenModal(cat)}><Edit2 size={14} /> تعديل</button>
+                    <button type="button" className="is-danger" onClick={() => handleDelete(cat.id)}><Trash2 size={14} /></button>
+                  </div>
+                )}
+                <ArrowUpLeft size={17} className="category-editorial-card__arrow" />
+              </article>
+            ))}
+          </div>
         )}
       </div>
 

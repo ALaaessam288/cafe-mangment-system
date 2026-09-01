@@ -12,12 +12,19 @@ import Modal from '../../components/Modal/Modal';
 import Spinner from '../../components/Spinner/Spinner';
 import { 
   Building2, User, KeyRound, Shield, RefreshCw, Sparkles, MessageCircle, 
-  Upload, Trash2, Image, Key, CheckCircle, AlertTriangle, Crown, ArrowUpRight, Copy, Check,
-  Wand2, Sliders, Layers, Eye, Scissors
+  Upload, Trash2, Image, Key, CheckCircle, Crown, ArrowUpRight, Check,
+  Wand2, ZoomIn, ZoomOut, RotateCcw, Download, Columns2, CheckCircle2
 } from 'lucide-react';
 import { ROLES } from '../../utils/constants';
 import PrinterSettings from './PrinterSettings';
 import './SettingsPage.css';
+
+const SETTINGS_TAB_META = {
+  facility: { label: 'هوية المنشأة', description: 'الشعار، بيانات الفرع، العملة وحالة إصدار النظام', index: '01', tone: 'amber' },
+  subscription: { label: 'الاشتراك والسعة', description: 'الباقة الحالية، حدود الاستخدام، الترخيص وخيارات الترقية', index: '02', tone: 'violet' },
+  security: { label: 'الحساب والأمان', description: 'بيانات الحساب، كلمة المرور وحماية الوصول الإداري', index: '03', tone: 'blue' },
+  hardware: { label: 'الأجهزة والتكاملات', description: 'الطابعات، إعدادات الإيصالات وقنوات التنبيه', index: '04', tone: 'emerald' },
+};
 
 export default function SettingsPage() {
   const { user, role, updateTenantInfo } = useAuth();
@@ -45,6 +52,8 @@ export default function SettingsPage() {
   const [isProcessingBg, setIsProcessingBg] = useState(false);
   const [processedDataUrl, setProcessedDataUrl] = useState('');
   const [previewBgTheme, setPreviewBgTheme] = useState('checkerboard'); // 'checkerboard' | 'dark' | 'receipt'
+  const [logoPreviewMode, setLogoPreviewMode] = useState('after'); // 'before' | 'after'
+  const [logoPreviewZoom, setLogoPreviewZoom] = useState(100);
 
   // Usage & Subscription state
   const [usage, setUsage] = useState(null);
@@ -158,6 +167,28 @@ export default function SettingsPage() {
     } finally {
       setIsSavingLogo(false);
     }
+  }
+
+  function handleResetLogoStudio() {
+    setBgRemovalMode('auto');
+    setBgTolerance(38);
+    setBgFeather(18);
+    setBgFloodFill(true);
+    setBgAutoTrim(true);
+    setLogoPreviewMode('after');
+    setLogoPreviewZoom(100);
+    runBackgroundRemoval(rawUploadedImage, 'auto', 38, 18, true, true);
+  }
+
+  function handleDownloadProcessedLogo() {
+    if (!processedDataUrl) return;
+    const link = document.createElement('a');
+    link.href = processedDataUrl;
+    link.download = `caffio-logo-${tenantSlug || 'brand'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('تم تنزيل نسخة PNG من الشعار');
   }
 
   async function handleSaveLogo() {
@@ -300,20 +331,20 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="settings-header__quick-stats">
-          <div className="settings-quick-stat-pill">
-            <span className="text-muted text-xs">المنشأة:</span>
-            <strong>{user?.tenantName || 'كافيه ونس'}</strong>
-          </div>
-          <div className="settings-quick-stat-pill">
-            <span className="text-muted text-xs">الباقة:</span>
-            <span className="text-accent font-bold">{usage?.planDisplayName || user?.planDisplayName || 'تجريبية'}</span>
+        <div className="settings-header__visual">
+          <div className="settings-header__orbit"><span /><i /><b><Building2 size={18} /></b></div>
+          <div className="settings-header__visual-copy">
+            <span>مساحة التشغيل</span>
+            <strong>{user?.tenantName || 'كافيو'}</strong>
+            <small>{usage?.planDisplayName || user?.planDisplayName || 'فترة تجريبية'} · {tenantSlug}</small>
           </div>
         </div>
       </div>
 
       {/* ── Glass Tabs Navigation Bar ── */}
-      <div className="settings-tabs-bar">
+      <div className="settings-workspace">
+      <aside className="settings-tabs-bar">
+        <div className="settings-tabs-bar__label"><span>SETTINGS</span><strong>مركز الإعدادات</strong><small>اختر مساحة للعمل عليها</small></div>
         {role === ROLES.ADMIN && (
           <>
             <button
@@ -321,16 +352,16 @@ export default function SettingsPage() {
               className={`settings-tab-btn ${activeTab === 'facility' ? 'settings-tab-btn--active' : ''}`}
               onClick={() => setActiveTab('facility')}
             >
-              <Building2 size={16} />
-              <span>بيانات المنشأة واللوجو</span>
+              <span className="settings-tab-btn__icon"><Building2 size={16} /></span>
+              <span className="settings-tab-btn__copy"><strong>هوية المنشأة</strong><small>الشعار وبيانات الفرع</small></span>
             </button>
             <button
               type="button"
               className={`settings-tab-btn ${activeTab === 'subscription' ? 'settings-tab-btn--active' : ''}`}
               onClick={() => setActiveTab('subscription')}
             >
-              <Crown size={16} />
-              <span>الاشتراك والتراخيص</span>
+              <span className="settings-tab-btn__icon"><Crown size={16} /></span>
+              <span className="settings-tab-btn__copy"><strong>الاشتراك والسعة</strong><small>الباقة وحدود الاستخدام</small></span>
               {usage?.daysRemaining <= 5 && <span className="settings-tab-badge">تجديد</span>}
             </button>
           </>
@@ -340,8 +371,8 @@ export default function SettingsPage() {
           className={`settings-tab-btn ${activeTab === 'security' ? 'settings-tab-btn--active' : ''}`}
           onClick={() => setActiveTab('security')}
         >
-          <KeyRound size={16} />
-          <span>الحساب والأمان</span>
+          <span className="settings-tab-btn__icon"><KeyRound size={16} /></span>
+          <span className="settings-tab-btn__copy"><strong>الحساب والأمان</strong><small>الدخول وكلمة المرور</small></span>
         </button>
         {role === ROLES.ADMIN && (
           <button
@@ -349,11 +380,31 @@ export default function SettingsPage() {
             className={`settings-tab-btn ${activeTab === 'hardware' ? 'settings-tab-btn--active' : ''}`}
             onClick={() => setActiveTab('hardware')}
           >
-            <MessageCircle size={16} />
-            <span>الطابعات والتنبيهات</span>
+            <span className="settings-tab-btn__icon"><MessageCircle size={16} /></span>
+            <span className="settings-tab-btn__copy"><strong>الأجهزة والتكاملات</strong><small>الطباعة والتنبيهات</small></span>
           </button>
         )}
-      </div>
+      </aside>
+
+      <div className="settings-workspace__main">
+
+      <section className={`settings-context-panel is-${SETTINGS_TAB_META[activeTab]?.tone || 'amber'}`}>
+        <div className="settings-context-panel__index">{SETTINGS_TAB_META[activeTab]?.index}</div>
+        <div className="settings-context-panel__copy">
+          <span>CONFIGURATION WORKSPACE</span>
+          <h2>{SETTINGS_TAB_META[activeTab]?.label}</h2>
+          <p>{SETTINGS_TAB_META[activeTab]?.description}</p>
+        </div>
+        <div className="settings-context-panel__health">
+          <span className="settings-context-panel__health-dot" />
+          <div><strong>النظام يعمل بشكل طبيعي</strong><small>آخر مزامنة: الآن</small></div>
+        </div>
+        {role === ROLES.ADMIN && (
+          <div className="settings-context-panel__account">
+            <span>الباقة الحالية</span><strong>{loadingUsage ? 'جاري التحقق…' : (usage?.planDisplayName || user?.planDisplayName || 'تجريبية')}</strong><small>{usage?.daysRemaining ?? 14} يوم متبقي</small>
+          </div>
+        )}
+      </section>
 
       {/* ── TAB 1: FACILITY & LOGO ── */}
       {activeTab === 'facility' && (
@@ -399,15 +450,17 @@ export default function SettingsPage() {
                     type="button"
                     variant="primary"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full justify-center"
+                    rightIcon={<Upload size={16} />}
+                    className="settings-logo-action settings-logo-action--upload"
                   >
-                    <Upload size={15} /> اختيار صورة (تفريغ خلفية تلقائي 🪄)
+                    رفع شعار جديد
                   </Button>
 
                   {logoPreview && (
                     <Button
                       type="button"
                       variant="secondary"
+                      rightIcon={<Wand2 size={16} />}
                       onClick={() => {
                         setRawUploadedImage(logoPreview);
                         setBgRemovalMode('auto');
@@ -416,9 +469,9 @@ export default function SettingsPage() {
                         setIsBgRemoverOpen(true);
                         runBackgroundRemoval(logoPreview, 'auto', 38, 18, true, true);
                       }}
-                      className="w-full justify-center"
+                      className="settings-logo-action settings-logo-action--studio"
                     >
-                      <Wand2 size={15} className="text-accent" /> ضبط وتفريغ الشعار (AI Studio)
+                      تحسين الشعار
                     </Button>
                   )}
                 </div>
@@ -429,10 +482,12 @@ export default function SettingsPage() {
                       type="button"
                       variant="primary"
                       size="sm"
+                      rightIcon={<Check size={15} />}
                       onClick={handleSaveLogo}
                       loading={isSavingLogo}
+                      className="settings-logo-save"
                     >
-                      <Check size={14} /> حفظ وتثبيت الشعار
+                      حفظ الشعار
                     </Button>
                     <Button
                       type="button"
@@ -440,8 +495,11 @@ export default function SettingsPage() {
                       size="sm"
                       onClick={handleRemoveLogo}
                       disabled={isSavingLogo}
+                      rightIcon={<Trash2 size={14} />}
+                      className="settings-logo-delete"
+                      title="حذف الشعار الحالي"
                     >
-                      <Trash2 size={14} /> حذف
+                      حذف
                     </Button>
                   </div>
                 )}
@@ -822,6 +880,9 @@ export default function SettingsPage() {
         </div>
       )}
 
+      </div>
+      </div>
+
       {/* ── AI Logo Background Removal Modal ── */}
       <Modal
         isOpen={isBgRemoverOpen}
@@ -832,6 +893,21 @@ export default function SettingsPage() {
         size="lg"
       >
         <div className="bg-remover-modal-body">
+          <div className="logo-studio-toolbar">
+            <div className="logo-studio-compare" aria-label="المقارنة بين الصورة الأصلية والنتيجة">
+              <button type="button" className={logoPreviewMode === 'before' ? 'active' : ''} onClick={() => setLogoPreviewMode('before')}><Columns2 size={13} /> قبل</button>
+              <button type="button" className={logoPreviewMode === 'after' ? 'active' : ''} onClick={() => setLogoPreviewMode('after')}><CheckCircle2 size={13} /> بعد</button>
+            </div>
+            <div className="logo-studio-tools">
+              <button type="button" onClick={() => setLogoPreviewZoom(value => Math.max(60, value - 10))} title="تصغير"><ZoomOut size={14} /></button>
+              <span>{logoPreviewZoom}%</span>
+              <button type="button" onClick={() => setLogoPreviewZoom(value => Math.min(180, value + 10))} title="تكبير"><ZoomIn size={14} /></button>
+              <i />
+              <button type="button" onClick={handleResetLogoStudio} title="إعادة الضبط"><RotateCcw size={14} /></button>
+              <button type="button" onClick={handleDownloadProcessedLogo} disabled={!processedDataUrl || isProcessingBg} title="تنزيل PNG"><Download size={14} /></button>
+            </div>
+          </div>
+
           {/* Preview Box with Mode Switcher */}
           <div className="bg-remover-preview-section">
             <div className="bg-remover-preview-tabs">
@@ -864,11 +940,12 @@ export default function SettingsPage() {
                   <Spinner />
                   <span>جاري إزالة الخلفية وتنعيم الحواف...</span>
                 </div>
-              ) : processedDataUrl ? (
+              ) : (logoPreviewMode === 'before' ? rawUploadedImage : processedDataUrl) ? (
                 <img
-                  src={processedDataUrl}
-                  alt="Transparent Logo Preview"
+                  src={logoPreviewMode === 'before' ? rawUploadedImage : processedDataUrl}
+                  alt={logoPreviewMode === 'before' ? 'Original logo preview' : 'Transparent logo preview'}
                   className="bg-remover-result-img"
+                  style={{ transform: `scale(${logoPreviewZoom / 100})` }}
                 />
               ) : (
                 <span className="text-muted">جاري المعالجة...</span>
@@ -878,6 +955,10 @@ export default function SettingsPage() {
 
           {/* Controls & Sliders */}
           <div className="bg-remover-controls-section">
+            <div className="logo-studio-quality">
+              <div className="logo-studio-quality__score"><CheckCircle2 size={15} /><span><strong>جاهز للاستخدام</strong><small>PNG شفاف مناسب للنظام والطباعة</small></span></div>
+              <div className="logo-studio-quality__chips"><span>حواف ناعمة</span><span>{bgAutoTrim ? 'متمركز تلقائياً' : 'الحجم الأصلي'}</span><span>{bgFloodFill ? 'التفاصيل محمية' : 'تفريغ شامل'}</span></div>
+            </div>
             <div className="control-group">
               <label className="control-group__label">نمط التفريغ:</label>
               <div className="bg-mode-pills">
@@ -997,7 +1078,9 @@ export default function SettingsPage() {
               </>
             )}
 
-            <div className="modal-actions-bar" style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div className="logo-studio-actions">
+              <button type="button" className="logo-studio-download" onClick={handleDownloadProcessedLogo} disabled={!processedDataUrl || isProcessingBg}><Download size={15} /><span><strong>تنزيل نسخة</strong><small>PNG للاحتفاظ بها</small></span></button>
+              <div>
               <Button
                 type="button"
                 variant="secondary"
@@ -1010,9 +1093,11 @@ export default function SettingsPage() {
                 variant="primary"
                 onClick={handleApplyProcessedLogo}
                 loading={isSavingLogo}
+                rightIcon={<Check size={16} />}
               >
-                <Check size={16} /> حفظ وتثبيت الشعار الشفاف (PNG)
+                اعتماد الشعار
               </Button>
+              </div>
             </div>
           </div>
         </div>

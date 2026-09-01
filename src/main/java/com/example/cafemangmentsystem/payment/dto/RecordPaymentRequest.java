@@ -11,6 +11,7 @@ public record RecordPaymentRequest(
         @NotNull PaymentMethod method,
         @NotNull @Positive BigDecimal amount,
         @PositiveOrZero BigDecimal received,
-        String reference
+        String reference,
+        String note
 ) {
 }

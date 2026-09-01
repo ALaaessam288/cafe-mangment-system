@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Printer, CheckCircle } from 'lucide-react';
+import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Printer, CheckCircle, Vault } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { expensesApi } from '../../api/expensesApi';
 import { menuApi } from '../../api/menuApi';
@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import DailyReportModal from '../../components/DailyReportModal/DailyReportModal';
+import CashDrawerModal from '../../components/CashDrawerModal/CashDrawerModal';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
@@ -32,6 +33,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   const { role, user } = useAuth();
   const [report, setReport] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showCashDrawerModal, setShowCashDrawerModal] = useState(false);
 
   const canViewFinancialTotals = role === ROLES.ADMIN || role === ROLES.SUPERVISOR;
 
@@ -328,6 +330,17 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
             <Clock size={14} /><span><strong>{pendingAdvances.length} عُهدة معلقة</strong><small>تحتاج تسوية</small></span>
           </button>
         )}
+
+        {/* Quick Cash Drawer & Safe Drop Controls */}
+        <button
+          type="button"
+          className="shift-tool shift-tool--drawer pos-quick-drawer-btn"
+          style={{ background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#fbbf24' }}
+          onClick={() => setShowCashDrawerModal(true)}
+          title="الرقابة على الخزينة: إيداعات وسحوبات وترحيل للخزنة الرئيسية (Safe Drop)"
+        >
+          <Vault size={14} /><span><strong>حركات الدرج</strong><small>إيداع وترحيل خزنة</small></span>
+        </button>
 
         {/* Quick Add Expense Payout Button */}
         <button
@@ -669,6 +682,18 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* POS Cash Drawer Controls Modal */}
+      {showCashDrawerModal && (
+        <CashDrawerModal
+          isOpen={showCashDrawerModal}
+          onClose={() => {
+            setShowCashDrawerModal(false);
+            load();
+          }}
+          currentShift={shift}
+        />
       )}
     </>
   );

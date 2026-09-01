@@ -350,3 +350,65 @@
   gap: var(--space-2);
 }
 
+/* ═══════════════════════════════════════════════
+   ADMIN EXPERIENCE — shared across management screens
+   ═══════════════════════════════════════════════ */
+.app-layout--admin .page:not(.dashboard-creative) {
+  padding: 18px clamp(14px, 2vw, 28px) 30px;
+  background:
+    radial-gradient(circle at 86% -10%, rgba(245, 158, 11, .055), transparent 28%),
+    radial-gradient(circle at 10% 24%, rgba(59, 130, 246, .035), transparent 24%),
+    var(--bg-app);
+}
+
+.app-layout--admin .page__header {
+  min-height: 78px;
+  margin-bottom: 16px;
+  padding: 15px 18px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(24,30,45,.9), rgba(15,19,30,.92));
+  box-shadow: 0 10px 30px rgba(0,0,0,.24);
+  position: relative;
+  overflow: hidden;
+}
+
+.app-layout--admin .page__header::before { content: ''; position: absolute; inset-inline-start: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: linear-gradient(var(--accent), #d97706); box-shadow: 0 0 14px rgba(245,158,11,.35); }
+.app-layout--admin .page__title { font-size: clamp(17px, 1.5vw, 21px); letter-spacing: -.35px; }
+.app-layout--admin .page__subtitle { color: #748197; line-height: 1.65; max-width: 680px; }
+.app-layout--admin .page__actions { padding-inline-start: 12px; }
+
+.app-layout--admin .page-filters {
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px;
+  border-radius: 13px;
+  background: rgba(18,24,38,.72);
+  border: 1px solid rgba(255,255,255,.065);
+  box-shadow: 0 6px 20px rgba(0,0,0,.16);
+}
+
+.app-layout--admin .data-table-wrap { border-radius: 15px; border-color: rgba(255,255,255,.08); background: rgba(18,24,38,.9); box-shadow: 0 12px 32px rgba(0,0,0,.26); }
+.app-layout--admin .data-table thead { position: sticky; top: 0; z-index: 2; }
+.app-layout--admin .data-table thead tr { background: #171c2a; }
+.app-layout--admin .data-table th { height: 38px; color: #8290a7; text-transform: none; }
+.app-layout--admin .data-table td { height: 42px; }
+.app-layout--admin .data-table tbody tr:hover td { background: rgba(245,158,11,.035); }
+
+.app-layout--admin .stat-card { border-radius: 14px; background: linear-gradient(150deg, rgba(27,33,49,.92), rgba(17,21,32,.94)); }
+.app-layout--admin .stat-card:hover { transform: translateY(-3px); border-color: rgba(245,158,11,.22); }
+.app-layout--admin .section-card { border-radius: 16px; background: linear-gradient(155deg, rgba(22,27,41,.92), rgba(16,20,31,.94)); box-shadow: 0 10px 28px rgba(0,0,0,.23); }
+
+.app-layout--admin input:not([type='checkbox']):not([type='radio']),
+.app-layout--admin select,
+.app-layout--admin textarea { border-radius: 9px; }
+
+.app-layout--admin button, .app-layout--admin a { -webkit-tap-highlight-color: transparent; }
+.app-layout--admin :focus-visible { outline: 2px solid rgba(245,158,11,.9); outline-offset: 2px; }
+
+@media (max-width: 760px) {
+  .app-layout--admin .page__header { align-items: flex-start; flex-direction: column; min-height: auto; }
+  .app-layout--admin .page__actions { width: 100%; padding-inline-start: 0; }
+  .app-layout--admin .page__actions > * { flex: 1; }
+}
+

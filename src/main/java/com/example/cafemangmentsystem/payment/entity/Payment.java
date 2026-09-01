@@ -48,6 +48,9 @@ public class Payment extends TenantScopedEntity {
 
     private String reference;
 
+    @Column(length = 255)
+    private String note;
+
     @Column(name = "paid_at", nullable = false)
     private Instant paidAt;
 

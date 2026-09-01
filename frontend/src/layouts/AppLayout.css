@@ -514,6 +514,39 @@
   background: var(--bg-app);
 }
 
+/* ── Admin workspace context ── */
+.admin-context-bar {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 18px;
+  background: linear-gradient(90deg, rgba(18, 24, 38, .98), rgba(13, 17, 28, .98));
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 4;
+}
+
+.admin-context-bar::after { content: ''; position: absolute; inset-inline-start: 18px; bottom: -1px; width: 92px; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); }
+.admin-context-bar__identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.admin-context-bar__mark { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(245,158,11,.22); }
+.admin-context-bar__trail { display: flex; align-items: center; gap: 4px; color: #64748b; font-size: 9px; }
+.admin-context-bar__trail strong { color: #e2e8f0; font-size: 10px; }
+.admin-context-bar__description { display: block; color: #64748b; font-size: 9px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-context-bar__command { display: inline-flex; align-items: center; gap: 7px; min-width: 240px; height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.025); color: #64748b; font: inherit; font-size: 9px; cursor: pointer; }
+.admin-context-bar__command:hover { color: #cbd5e1; border-color: rgba(245,158,11,.28); background: rgba(245,158,11,.04); }
+.admin-context-bar__command span { flex: 1; text-align: start; }
+.admin-context-bar__command kbd { padding: 2px 5px; border-radius: 4px; color: #94a3b8; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); font: 8px var(--font-mono); }
+
+@media (max-width: 720px) {
+  .admin-context-bar { padding-inline: 12px; }
+  .admin-context-bar__description, .admin-context-bar__command span { display: none; }
+  .admin-context-bar__command { min-width: auto; }
+}
+
 /* ── Standard page wrapper ── */
 .page {
   flex: 1;

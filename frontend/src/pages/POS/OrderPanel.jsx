@@ -3,6 +3,7 @@ import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus
 import Spinner from '../../components/Spinner/Spinner';
 import Badge from '../../components/Badge/Badge';
 import DiscountServiceModal from '../../components/DiscountServiceModal/DiscountServiceModal';
+import SupervisorApprovalModal from '../../components/SupervisorApprovalModal/SupervisorApprovalModal';
 import { formatCurrency } from '../../utils/formatters';
 import {
   ACTIONS,
@@ -653,20 +654,20 @@ export default function OrderPanel({
             )}
           </div>
 
-          {/* Cancel item dialog */}
+          {/* Cancel item supervisor authorization dialog */}
           {cancelItemId && (
-            <div className="cancel-overlay" onClick={() => setCancelItemId(null)}>
-              <div className="cancel-dialog" onClick={(e) => e.stopPropagation()}>
-                <h4>تأكيد إلغاء الصنف</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '8px 0 16px' }}>
-                  هل أنت متأكد من إلغاء هذا الصنف؟
-                </p>
-                <div className="cancel-dialog__actions">
-                  <button className="btn btn--ghost btn--sm" onClick={() => setCancelItemId(null)}>رجوع</button>
-                  <button className="btn btn--danger btn--sm" onClick={submitCancel}>تأكيد الإلغاء</button>
-                </div>
-              </div>
-            </div>
+            <SupervisorApprovalModal
+              isOpen={Boolean(cancelItemId)}
+              onClose={() => setCancelItemId(null)}
+              onApproved={async (supervisorData, reason) => {
+                await onCancelItem(cancelItemId, reason);
+                setCancelItemId(null);
+              }}
+              actionType="VOID_ITEM"
+              title="اعتماد إلغاء صنف مرسل للمطبخ"
+              description="تم إرسال هذا الصنف للتجهيز مسبقاً. يلزم موافقة المشرف وإدخال سبب الإلغاء للرقابة وحساب الهالك."
+              orderId={order.id}
+            />
           )}
 
           {/* Discount & Service Fee Modal */}
