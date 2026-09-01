@@ -3,7 +3,7 @@ import {
   Plus, Check, X, Search, Calendar, DollarSign, 
   MinusCircle, PlusCircle, CreditCard, Eye, Trash2, 
   UserCheck, ShieldAlert, Award, FileText, ArrowRight, RefreshCw,
-  Printer, RotateCcw
+  Printer, RotateCcw, Users, Briefcase, ChevronRight, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import { employeesApi } from '../../api/employeesApi';
 import { useToast } from '../../context/ToastContext';
@@ -17,20 +17,18 @@ import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
 import ObserverBanner from '../../components/ObserverBanner/ObserverBanner';
 import { ROLES } from '../../utils/constants';
+import { sounds } from '../../utils/soundEffects';
 import './EmployeesPage.css';
 
 const JOB_TITLES = ['شيف', 'ويتر', 'باريستا', 'كاشير', 'مشرف'];
-const DEDUCTION_REASONS = ['أكل', 'سلفة', 'تأخير', 'عدم التزام', 'عجز أوردر'];
+const DEDUCTION_REASONS = ['أكل ومشروبات', 'سلفة عاجلة', 'تأخير عن الشيفت', 'عدم التزام بالزي', 'عجز كاشير / أوردر', 'أخرى'];
 
 export default function EmployeesPage() {
   const toast = useToast();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isSupervisor = role === ROLES.SUPERVISOR;
-  // The weekly payroll sheet is admin/supervisor only server-side
-  // (GET /employees/payroll/summary). Cashiers still get the staff list and can
-  // record a payout, which the backend allows - so we just hide the sheet
-  // instead of hiding the whole module from them.
   const canSeePayroll = role === ROLES.ADMIN || role === ROLES.SUPERVISOR;
+
   const [activeTab, setActiveTab] = useState(canSeePayroll ? 'PAYROLL' : 'EMPLOYEES'); // 'PAYROLL' | 'EMPLOYEES'
   
   // Employees state
@@ -43,7 +41,7 @@ export default function EmployeesPage() {
   // Employee Form Modal state
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [employeeModalMode, setEmployeeModalMode] = useState('CREATE');
-  const [employeeForm, setEmployeeForm] = useState({ id: null, name: '', jobTitle: '', baseSalary: 0, active: true });
+  const [employeeForm, setEmployeeForm] = useState({ id: null, name: '', jobTitle: '', baseSalary: '', salaryPeriod: 'WEEKLY', active: true });
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [jobTitleCustom, setJobTitleCustom] = useState(false);
 
@@ -124,6 +122,7 @@ export default function EmployeesPage() {
 
   // Handle Date Presets
   const setDatePreset = (preset) => {
+    sounds.playTap();
     const today = new Date();
     if (preset === 'THIS_WEEK') {
       const start = new Date(today);
@@ -146,16 +145,18 @@ export default function EmployeesPage() {
 
   // Employee Modal Handlers
   function openCreateEmployeeModal() {
+    sounds.playTap();
     setEmployeeModalMode('CREATE');
-    setEmployeeForm({ id: null, name: '', jobTitle: '', baseSalary: 0, salaryPeriod: 'WEEKLY', active: true });
+    setEmployeeForm({ id: null, name: '', jobTitle: '', baseSalary: '', salaryPeriod: 'WEEKLY', active: true });
     setJobTitleCustom(false);
     setIsEmployeeModalOpen(true);
   }
 
   function openEditEmployeeModal(emp) {
+    sounds.playTap();
     setEmployeeModalMode('EDIT');
     setEmployeeForm({ ...emp });
-    setJobTitleCustom(!!emp.jobTitle && !JOB_TITLES.includes(emp.jobTitle));
+    setJobTitleCustom(Boolean(emp.jobTitle && !JOB_TITLES.includes(emp.jobTitle)));
     setIsEmployeeModalOpen(true);
   }
 
@@ -169,10 +170,10 @@ export default function EmployeesPage() {
     try {
       if (employeeModalMode === 'CREATE') {
         await employeesApi.create(employeeForm);
-        toast.success('تم إضافة الموظف بنجاح');
+        toast.success(`تم إضافة الموظف "${employeeForm.name}" بنجاح 👤`);
       } else {
         await employeesApi.update(employeeForm.id, employeeForm);
-        toast.success('تم تحديث بيانات الموظف بنجاح');
+        toast.success(`تم تحديث بيانات الموظف "${employeeForm.name}" بنجاح ✨`);
       }
       setIsEmployeeModalOpen(false);
       loadEmployees();
@@ -184,20 +185,34 @@ export default function EmployeesPage() {
     }
   }
 
-  async function handleDeleteEmployee(id) {
-    if (!window.confirm('هل أنت تأكد من مسح هذا الموظف؟')) return;
+  async function handleToggleActive(emp) {
+    sounds.playTap();
     try {
-      await employeesApi.delete(id);
-      toast.success('تم مسح الموظف بنجاح');
+      const updated = { ...emp, active: !emp.active };
+      await employeesApi.update(emp.id, updated);
+      toast.success(`تم ${!emp.active ? 'تفعيل' : 'تعطيل'} حساب الموظف ${emp.name}`);
       loadEmployees();
       loadPayrollSummary();
     } catch (err) {
-      toast.error(err.message, 'فشل المسح');
+      toast.error(err.message, 'فشل تغيير حالة الموظف');
+    }
+  }
+
+  async function handleDeleteEmployee(id, name) {
+    if (!window.confirm(`هل أنت متأكد من مسح الموظف "${name}" نهائياً من النظام؟`)) return;
+    try {
+      await employeesApi.delete(id);
+      toast.success(`تم مسح الموظف "${name}" بنجاح`);
+      loadEmployees();
+      loadPayrollSummary();
+    } catch (err) {
+      toast.error(err.message, 'فشل مسح الموظف');
     }
   }
 
   // Open Log Transaction Modal
   function openTxModal(emp, defaultType = 'DEDUCTION') {
+    sounds.playTap();
     setTxForm({
       employeeId: emp.employeeId || emp.id,
       employeeName: emp.employeeName || emp.name,
@@ -232,9 +247,9 @@ export default function EmployeesPage() {
       const labels = {
         DEDUCTION: 'خصم',
         ADVANCE: 'سُلفة',
-        BONUS: 'بونص/مكافأة'
+        BONUS: 'مكافأة/بونص'
       };
-      toast.success(`تم تسجيل ${labels[txForm.type]} للموظف ${txForm.employeeName} بنجاح`);
+      toast.success(`تم تسجيل ${labels[txForm.type]} بقيمة ${formatCurrency(txForm.amount)} للموظف ${txForm.employeeName} بنجاح`);
       setIsTxModalOpen(false);
       loadPayrollSummary();
     } catch (err) {
@@ -246,6 +261,7 @@ export default function EmployeesPage() {
 
   // Open View Log Modal
   async function openLogModal(emp) {
+    sounds.playTap();
     setSelectedLogEmp(emp);
     setIsLogModalOpen(true);
     setLoadingLog(true);
@@ -259,93 +275,124 @@ export default function EmployeesPage() {
     }
   }
 
-  // Delete Transaction Item
-  async function handleDeleteTxItem(txId) {
-    if (!window.confirm('هل أنت تأكد من حذف هذه الحركة؟')) return;
+  // Delete Individual Transaction
+  async function handleDeleteTransaction(txId) {
+    if (!window.confirm('هل أنت متأكد من حذف هذه العملية من سجل الموظف؟')) return;
     try {
       await employeesApi.deleteTransaction(txId);
-      toast.success('تم حذف الحركة بنجاح');
-      setEmpLogTxs(prev => prev.filter(t => t.id !== txId));
+      toast.success('تم حذف العملية بنجاح');
+      if (selectedLogEmp) {
+        const txs = await employeesApi.getTransactions(selectedLogEmp.employeeId || selectedLogEmp.id);
+        setEmpLogTxs(txs || []);
+      }
       loadPayrollSummary();
     } catch (err) {
-      toast.error(err.message, 'فشل الحذف');
+      toast.error(err.message, 'فشل حذف العملية');
     }
   }
 
-  // Open Payout Modal
-  function openPayoutModal(empSummary) {
+  // Print Employee Statement
+  function handlePrintEmployee(emp) {
+    sounds.playTap();
+    const html = buildEmployeeStatementHtml(emp, user?.tenantName, { startDate, endDate });
+    printReceipt(html, false);
+  }
+
+  // Print Full Team Payroll
+  function handlePrintTeamPayroll() {
+    sounds.playTap();
+    const rows = payrollSummaries.map((s, idx) => `
+      <tr style="border-bottom: 1px solid #ddd;">
+        <td style="padding: 6px 4px; text-align: right;">${idx + 1}. ${s.employeeName}</td>
+        <td style="padding: 6px 4px; text-align: center;">${s.jobTitle || '—'}</td>
+        <td style="padding: 6px 4px; text-align: center;">${formatCurrency(s.baseWeeklySalary)}</td>
+        <td style="padding: 6px 4px; text-align: center; color: #10b981;">+${formatCurrency(s.totalBonuses)}</td>
+        <td style="padding: 6px 4px; text-align: center; color: #ef4444;">-${formatCurrency(s.totalDeductions)}</td>
+        <td style="padding: 6px 4px; text-align: center; color: #f59e0b;">-${formatCurrency(s.totalAdvances)}</td>
+        <td style="padding: 6px 4px; text-align: left; font-weight: bold;">${formatCurrency(s.netPayable)}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; direction: rtl; padding: 20px; color: #111;">
+        <div style="text-align: center; border-bottom: 2px dashed #333; padding-bottom: 12px; margin-bottom: 16px;">
+          <h2 style="margin: 0 0 6px;">${user?.tenantName || 'كافيو POS'}</h2>
+          <h3 style="margin: 0 0 4px; color: #444;">كشف مسير رواتب الموظفين</h3>
+          <p style="margin: 0; font-size: 12px; color: #666;">الفترة من: <strong>${startDate}</strong> إلى: <strong>${endDate}</strong></p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;">
+          <thead>
+            <tr style="background: #f3f4f6; border-bottom: 2px solid #999;">
+              <th style="padding: 8px 4px; text-align: right;">الموظف</th>
+              <th style="padding: 8px 4px; text-align: center;">الوظيفة</th>
+              <th style="padding: 8px 4px; text-align: center;">الأساسي</th>
+              <th style="padding: 8px 4px; text-align: center;">بونص</th>
+              <th style="padding: 8px 4px; text-align: center;">خصم</th>
+              <th style="padding: 8px 4px; text-align: center;">سُلف</th>
+              <th style="padding: 8px 4px; text-align: left;">صافي القبض</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+
+        <div style="border-top: 2px solid #333; padding-top: 10px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between;">
+          <span>إجمالي المستحق للصرف:</span>
+          <span>${formatCurrency(payrollTotals.net)}</span>
+        </div>
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px;">
+          <div>توقيع المشرف المسؤول: .......................</div>
+          <div>توقيع إدارة المنشأة: .......................</div>
+        </div>
+      </div>
+    `;
+
+    printReceipt(html, false);
+  }
+
+  // Open Pay Salary Modal
+  function openPayoutModal(emp) {
+    sounds.playTap();
     setPayoutForm({
-      employeeId: empSummary.employeeId,
-      employeeName: empSummary.employeeName,
-      netPayable: empSummary.netPayable,
+      employeeId: emp.employeeId,
+      employeeName: emp.employeeName,
+      netPayable: emp.netPayable,
       paidFromDrawer: true
     });
     setIsPayoutModalOpen(true);
   }
 
-  // Submit Salary Payout
+  // Submit Payout
   async function handlePayoutSubmit(e) {
     e.preventDefault();
     setSavingPayout(true);
     try {
       await employeesApi.payWeeklySalary(payoutForm.employeeId, {
         amount: payoutForm.netPayable,
-        paidFromDrawer: payoutForm.paidFromDrawer,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        paidFromDrawer: payoutForm.paidFromDrawer
       });
-      toast.success(`تم تسجيل صرف وتسديد القبض الأسبوعي للموظف ${payoutForm.employeeName} بنجاح`);
+      toast.success(`تم تسديد راتب الموظف "${payoutForm.employeeName}" بمبلغ ${formatCurrency(payoutForm.netPayable)} بنجاح 💵`);
       setIsPayoutModalOpen(false);
       loadPayrollSummary();
     } catch (err) {
-      toast.error(err.message, 'فشل عملية تسديد القبض');
+      toast.error(err.message, 'فشل تسديد الراتب');
     } finally {
       setSavingPayout(false);
     }
   }
 
-  // Print Individual Employee Statement
-  const handlePrintEmployee = async (empSummary) => {
-    try {
-      let txs = empSummary.transactions;
-      if (!txs || txs.length === 0) {
-        txs = await employeesApi.getTransactions(empSummary.employeeId || empSummary.id);
-      }
-      const html = buildEmployeeStatementHtml({
-        employeeName: empSummary.employeeName || empSummary.name,
-        jobTitle: empSummary.jobTitle,
-        baseSalary: empSummary.baseWeeklySalary || empSummary.baseSalary,
-        summary: empSummary,
-        transactions: txs,
-        startDate,
-        endDate,
-        cafeName: 'الكافيه'
-      });
-      printReceipt(html, { width: 80 });
-      toast.success(`جاري طباعة كشف حساب الموظف ${empSummary.employeeName || empSummary.name}`);
-    } catch (err) {
-      toast.error(err.message, 'فشل إنشاء أمر الطباعة');
-    }
-  };
-
-  // Print Full Team Payroll
-  const handlePrintTeamPayroll = () => {
-    if (!payrollSummaries || payrollSummaries.length === 0) {
-      toast.warning('لا توجد بيانات رواتب متاحة للطباعة');
-      return;
-    }
-    window.print();
-  };
-
-  // Confirm Reset Week
-  const handleResetWeekConfirm = async () => {
+  // Handle Reset Week
+  const handleResetWeek = async () => {
     setResettingWeek(true);
     try {
-      const res = await employeesApi.resetWeek({ date: endDate });
-      toast.success(`تم تصفية وبدء أسبوع جديد بنجاح! تم ترحيل ${res.settledCount || 0} حركة.`);
+      const res = await employeesApi.resetWeek({ date: new Date().toISOString().split('T')[0] });
+      toast.success(res.message || 'تمت تصفية حسابات الأسبوع وبدء دورة أسبوعية جديدة بنجاح 🎉');
       setIsResetWeekModalOpen(false);
-      setDatePreset('THIS_WEEK');
       loadPayrollSummary();
-      loadEmployees();
     } catch (err) {
       toast.error(err.message, 'فشل تصفية الأسبوع');
     } finally {
@@ -402,35 +449,43 @@ export default function EmployeesPage() {
   return (
     <div className="page employees-page">
       <ObserverBanner />
-      {/* Page Header */}
-      <div className="page__header">
-        <div>
-          <h1 className="page__title">رواتب وقبض الموظفين الأسبوعي</h1>
-          <p className="page__subtitle">متابعة حسابات الرواتب الأسبوعية، الخصومات، السُلف والمكافآت وتصفية القبض</p>
+
+      {/* ── 3D Glassmorphic Header ── */}
+      <div className="page__header employees-header">
+        <div className="employees-header__info">
+          <div className="employees-header__icon-box">
+            <Users size={24} className="text-accent" />
+          </div>
+          <div>
+            <div className="employees-header__title-row">
+              <h1 className="page__title">شؤون الموظفين والرواتب</h1>
+              <span className="employees-count-badge">{employees.length} موظف</span>
+            </div>
+            <p className="page__subtitle">إدارة فريق العمل، حسابات الرواتب الأسبوعية، السُلف، الخصومات، وصرف المستحقات</p>
+          </div>
         </div>
-        <div className="page__actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {canSeePayroll && activeTab === 'PAYROLL' && (
-            <>
-              <Button
-                variant="outline"
-                leftIcon={<Printer size={16} />}
-                onClick={handlePrintTeamPayroll}
-                title="طباعة كشف مسير الرواتب لجميع الموظفين"
-              >
-                طباعة كشف الرواتب
-              </Button>
-              {isSupervisor && (
-                <Button
-                  variant="danger"
-                  leftIcon={<RotateCcw size={16} />}
-                  onClick={() => setIsResetWeekModalOpen(true)}
-                  style={{ background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', color: '#fff' }}
-                  title="تصفية مستحقات وحسابات الأسبوع وبدء أسبوع جديد"
-                >
-                  بدء أسبوع جديد وتصفية الحسابات 🔄
-                </Button>
-              )}
-            </>
+
+        <div className="page__actions employees-header__actions">
+          {canSeePayroll && (
+            <Button
+              variant="outline"
+              leftIcon={<Printer size={16} />}
+              onClick={handlePrintTeamPayroll}
+              title="طباعة كشف مسير الرواتب لجميع الموظفين"
+            >
+              طباعة كشف الرواتب
+            </Button>
+          )}
+          {isSupervisor && canSeePayroll && activeTab === 'PAYROLL' && (
+            <Button
+              variant="danger"
+              leftIcon={<RotateCcw size={16} />}
+              onClick={() => { sounds.playTap(); setIsResetWeekModalOpen(true); }}
+              className="btn-reset-week"
+              title="تصفية مستحقات وحسابات الأسبوع وبدء أسبوع جديد"
+            >
+              بدء أسبوع جديد وتصفية الحسابات 🔄
+            </Button>
           )}
           {isSupervisor && (
             <Button variant="primary" leftIcon={<Plus size={16} />} onClick={openCreateEmployeeModal}>
@@ -440,37 +495,41 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* ── Navigation Tabs ── */}
       <div className="payroll-tabs-bar">
         {canSeePayroll && (
           <button
+            type="button"
             className={`payroll-tab ${activeTab === 'PAYROLL' ? 'payroll-tab--active' : ''}`}
-            onClick={() => setActiveTab('PAYROLL')}
+            onClick={() => { sounds.playTap(); setActiveTab('PAYROLL'); }}
           >
             <Calendar size={18} />
             <span>شيت القبض والحساب الأسبوعي</span>
           </button>
         )}
         <button 
+          type="button"
           className={`payroll-tab ${activeTab === 'EMPLOYEES' ? 'payroll-tab--active' : ''}`}
-          onClick={() => setActiveTab('EMPLOYEES')}
+          onClick={() => { sounds.playTap(); setActiveTab('EMPLOYEES'); }}
         >
           <UserCheck size={18} />
-          <span>قائمة الموظفين والراتب الأساسي</span>
+          <span>فريق العمل والرواتب الأساسية ({employees.length})</span>
         </button>
       </div>
 
-      {/* TAB 1: WEEKLY PAYROLL SHEET */}
+      {/* ═══════════════════════════════════════
+          TAB 1: WEEKLY PAYROLL SHEET
+         ═══════════════════════════════════════ */}
       {activeTab === 'PAYROLL' && canSeePayroll && (
         <div className="payroll-tab-content animate-fade-in">
-          {/* Week Selector Bar */}
+          {/* Week Selector Filter Bar */}
           <div className="payroll-filter-card">
             <div className="date-picker-group">
               <div className="date-field">
                 <label>من تاريخ:</label>
                 <input 
                   type="date" 
-                  className="input" 
+                  className="payroll-date-input" 
                   value={startDate} 
                   onChange={(e) => setStartDate(e.target.value)} 
                 />
@@ -479,29 +538,30 @@ export default function EmployeesPage() {
                 <label>إلى تاريخ:</label>
                 <input 
                   type="date" 
-                  className="input" 
+                  className="payroll-date-input" 
                   value={endDate} 
                   onChange={(e) => setEndDate(e.target.value)} 
                 />
               </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                leftIcon={<RefreshCw size={14} />}
-                onClick={loadPayrollSummary}
+              <button 
+                type="button"
+                className="btn-refresh-payroll"
+                onClick={() => { sounds.playTap(); loadPayrollSummary(); }}
+                title="تحديث البيانات"
               >
-                تحديث
-              </Button>
+                <RefreshCw size={14} />
+                <span>تحديث</span>
+              </button>
             </div>
 
             <div className="preset-buttons">
-              <button className="btn-preset" onClick={() => setDatePreset('THIS_WEEK')}>الأسبوع الحالي</button>
-              <button className="btn-preset" onClick={() => setDatePreset('LAST_WEEK')}>الأسبوع الماضي</button>
-              <button className="btn-preset" onClick={() => setDatePreset('THIS_MONTH')}>الشهر الحالي</button>
+              <button type="button" className="btn-preset" onClick={() => setDatePreset('THIS_WEEK')}>الأسبوع الحالي</button>
+              <button type="button" className="btn-preset" onClick={() => setDatePreset('LAST_WEEK')}>الأسبوع الماضي</button>
+              <button type="button" className="btn-preset" onClick={() => setDatePreset('THIS_MONTH')}>الشهر الحالي</button>
             </div>
           </div>
 
-          {/* Payroll KPI Totals Bar */}
+          {/* Payroll KPI Summary Cards Strip */}
           <div className="payroll-kpi-grid">
             <div className="kpi-box kpi-box--base">
               <span className="kpi-box__label">إجمالي الراتب الأساسي</span>
@@ -525,32 +585,41 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          {/* Weekly Payroll Table */}
-          <div className="data-table-wrap">
+          {/* Weekly Payroll Data Table */}
+          <div className="data-table-wrap" style={{ overflowX: 'auto' }}>
             {loadingPayroll ? (
-              <div className="data-table-empty"><Spinner /></div>
+              <div className="data-table-empty"><Spinner size="lg" /></div>
             ) : payrollSummaries.length === 0 ? (
-              <div className="data-table-empty">مفيش بيانات رواتب متوفرة لهذه الفترة. قم بتحديد تاريخ مختلف أو إضافة موظفين.</div>
+              <div className="data-table-empty">لا توجد بيانات رواتب متوفرة لهذه الفترة. قم بتحديد تاريخ مختلف أو إضافة موظفين.</div>
             ) : (
               <table className="data-table payroll-table">
                 <thead>
                   <tr>
                     <th>الموظف</th>
                     <th>الوظيفة</th>
-                    <th>الراتب الأسبوعي</th>
+                    <th>الراتب الأساسي</th>
                     <th>+ بونص / مكافأة</th>
                     <th>- الخصومات</th>
                     <th>- السُلف المسحوبة</th>
                     <th>صافي القبض المستحق</th>
                     <th>حالة التسديد</th>
-                    <th className="text-center">إجراءات الحساب</th>
+                    <th className="text-center">إجراءات وعمليات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payrollSummaries.map((emp) => (
                     <tr key={emp.employeeId}>
-                      <td className="fw-bold">{emp.employeeName}</td>
-                      <td className="text-muted">{emp.jobTitle || '—'}</td>
+                      <td>
+                        <div className="emp-table-cell-name">
+                          <div className="emp-avatar-sm">
+                            {emp.employeeName?.[0] || '👤'}
+                          </div>
+                          <strong>{emp.employeeName}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="emp-role-tag">{emp.jobTitle || '—'}</span>
+                      </td>
                       <td>{formatCurrency(emp.baseWeeklySalary)}</td>
                       <td className="text-success fw-medium">
                         {emp.totalBonuses > 0 ? `+${formatCurrency(emp.totalBonuses)}` : '0 ج.م'}
@@ -575,34 +644,38 @@ export default function EmployeesPage() {
                         <div className="payroll-actions-row">
                           {/* Quick add Deduction / Bonus / Advance */}
                           <button 
+                            type="button"
                             className="btn-action-chip btn-action-chip--danger"
                             title="إضافة خصم"
                             onClick={() => openTxModal(emp, 'DEDUCTION')}
                           >
-                            <MinusCircle size={14} />
+                            <MinusCircle size={13} />
                             <span>خصم</span>
                           </button>
 
                           <button 
+                            type="button"
                             className="btn-action-chip btn-action-chip--warning"
                             title="إضافة سُلفة"
                             onClick={() => openTxModal(emp, 'ADVANCE')}
                           >
-                            <CreditCard size={14} />
+                            <CreditCard size={13} />
                             <span>سُلفة</span>
                           </button>
 
                           <button 
+                            type="button"
                             className="btn-action-chip btn-action-chip--success"
                             title="إضافة بونص / مكافأة"
                             onClick={() => openTxModal(emp, 'BONUS')}
                           >
-                            <Award size={14} />
+                            <Award size={13} />
                             <span>بونص</span>
                           </button>
 
                           {/* View Log */}
                           <button 
+                            type="button"
                             className="btn-action-icon"
                             title="عرض تفاصيل الحركات والخصومات"
                             onClick={() => openLogModal(emp)}
@@ -612,6 +685,7 @@ export default function EmployeesPage() {
 
                           {/* Print Employee Statement */}
                           <button 
+                            type="button"
                             className="btn-action-icon"
                             title="طباعة كشف حساب وراتب الموظف"
                             onClick={() => handlePrintEmployee(emp)}
@@ -621,15 +695,18 @@ export default function EmployeesPage() {
                           </button>
 
                           {/* Pay Weekly Salary */}
-                          <button 
-                            className="btn-action-chip btn-action-chip--primary"
-                            title="صرف وتصفية القبض الأسبوعي"
-                            onClick={() => openPayoutModal(emp)}
-                            disabled={emp.isSettled || emp.netPayable <= 0}
-                          >
-                            <DollarSign size={14} />
-                            <span>تسديد القبض</span>
-                          </button>
+                          {isSupervisor && (
+                            <button 
+                              type="button"
+                              className="btn-action-chip btn-action-chip--primary"
+                              title="صرف وتصفية القبض الأسبوعي"
+                              onClick={() => openPayoutModal(emp)}
+                              disabled={emp.isSettled || emp.netPayable <= 0}
+                            >
+                              <DollarSign size={13} />
+                              <span>تسديد القبض</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -641,10 +718,13 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* TAB 2: EMPLOYEES LIST */}
+      {/* ═══════════════════════════════════════
+          TAB 2: EMPLOYEES & STAFF ROSTER
+         ═══════════════════════════════════════ */}
       {activeTab === 'EMPLOYEES' && (
         <div className="payroll-tab-content animate-fade-in">
-          <div className="page-filters">
+          {/* Filters Bar */}
+          <div className="page-filters employees-filter-bar">
             <Input
               placeholder="ابحث باسم الموظف أو المسمى الوظيفي..."
               value={searchTerm}
@@ -658,7 +738,7 @@ export default function EmployeesPage() {
                 value={empFilterActive}
                 onChange={(e) => setEmpFilterActive(e.target.value)}
               >
-                <option value="ALL">كل الحالات</option>
+                <option value="ALL">كل الحالات ({employees.length})</option>
                 <option value="ACTIVE">نشط فقط</option>
                 <option value="INACTIVE">موقوف فقط</option>
               </select>
@@ -680,11 +760,12 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          <div className="data-table-wrap">
+          {/* Employees Data Table */}
+          <div className="data-table-wrap" style={{ overflowX: 'auto' }}>
             {loadingEmployees ? (
-              <div className="data-table-empty"><Spinner /></div>
+              <div className="data-table-empty"><Spinner size="lg" /></div>
             ) : filteredEmployees.length === 0 ? (
-              <div className="data-table-empty">مفيش موظفين متسجلين أو مطابقين للبحث.</div>
+              <div className="data-table-empty">لا يوجد موظفون مسجلون أو مطابقون للبحث الحالي.</div>
             ) : (
               <table className="data-table">
                 <thead>
@@ -692,16 +773,25 @@ export default function EmployeesPage() {
                     <th>الاسم الكامل</th>
                     <th>المسمى الوظيفي</th>
                     <th>الراتب الأساسي والدورية</th>
-                    <th>تاريخ التعيين/الإضافة</th>
+                    <th>تاريخ الإضافة</th>
                     <th>الحالة</th>
-                    <th style={{ textAlign: 'left' }}>العمليات والحركات</th>
+                    <th style={{ textAlign: 'left' }}>العمليات والإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredEmployees.map((emp) => (
                     <tr key={emp.id} className={!emp.active ? 'inactive-row' : ''}>
-                      <td style={{ fontWeight: 'var(--fw-medium)' }}>{emp.name}</td>
-                      <td>{emp.jobTitle || '—'}</td>
+                      <td>
+                        <div className="emp-table-cell-name">
+                          <div className="emp-avatar-sm">
+                            {emp.name?.[0] || '👤'}
+                          </div>
+                          <strong>{emp.name}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="emp-role-tag">{emp.jobTitle || '—'}</span>
+                      </td>
                       <td className="fw-bold text-accent">
                         {formatCurrency(emp.baseSalary)}
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginInlineStart: '6px' }}>
@@ -736,8 +826,28 @@ export default function EmployeesPage() {
                           </Button>
                           {isSupervisor && (
                             <>
-                              <Button variant="secondary" size="sm" onClick={() => openEditEmployeeModal(emp)}>تعديل</Button>
-                              <Button variant="danger" size="sm" onClick={() => handleDeleteEmployee(emp.id)}>مسح</Button>
+                              <Button 
+                                variant="secondary" 
+                                size="sm" 
+                                onClick={() => openEditEmployeeModal(emp)}
+                              >
+                                تعديل
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleToggleActive(emp)}
+                                style={{ color: emp.active ? 'var(--danger)' : 'var(--success)' }}
+                              >
+                                {emp.active ? 'تعطيل' : 'تفعيل'}
+                              </Button>
+                              <Button 
+                                variant="danger" 
+                                size="sm" 
+                                onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                              >
+                                مسح
+                              </Button>
                             </>
                           )}
                         </div>
@@ -751,19 +861,20 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Employee Add/Edit Modal */}
+      {/* ── Employee Add/Edit Modal ── */}
       <Modal
         isOpen={isEmployeeModalOpen}
         onClose={() => !savingEmployee && setIsEmployeeModalOpen(false)}
         title={employeeModalMode === 'CREATE' ? 'إضافة موظف جديد' : 'تعديل بيانات موظف'}
         icon={employeeModalMode === 'CREATE' ? '👤' : '✏️'}
-        subtitle={employeeModalMode === 'CREATE' ? 'إضافة موظف جديد وتحديد المسمى الوظيفي والراتب الأسبوعي' : `تعديل بيانات وراتب الموظف: ${employeeForm.name}`}
+        subtitle={employeeModalMode === 'CREATE' ? 'إضافة موظف جديد وتحديد المسمى الوظيفي ونظام الراتب' : `تعديل بيانات وراتب الموظف: ${employeeForm.name}`}
         size="md"
       >
         <form onSubmit={handleEmployeeSubmit} className="form-stack">
           <Input
-            label="اسم الموظف"
+            label="اسم الموظف الكامل"
             name="name"
+            placeholder="مثال: أحمد محمد علي"
             value={employeeForm.name}
             onChange={(e) => setEmployeeForm({ ...employeeForm, name: e.target.value })}
             required
@@ -802,6 +913,7 @@ export default function EmployeesPage() {
               autoFocus
             />
           )}
+
           <div className="form-group">
             <label className="form-label">دورية احتساب الراتب</label>
             <select
@@ -818,7 +930,7 @@ export default function EmployeesPage() {
           <Input
             label={
               employeeForm.salaryPeriod === 'DAILY' 
-                ? 'قيمة الراتب اليومي / اليومية (ج.م)' 
+                ? 'قيمة اليومية (ج.م)' 
                 : employeeForm.salaryPeriod === 'MONTHLY' 
                   ? 'قيمة الراتب الشهري الأساسي (ج.م)' 
                   : 'قيمة الراتب الأسبوعي الأساسي (ج.م)'
@@ -826,11 +938,13 @@ export default function EmployeesPage() {
             name="baseSalary"
             type="number"
             min="0"
-            step="0.01"
+            step="0.5"
+            placeholder="0.00"
             value={employeeForm.baseSalary}
             onChange={(e) => setEmployeeForm({ ...employeeForm, baseSalary: parseFloat(e.target.value) || 0 })}
             required
           />
+
           <label className="checkbox-label" style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -838,176 +952,148 @@ export default function EmployeesPage() {
               checked={employeeForm.active}
               onChange={(e) => setEmployeeForm({ ...employeeForm, active: e.target.checked })}
             />
-            نشط (متاح لصرف الرواتب)
+            نشط (متاح في كشوفات الرواتب)
           </label>
+
           <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
             <Button type="button" variant="secondary" onClick={() => setIsEmployeeModalOpen(false)} disabled={savingEmployee}>إلغاء</Button>
-            <Button type="submit" variant="primary" loading={savingEmployee}>حفظ</Button>
+            <Button type="submit" variant="primary" loading={savingEmployee}>حفظ الموظف</Button>
           </div>
         </form>
       </Modal>
 
-      {/* Add Transaction Modal (Deduction, Advance, Bonus) */}
-      {isTxModalOpen && (
-        <Modal
-          isOpen={isTxModalOpen}
-          onClose={() => !savingTx && setIsTxModalOpen(false)}
-          title={`تسجيل حركة مالية`}
-          icon="⚡"
-          subtitle={`تسجيل خصم أو سلفة أو مكافأة للموظف: ${txForm.employeeName}`}
-          size="sm"
-        >
-          <form onSubmit={handleSaveTx} className="form-stack">
-            <div className="form-group">
-              <label className="form-label">نوع الحركة:</label>
-              <div className="tx-type-selector">
-                <button
-                  type="button"
-                  className={`tx-type-btn tx-type-btn--deduction ${txForm.type === 'DEDUCTION' ? 'active' : ''}`}
-                  onClick={() => setTxForm({ ...txForm, type: 'DEDUCTION' })}
-                >
-                  <MinusCircle size={16} />
-                  <span>خصم (-)</span>
-                </button>
-                <button
-                  type="button"
-                  className={`tx-type-btn tx-type-btn--advance ${txForm.type === 'ADVANCE' ? 'active' : ''}`}
-                  onClick={() => setTxForm({ ...txForm, type: 'ADVANCE' })}
-                >
-                  <CreditCard size={16} />
-                  <span>سُلفة (-)</span>
-                </button>
-                <button
-                  type="button"
-                  className={`tx-type-btn tx-type-btn--bonus ${txForm.type === 'BONUS' ? 'active' : ''}`}
-                  onClick={() => setTxForm({ ...txForm, type: 'BONUS' })}
-                >
-                  <Award size={16} />
-                  <span>بونص/مكافأة (+)</span>
-                </button>
-              </div>
+      {/* ── Transaction Modal (Deduction, Advance, Bonus) ── */}
+      <Modal
+        isOpen={isTxModalOpen}
+        onClose={() => !savingTx && setIsTxModalOpen(false)}
+        title={
+          txForm.type === 'DEDUCTION' ? `تسجيل خصم للموظف: ${txForm.employeeName}` :
+          txForm.type === 'ADVANCE' ? `تسجيل سُلفة للموظف: ${txForm.employeeName}` :
+          `تسجيل مكافأة / بونص للموظف: ${txForm.employeeName}`
+        }
+        icon={txForm.type === 'DEDUCTION' ? '🔻' : txForm.type === 'ADVANCE' ? '💳' : '🎁'}
+        subtitle="سيتم احتساب هذه الحركة تلقائياً في شيت تصفية القبض الأسبوعي للموظف"
+        size="md"
+      >
+        <form onSubmit={handleSaveTx} className="form-stack">
+          <div className="form-group">
+            <label className="form-label">نوع الحركة</label>
+            <div className="tx-type-selector-pills">
+              <button
+                type="button"
+                className={`tx-type-pill ${txForm.type === 'DEDUCTION' ? 'tx-type-pill--deduction-active' : ''}`}
+                onClick={() => setTxForm({ ...txForm, type: 'DEDUCTION' })}
+              >
+                <MinusCircle size={15} />
+                <span>خصم مالي</span>
+              </button>
+              <button
+                type="button"
+                className={`tx-type-pill ${txForm.type === 'ADVANCE' ? 'tx-type-pill--advance-active' : ''}`}
+                onClick={() => setTxForm({ ...txForm, type: 'ADVANCE' })}
+              >
+                <CreditCard size={15} />
+                <span>سُلفة نقدية</span>
+              </button>
+              <button
+                type="button"
+                className={`tx-type-pill ${txForm.type === 'BONUS' ? 'tx-type-pill--bonus-active' : ''}`}
+                onClick={() => setTxForm({ ...txForm, type: 'BONUS' })}
+              >
+                <Award size={15} />
+                <span>بونص / مكافأة</span>
+              </button>
             </div>
+          </div>
 
-            <div>
-              <Input
-                label="المبلغ (ج.م)"
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={txForm.amount}
-                onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
-                placeholder="مثال: 50"
-                required
-                autoFocus
-              />
-              <div className="preset-chips-wrap">
-                {['25', '50', '100', '150', '200'].map((amt) => (
+          <Input
+            label="المبلغ (ج.م)"
+            type="number"
+            min="0.5"
+            step="0.5"
+            placeholder="0.00"
+            value={txForm.amount}
+            onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
+            required
+            autoFocus
+          />
+
+          {txForm.type === 'DEDUCTION' && (
+            <div className="form-group">
+              <label className="form-label">سبب الخصم (سريع)</label>
+              <div className="quick-reasons-row">
+                {DEDUCTION_REASONS.map((r) => (
                   <button
-                    key={amt}
+                    key={r}
                     type="button"
-                    className={`preset-chip-btn ${String(txForm.amount) === amt ? 'preset-chip-btn--active' : ''}`}
-                    onClick={() => setTxForm({ ...txForm, amount: amt })}
+                    className={`quick-reason-btn ${txForm.notes === r ? 'quick-reason-btn--active' : ''}`}
+                    onClick={() => setTxForm({ ...txForm, notes: r })}
                   >
-                    {amt} ج.م
+                    {r}
                   </button>
                 ))}
               </div>
             </div>
+          )}
 
-            <Input
-              label="التاريخ"
-              type="date"
-              value={txForm.transactionDate}
-              onChange={(e) => setTxForm({ ...txForm, transactionDate: e.target.value })}
-              required
-            />
+          <Input
+            label="ملاحظات وتفاصيل إضافية"
+            placeholder="اكتب سبب العملية بالتفصيل..."
+            value={txForm.notes}
+            onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
+          />
 
-            <div className="form-group">
-              <label className="form-label">
-                {txForm.type === 'DEDUCTION' ? 'سبب وتفاصيل الخصم (تعليق / ملاحظات):' : 'السبب / الملاحظات:'}
-              </label>
-              <Input
-                value={txForm.notes}
-                onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
-                placeholder={txForm.type === 'DEDUCTION' ? 'اكتب تعليق/سبب الخصم هنا أو اختر اختصاراً...' : 'مثال: مكافأة تميز / سلفة نقداً'}
-                required={txForm.type === 'DEDUCTION'}
+          <Input
+            label="تاريخ العملية"
+            type="date"
+            value={txForm.transactionDate}
+            onChange={(e) => setTxForm({ ...txForm, transactionDate: e.target.value })}
+            required
+          />
+
+          {(txForm.type === 'ADVANCE') && (
+            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={txForm.paidFromDrawer}
+                onChange={(e) => setTxForm({ ...txForm, paidFromDrawer: e.target.checked })}
               />
-              {txForm.type === 'DEDUCTION' && (
-                <div className="preset-chips-wrap">
-                  {DEDUCTION_REASONS.map((reason) => (
-                    <button
-                      key={reason}
-                      type="button"
-                      className={`preset-chip-btn ${txForm.notes.includes(reason) ? 'preset-chip-btn--active' : ''}`}
-                      onClick={() => {
-                        setTxForm(prev => ({
-                          ...prev,
-                          notes: prev.notes ? `${prev.notes} - ${reason}` : reason
-                        }));
-                      }}
-                    >
-                      + {reason}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              خصم مبلغ السلفة من درج النقدية للوردية الحالية
+            </label>
+          )}
 
-            {(txForm.type === 'ADVANCE' || txForm.type === 'BONUS') && (
-              <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '0.5rem' }}>
-                <input
-                  type="checkbox"
-                  checked={txForm.paidFromDrawer}
-                  onChange={(e) => setTxForm({ ...txForm, paidFromDrawer: e.target.checked })}
-                />
-                خصم المبلغ فوراً من الخزينة/الدرج الحالية (مصروف رواتب)
-              </label>
-            )}
+          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
+            <Button type="button" variant="secondary" onClick={() => setIsTxModalOpen(false)} disabled={savingTx}>إلغاء</Button>
+            <Button type="submit" variant="primary" loading={savingTx}>تأكيد وحفظ</Button>
+          </div>
+        </form>
+      </Modal>
 
-            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-              <Button type="button" variant="secondary" onClick={() => setIsTxModalOpen(false)} disabled={savingTx}>إلغاء</Button>
-              <Button type="submit" variant="primary" loading={savingTx}>تسجيل الحركة</Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Transaction Log View Modal */}
-      {isLogModalOpen && selectedLogEmp && (
-        <Modal
-          isOpen={isLogModalOpen}
-          onClose={() => setIsLogModalOpen(false)}
-          title={`سجل الخصومات والسُلف للموظف: ${selectedLogEmp.employeeName || selectedLogEmp.name}`}
-          size="md"
-        >
-          <div className="log-modal-body">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                تفاصيل الحركات المسجلة لهذا الموظف
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<Printer size={14} />}
-                onClick={() => handlePrintEmployee(selectedLogEmp)}
-              >
-                طباعة كشف الحساب
-              </Button>
-            </div>
-
-            {loadingLog ? (
-              <div className="text-center p-4"><Spinner /></div>
-            ) : empLogTxs.length === 0 ? (
-              <p className="text-center text-muted p-4">لا توجد حركات مسجلة لهذا الموظف.</p>
-            ) : (
-              <table className="data-table log-table">
+      {/* ── View Log Statement Modal ── */}
+      <Modal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
+        title={`سجل حركات وخصومات: ${selectedLogEmp?.employeeName || selectedLogEmp?.name || ''}`}
+        icon="📜"
+        subtitle="عرض كافة الخصومات، السُلف، والمكافآت المسجلة لهذا الموظف"
+        size="lg"
+      >
+        <div className="log-modal-content">
+          {loadingLog ? (
+            <div className="text-center py-5"><Spinner size="lg" /></div>
+          ) : empLogTxs.length === 0 ? (
+            <div className="text-center py-5 text-muted">لا توجد حركات مسجلة لهذا الموظف حتى الآن.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th>التاريخ</th>
-                    <th>نوع الحركة</th>
+                    <th>النوع</th>
                     <th>المبلغ</th>
-                    <th>السبب / البيان</th>
-                    <th className="text-center">حذف</th>
+                    <th>البيان / السبب</th>
+                    <th>المسؤول</th>
+                    {isSupervisor && <th style={{ textAlign: 'left' }}>إجراء</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1016,106 +1102,104 @@ export default function EmployeesPage() {
                       <td>{tx.transactionDate}</td>
                       <td>
                         {tx.type === 'DEDUCTION' && <Badge variant="danger">خصم 🔻</Badge>}
-                        {tx.type === 'ADVANCE' && <Badge variant="warning">سُلفة 💸</Badge>}
+                        {tx.type === 'ADVANCE' && <Badge variant="warning">سُلفة 💳</Badge>}
                         {tx.type === 'BONUS' && <Badge variant="success">بونص 🎁</Badge>}
-                        {tx.type === 'SALARY_PAYOUT' && <Badge variant="info">تسديد قبض 🟢</Badge>}
+                        {tx.type === 'PAYROLL_PAYOUT' && <Badge variant="primary">صرف راتب 💵</Badge>}
                       </td>
                       <td className="fw-bold">{formatCurrency(tx.amount)}</td>
                       <td>{tx.notes || '—'}</td>
-                      <td className="text-center">
-                        <button 
-                          className="btn-icon btn-icon--danger" 
-                          onClick={() => handleDeleteTxItem(tx.id)}
-                          title="حذف الحركة"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
+                      <td>{tx.recordedByName || 'النظام'}</td>
+                      {isSupervisor && (
+                        <td>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              style={{ color: 'var(--danger)' }}
+                              onClick={() => handleDeleteTransaction(tx.id)}
+                              title="حذف هذه العملية"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
+            </div>
+          )}
+          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+            <Button variant="secondary" onClick={() => setIsLogModalOpen(false)}>إغلاق</Button>
           </div>
-        </Modal>
-      )}
+        </div>
+      </Modal>
 
-      {/* Pay Weekly Salary Modal */}
-      {isPayoutModalOpen && (
-        <Modal
-          isOpen={isPayoutModalOpen}
-          onClose={() => !savingPayout && setIsPayoutModalOpen(false)}
-          title={`تسديد القبض الأسبوعي: ${payoutForm.employeeName}`}
-          size="sm"
-        >
-          <form onSubmit={handlePayoutSubmit} className="form-stack">
-            <div className="payout-summary-box">
-              <span>صافي المستحق للقبض:</span>
-              <strong className="payout-amount">{formatCurrency(payoutForm.netPayable)}</strong>
-            </div>
+      {/* ── Pay Weekly Salary Modal ── */}
+      <Modal
+        isOpen={isPayoutModalOpen}
+        onClose={() => !savingPayout && setIsPayoutModalOpen(false)}
+        title={`تسديد وصرف راتب: ${payoutForm.employeeName}`}
+        icon="💵"
+        subtitle="صرف صافي القبض المستحق للأسبوع الحالي وإقفال المستحقات"
+        size="md"
+      >
+        <form onSubmit={handlePayoutSubmit} className="form-stack">
+          <div className="payout-summary-card">
+            <span className="payout-label">صافي الراتب المستحق للصرف:</span>
+            <strong className="payout-amount">{formatCurrency(payoutForm.netPayable)}</strong>
+          </div>
 
-            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '1rem' }}>
-              <input
-                type="checkbox"
-                checked={payoutForm.paidFromDrawer}
-                onChange={(e) => setPayoutForm({ ...payoutForm, paidFromDrawer: e.target.checked })}
-              />
-              خصم المبلغ وتسديده من الخزينة/درج الكاشير الحالي (تسجيل مصروف)
-            </label>
+          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '10px' }}>
+            <input
+              type="checkbox"
+              checked={payoutForm.paidFromDrawer}
+              onChange={(e) => setPayoutForm({ ...payoutForm, paidFromDrawer: e.target.checked })}
+            />
+            تسجيل الصرف من درج الكاشير للوردية الحالية
+          </label>
 
-            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-              <Button type="button" variant="secondary" onClick={() => setIsPayoutModalOpen(false)} disabled={savingPayout}>تراجع</Button>
-              <Button type="submit" variant="primary" loading={savingPayout}>تأكيد صرف القبض</Button>
-            </div>
-          </form>
-        </Modal>
-      )}
+          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
+            <Button type="button" variant="secondary" onClick={() => setIsPayoutModalOpen(false)} disabled={savingPayout}>إلغاء</Button>
+            <Button type="submit" variant="primary" loading={savingPayout}>تأكيد الصرف والتسديد</Button>
+          </div>
+        </form>
+      </Modal>
 
-      {/* Reset Week Confirmation Modal */}
-      {isResetWeekModalOpen && (
-        <Modal
-          isOpen={isResetWeekModalOpen}
-          onClose={() => !resettingWeek && setIsResetWeekModalOpen(false)}
-          title="تصفية مستحقات الأسبوع وبدء أسبوع جديد 🔄"
-          size="sm"
-        >
-          <div className="form-stack">
-            <p style={{ fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-              هل أنت متأكد من تصفية مستحقات الأسبوع الحالي وترحيل الحركات السابقة؟
+      {/* ── Reset Week Modal ── */}
+      <Modal
+        isOpen={isResetWeekModalOpen}
+        onClose={() => !resettingWeek && setIsResetWeekModalOpen(false)}
+        title="تصفية حسابات الأسبوع وبدء أسبوع جديد 🔄"
+        icon="⚠️"
+        subtitle="إغلاق مستحقات وخصومات الأسبوع الحالي وبدء دورة قبض جديدة"
+        size="md"
+      >
+        <div className="reset-week-body">
+          <div className="reset-alert-box">
+            <AlertTriangle size={24} className="text-warning" />
+            <p>
+              هذا الإجراء سيقوم باعتماد كافة الرواتب والخصومات والسُلف المسجلة في الفترة الحالية كـ <strong>"مسددة"</strong> وبدء أسبوع جديد من الصفر لجميع الموظفين.
             </p>
-            <div style={{
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 'var(--radius-md)',
-              padding: '12px',
-              fontSize: '13px',
-              color: '#f87171'
-            }}>
-              ⚠️ سيتم تسوية وترحيل جميع السُلف والخصومات حتى تاريخ <strong>{endDate}</strong>، وسيبدأ الأسبوع الجديد بحسابات ورصيد صافي لجميع الموظفين.
-            </div>
-
-            <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsResetWeekModalOpen(false)}
-                disabled={resettingWeek}
-              >
-                إلغاء
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                loading={resettingWeek}
-                onClick={handleResetWeekConfirm}
-                style={{ background: '#ef4444', color: '#fff' }}
-              >
-                تأكيد وبدء أسبوع جديد 🚀
-              </Button>
-            </div>
           </div>
-        </Modal>
-      )}
+
+          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
+            <Button type="button" variant="secondary" onClick={() => setIsResetWeekModalOpen(false)} disabled={resettingWeek}>
+              تراجع
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              loading={resettingWeek}
+              onClick={handleResetWeek}
+              style={{ background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', color: '#fff' }}
+            >
+              تأكيد بدء الأسبوع الجديد
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
