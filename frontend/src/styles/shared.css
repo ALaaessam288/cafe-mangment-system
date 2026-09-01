@@ -354,6 +354,9 @@
    ADMIN EXPERIENCE — shared across management screens
    ═══════════════════════════════════════════════ */
 .app-layout--admin .page:not(.dashboard-creative) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 18px clamp(14px, 2vw, 28px) 30px;
   background:
     radial-gradient(circle at 86% -10%, rgba(245, 158, 11, .055), transparent 28%),

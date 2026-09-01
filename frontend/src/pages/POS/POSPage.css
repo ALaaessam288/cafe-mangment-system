@@ -256,12 +256,15 @@
 /* Table grid */
 .table-grid {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 6px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
   gap: 4px;
   align-content: start;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, 0.3) rgba(255, 255, 255, 0.02);
 }
 
 .table-btn {
@@ -2368,10 +2371,14 @@
 
 /* Floor-map tables: circular café tables rather than dashboard tiles. */
 .pos-shell--creative .table-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
   column-gap: 8px;
   row-gap: 13px;
   padding: 14px 9px;
+  scrollbar-width: thin;
 }
 .pos-shell--creative .table-btn {
   width: 56px;

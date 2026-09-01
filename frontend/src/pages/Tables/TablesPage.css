@@ -2,6 +2,13 @@
    CREATIVE 3D FLOORPLAN & TABLES MANAGEMENT
    ═══════════════════════════════════════════════ */
 
+.tables-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto !important;
+  height: 100%;
+}
+
 .tables-creative {
   display: flex;
   flex-direction: column;
@@ -10,6 +17,7 @@
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
+  min-height: min-content;
 }
 
 /* ── Header ── */
