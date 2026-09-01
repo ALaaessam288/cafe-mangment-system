@@ -806,7 +806,7 @@ export default function POSPage() {
         // Has real modifiers - ask, don't guess.
         setPosOptionsProduct(product);
         setPosOptionsList(options);
-        setSelectedOptionIds(options.filter((o) => o.isDefault).map((o) => o.id));
+        setSelectedOptionIds(options.filter((o) => o.isDefault).slice(0, 1).map((o) => o.id));
         setAddQuantity(quantity);
         setAddNote('');
         setShowPosOptionsModal(true);

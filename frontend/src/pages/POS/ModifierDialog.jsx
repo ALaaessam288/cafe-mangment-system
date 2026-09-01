@@ -100,32 +100,41 @@ export default function ModifierDialog({
         </div>
 
         <div style={{ margin: '12px 0 6px', display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9c8c7f', fontWeight: 800 }}>🍬 سكر سريع:</span>
-          {['سادة', 'ع الريحة', 'مظبوط', 'زيادة', 'فوق الزيادة', 'سكر برة', 'سكر دايت'].map((s) => (
-            <button
-              key={s}
-              type="button"
-              style={{
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '6px',
-                padding: '3px 7px',
-                fontSize: '11px',
-                background: (note || '').includes(s) ? '#5fd2b7' : 'rgba(255,255,255,0.04)',
-                color: (note || '').includes(s) ? '#110e0c' : '#dcd1c6',
-                fontWeight: (note || '').includes(s) ? 800 : 600,
-                cursor: 'pointer',
-              }}
-              onClick={() => {
-                if ((note || '').includes(s)) {
-                  onNoteChange((note || '').replace(s, '').replace(/\s*-\s*$/, '').trim());
-                } else {
-                  onNoteChange(note ? `${note} - ${s}` : s);
-                }
-              }}
-            >
-              {s}
-            </button>
-          ))}
+          <span style={{ fontSize: '11px', color: '#9c8c7f', fontWeight: 800 }}>🍬 سكر سريع (اختيار واحد):</span>
+          {['سادة', 'ع الريحة', 'مظبوط', 'زيادة', 'فوق الزيادة', 'سكر برة', 'سكر دايت'].map((s) => {
+            const isSelected = (note || '').includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '6px',
+                  padding: '4px 9px',
+                  fontSize: '11.5px',
+                  background: isSelected ? '#5fd2b7' : 'rgba(255,255,255,0.04)',
+                  color: isSelected ? '#110e0c' : '#dcd1c6',
+                  fontWeight: isSelected ? 850 : 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.14s',
+                }}
+                onClick={() => {
+                  const ALL_SUGARS = ['سادة', 'ع الريحة', 'مظبوط', 'زيادة', 'فوق الزيادة', 'سكر برة', 'سكر دايت'];
+                  let cleanNote = note || '';
+                  ALL_SUGARS.forEach((other) => {
+                    cleanNote = cleanNote.replace(new RegExp(`\\s*-?\\s*${other}\\s*-?\\s*`, 'g'), ' ').trim();
+                  });
+                  if (isSelected) {
+                    onNoteChange(cleanNote);
+                  } else {
+                    onNoteChange(cleanNote ? `${s} - ${cleanNote}` : s);
+                  }
+                }}
+              >
+                {s}
+              </button>
+            );
+          })}
         </div>
 
         <textarea
