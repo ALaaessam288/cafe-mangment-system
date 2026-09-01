@@ -37,7 +37,8 @@ public class UserService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UserResponse create(CreateUserRequest request) {
-        if (userRepository.findByUsername(request.username()).isPresent()) {
+        Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
+        if (tenantId != null && userRepository.findByTenantIdAndUsername(tenantId, request.username().trim()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already taken: " + request.username());
         }
         
@@ -70,11 +71,14 @@ public class UserService {
         user.setFullName(request.fullName());
         user.setRole(request.role());
         if (request.username() != null && !request.username().isBlank() && !request.username().equals(user.getUsername())) {
-            userRepository.findByUsername(request.username().trim()).ifPresent(existing -> {
-                if (!existing.getId().equals(user.getId())) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "اسم المستخدم مستخدم بالفعل");
-                }
-            });
+            Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
+            if (tenantId != null) {
+                userRepository.findByTenantIdAndUsername(tenantId, request.username().trim()).ifPresent(existing -> {
+                    if (!existing.getId().equals(user.getId())) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT, "اسم المستخدم مستخدم بالفعل");
+                    }
+                });
+            }
             user.setUsername(request.username().trim());
         }
         if (request.pin() != null) {

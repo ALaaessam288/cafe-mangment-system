@@ -32,7 +32,7 @@ public class CustomUserDetailsService implements UserDetailsService {
             log.warn("No tenant context for username: {}", username);
             throw new UsernameNotFoundException("No tenant context for username: " + username);
         }
-        return userRepository.findByUsername(username)
+        return userRepository.findByTenantIdAndUsername(tenantId, username)
                 .map(UserPrincipal::new)
                 .orElseThrow(() -> {
                     log.warn("User not found: {} for tenantId={}", username, tenantId);

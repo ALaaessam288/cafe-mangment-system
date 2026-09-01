@@ -238,7 +238,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             if (platformTenant != null) {
                 TenantContext.set(platformTenant.getId());
                 try {
-                    User adminUser = userRepository.findByUsername("alaaHarb").orElse(null);
+                    User adminUser = userRepository.findByTenantIdAndUsername(platformTenant.getId(), "alaaHarb").orElse(null);
                     if (adminUser == null) {
                         adminUser = new User();
                         adminUser.setUsername("alaaHarb");
@@ -283,7 +283,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             if (wanasTenant != null) {
                 TenantContext.set(wanasTenant.getId());
                 try {
-                    User wanasAdmin = userRepository.findByUsername("alaaHarb").orElse(null);
+                    User wanasAdmin = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "alaaHarb").orElse(null);
                     if (wanasAdmin == null) {
                         wanasAdmin = new User();
                         wanasAdmin.setUsername("alaaHarb");
@@ -292,7 +292,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         wanasAdmin.setRole(Role.ADMIN);
                         userRepository.save(wanasAdmin);
                     }
-                    User cashier = userRepository.findByUsername("cashier1").orElse(null);
+                    User cashier = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "cashier1").orElse(null);
                     if (cashier == null) {
                         cashier = new User();
                         cashier.setUsername("cashier1");

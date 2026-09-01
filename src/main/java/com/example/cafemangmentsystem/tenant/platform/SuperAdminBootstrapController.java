@@ -62,7 +62,7 @@ public class SuperAdminBootstrapController {
                         tenantService.resolveLoginableTenant("platform");
                 TenantContext.set(platform.getId());
                 try {
-                    userRepository.findByUsername(req.username()).ifPresent(u -> {
+                    userRepository.findByTenantIdAndUsername(platform.getId(), req.username()).ifPresent(u -> {
                         u.setRole(Role.SUPER_ADMIN);
                         userRepository.save(u);
                     });
@@ -79,7 +79,7 @@ public class SuperAdminBootstrapController {
                 tenantService.resolveLoginableTenant("platform");
         TenantContext.set(platform.getId());
         try {
-            userRepository.findByUsername(req.username()).ifPresent(u -> {
+            userRepository.findByTenantIdAndUsername(platform.getId(), req.username()).ifPresent(u -> {
                 u.setRole(Role.SUPER_ADMIN);
                 userRepository.save(u);
             });
