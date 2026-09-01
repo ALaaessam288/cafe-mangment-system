@@ -288,8 +288,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                         wanasAdmin = new User();
                         wanasAdmin.setUsername("alaaHarb");
                         wanasAdmin.setPasswordHash(passwordEncoder.encode("alaa@12345"));
+                        wanasAdmin.setPinHash(passwordEncoder.encode("1234"));
                         wanasAdmin.setFullName("Alaa Harb");
                         wanasAdmin.setRole(Role.ADMIN);
+                        userRepository.save(wanasAdmin);
+                    } else if (wanasAdmin.getPinHash() == null) {
+                        wanasAdmin.setPinHash(passwordEncoder.encode("1234"));
                         userRepository.save(wanasAdmin);
                     }
                     User cashier = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "cashier1").orElse(null);
@@ -297,8 +301,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                         cashier = new User();
                         cashier.setUsername("cashier1");
                         cashier.setPasswordHash(passwordEncoder.encode("123456"));
+                        cashier.setPinHash(passwordEncoder.encode("123456"));
                         cashier.setFullName("كاشير 1");
                         cashier.setRole(Role.CASHIER);
+                        userRepository.save(cashier);
+                    } else if (cashier.getPinHash() == null) {
+                        cashier.setPinHash(passwordEncoder.encode("123456"));
                         userRepository.save(cashier);
                     }
                 } finally {

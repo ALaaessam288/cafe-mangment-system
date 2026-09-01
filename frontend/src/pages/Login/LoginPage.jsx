@@ -18,7 +18,7 @@ const operationalCards = [
 ];
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login, loginPin, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -64,14 +64,14 @@ export default function LoginPage() {
     if (!pin || pin.length < 4) return setError('يرجى إدخال رمز PIN من 4 أرقام على الأقل');
     setPinLoading(true);
     try {
-      const result = await authApi.loginPin(cleanSlug, pin);
-      if (result?.token) {
-        localStorage.setItem('authToken', result.token);
-        if (result.refreshToken) localStorage.setItem('refreshToken', result.refreshToken);
-        window.location.replace(location.state?.from?.pathname || '/pos');
-      } else setError('رمز PIN غير صحيح أو انتهت صلاحيته');
+      const result = await loginPin(cleanSlug, pin);
+      if (result.success) {
+        navigate(location.state?.from?.pathname || result.defaultRoute || ROUTES.POS, { replace: true });
+      } else {
+        setError(result.message || 'رمز PIN غير صحيح أو غير مسجل');
+      }
     } catch (err) {
-      setError(err?.response?.data?.message || 'رمز PIN غير صحيح');
+      setError(err?.response?.data?.message || err?.message || 'رمز PIN غير صحيح');
     } finally {
       setPinLoading(false);
     }

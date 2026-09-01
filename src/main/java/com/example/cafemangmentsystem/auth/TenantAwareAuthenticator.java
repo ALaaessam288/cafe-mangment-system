@@ -34,10 +34,14 @@ public class TenantAwareAuthenticator {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public com.example.cafemangmentsystem.user.entity.User authenticateByPin(String pin) {
+        Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
         return userRepository.findAll().stream()
-                .filter(u -> u.getPinHash() != null && passwordEncoder.matches(pin, u.getPinHash()))
+                .filter(u -> (tenantId == null || tenantId.equals(u.getTenantId())) && u.isActive() && (
+                        (u.getPinHash() != null && passwordEncoder.matches(pin, u.getPinHash())) ||
+                        (u.getPasswordHash() != null && passwordEncoder.matches(pin, u.getPasswordHash()))
+                ))
                 .findFirst()
-                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Invalid PIN"));
+                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("رمز PIN غير صحيح أو غير مسجل"));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
