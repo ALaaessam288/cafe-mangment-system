@@ -3,7 +3,8 @@ import {
   Plus, Check, X, Search, Calendar, DollarSign, 
   MinusCircle, PlusCircle, CreditCard, Eye, Trash2, 
   UserCheck, ShieldAlert, Award, FileText, ArrowRight, RefreshCw,
-  Printer, RotateCcw, Users, Briefcase, ChevronRight, AlertTriangle, CheckCircle2
+  Printer, RotateCcw, Users, Briefcase, ChevronRight, AlertTriangle, CheckCircle2,
+  Utensils, Coffee, Shield, Sparkles, User, HelpCircle, CheckSquare, Square
 } from 'lucide-react';
 import { employeesApi } from '../../api/employeesApi';
 import { useToast } from '../../context/ToastContext';
@@ -20,7 +21,15 @@ import { ROLES } from '../../utils/constants';
 import { sounds } from '../../utils/soundEffects';
 import './EmployeesPage.css';
 
-const JOB_TITLES = ['شيف', 'ويتر', 'باريستا', 'كاشير', 'مشرف'];
+const PRESET_ROLES = [
+  { id: 'شيف', label: 'شيف / طباخ', icon: Utensils, color: '#f97316' },
+  { id: 'باريستا', label: 'باريستا', icon: Coffee, color: '#f59e0b' },
+  { id: 'ويتر', label: 'ويتر / صالة', icon: UserCheck, color: '#3b82f6' },
+  { id: 'كاشير', label: 'كاشير', icon: CreditCard, color: '#10b981' },
+  { id: 'مشرف', label: 'مشرف تشغيل', icon: Shield, color: '#8b5cf6' },
+  { id: '__CUSTOM__', label: 'مسمى آخر...', icon: Sparkles, color: '#ec4899' },
+];
+
 const DEDUCTION_REASONS = ['أكل ومشروبات', 'سلفة عاجلة', 'تأخير عن الشيفت', 'عدم التزام بالزي', 'عجز كاشير / أوردر', 'أخرى'];
 
 export default function EmployeesPage() {
@@ -38,12 +47,20 @@ export default function EmployeesPage() {
   const [empSortBy, setEmpSortBy] = useState('NAME_ASC');
   const [empFilterActive, setEmpFilterActive] = useState('ALL'); // ALL | ACTIVE | INACTIVE
   
-  // Employee Form Modal state
+  // Enhanced Employee Form Modal state
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [employeeModalMode, setEmployeeModalMode] = useState('CREATE');
-  const [employeeForm, setEmployeeForm] = useState({ id: null, name: '', jobTitle: '', baseSalary: '', salaryPeriod: 'WEEKLY', active: true });
+  const [employeeForm, setEmployeeForm] = useState({ 
+    id: null, 
+    name: '', 
+    jobTitle: 'باريستا', 
+    baseSalary: '', 
+    salaryPeriod: 'WEEKLY', 
+    active: true 
+  });
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [jobTitleCustom, setJobTitleCustom] = useState(false);
+  const [customTitleInput, setCustomTitleInput] = useState('');
 
   // Payroll state
   const [startDate, setStartDate] = useState(() => {
@@ -147,17 +164,52 @@ export default function EmployeesPage() {
   function openCreateEmployeeModal() {
     sounds.playTap();
     setEmployeeModalMode('CREATE');
-    setEmployeeForm({ id: null, name: '', jobTitle: '', baseSalary: '', salaryPeriod: 'WEEKLY', active: true });
+    setEmployeeForm({ 
+      id: null, 
+      name: '', 
+      jobTitle: 'باريستا', 
+      baseSalary: 1500, 
+      salaryPeriod: 'WEEKLY', 
+      active: true 
+    });
     setJobTitleCustom(false);
+    setCustomTitleInput('');
     setIsEmployeeModalOpen(true);
   }
 
   function openEditEmployeeModal(emp) {
     sounds.playTap();
     setEmployeeModalMode('EDIT');
+    const isCustom = Boolean(emp.jobTitle && !PRESET_ROLES.some(r => r.id === emp.jobTitle));
     setEmployeeForm({ ...emp });
-    setJobTitleCustom(Boolean(emp.jobTitle && !JOB_TITLES.includes(emp.jobTitle)));
+    setJobTitleCustom(isCustom);
+    setCustomTitleInput(isCustom ? emp.jobTitle : '');
     setIsEmployeeModalOpen(true);
+  }
+
+  function handleSelectRole(roleId) {
+    sounds.playTap();
+    if (roleId === '__CUSTOM__') {
+      setJobTitleCustom(true);
+      setEmployeeForm(prev => ({ ...prev, jobTitle: customTitleInput || 'مخصص' }));
+    } else {
+      setJobTitleCustom(false);
+      setEmployeeForm(prev => ({ ...prev, jobTitle: roleId }));
+    }
+  }
+
+  function handleCustomRoleChange(val) {
+    setCustomTitleInput(val);
+    setEmployeeForm(prev => ({ ...prev, jobTitle: val }));
+  }
+
+  function handleQuickSalaryAdjust(delta) {
+    sounds.playTap();
+    setEmployeeForm(prev => {
+      const current = parseFloat(prev.baseSalary) || 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, baseSalary: next };
+    });
   }
 
   async function handleEmployeeSubmit(e) {
@@ -166,14 +218,26 @@ export default function EmployeesPage() {
       toast.error('الرجاء كتابة اسم الموظف');
       return;
     }
+    if (!employeeForm.baseSalary || parseFloat(employeeForm.baseSalary) < 0) {
+      toast.error('الرجاء تحديد راتب صحيح للموظف');
+      return;
+    }
+
     setSavingEmployee(true);
+    const finalJobTitle = jobTitleCustom ? (customTitleInput.trim() || 'مخصص') : employeeForm.jobTitle;
+    const payload = {
+      ...employeeForm,
+      jobTitle: finalJobTitle,
+      baseSalary: parseFloat(employeeForm.baseSalary) || 0
+    };
+
     try {
       if (employeeModalMode === 'CREATE') {
-        await employeesApi.create(employeeForm);
-        toast.success(`تم إضافة الموظف "${employeeForm.name}" بنجاح 👤`);
+        await employeesApi.create(payload);
+        toast.success(`تم إضافة الموظف "${payload.name}" بنجاح 👤`);
       } else {
-        await employeesApi.update(employeeForm.id, employeeForm);
-        toast.success(`تم تحديث بيانات الموظف "${employeeForm.name}" بنجاح ✨`);
+        await employeesApi.update(employeeForm.id, payload);
+        toast.success(`تم تحديث بيانات الموظف "${payload.name}" بنجاح ✨`);
       }
       setIsEmployeeModalOpen(false);
       loadEmployees();
@@ -445,6 +509,33 @@ export default function EmployeesPage() {
       }
     });
   }, [employees, searchTerm, empFilterActive, empSortBy]);
+
+  // Salary estimation breakdown
+  const salaryEstimation = useMemo(() => {
+    const amount = parseFloat(employeeForm.baseSalary) || 0;
+    const period = employeeForm.salaryPeriod || 'WEEKLY';
+    if (amount <= 0) return null;
+
+    if (period === 'DAILY') {
+      return {
+        daily: amount,
+        weekly: amount * 6, // assuming 6 working days
+        monthly: amount * 26
+      };
+    } else if (period === 'MONTHLY') {
+      return {
+        daily: Math.round(amount / 26),
+        weekly: Math.round(amount / 4.33),
+        monthly: amount
+      };
+    } else { // WEEKLY
+      return {
+        daily: Math.round(amount / 6),
+        weekly: amount,
+        monthly: Math.round(amount * 4.33)
+      };
+    }
+  }, [employeeForm.baseSalary, employeeForm.salaryPeriod]);
 
   return (
     <div className="page employees-page">
@@ -861,103 +952,204 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* ── Employee Add/Edit Modal ── */}
+      {/* ═══════════════════════════════════════
+          ENHANCED ADD / EDIT EMPLOYEE MODAL
+         ═══════════════════════════════════════ */}
       <Modal
         isOpen={isEmployeeModalOpen}
         onClose={() => !savingEmployee && setIsEmployeeModalOpen(false)}
-        title={employeeModalMode === 'CREATE' ? 'إضافة موظف جديد' : 'تعديل بيانات موظف'}
+        title={employeeModalMode === 'CREATE' ? 'إضافة موظف جديد' : 'تعديل بيانات الموظف'}
         icon={employeeModalMode === 'CREATE' ? '👤' : '✏️'}
-        subtitle={employeeModalMode === 'CREATE' ? 'إضافة موظف جديد وتحديد المسمى الوظيفي ونظام الراتب' : `تعديل بيانات وراتب الموظف: ${employeeForm.name}`}
-        size="md"
+        subtitle={employeeModalMode === 'CREATE' ? 'أدخل بيانات الموظف وحدد المسمى الوظيفي وقيمة الراتب' : `تعديل بيانات وراتب الموظف: ${employeeForm.name}`}
+        size="lg"
       >
-        <form onSubmit={handleEmployeeSubmit} className="form-stack">
-          <Input
-            label="اسم الموظف الكامل"
-            name="name"
-            placeholder="مثال: أحمد محمد علي"
-            value={employeeForm.name}
-            onChange={(e) => setEmployeeForm({ ...employeeForm, name: e.target.value })}
-            required
-            autoFocus
-          />
-          <div className="form-group">
-            <label className="form-label">المسمى الوظيفي</label>
-            <select
-              className="input"
-              value={jobTitleCustom ? '__CUSTOM__' : (employeeForm.jobTitle || '')}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === '__CUSTOM__') {
-                  setJobTitleCustom(true);
-                } else {
-                  setJobTitleCustom(false);
-                  setEmployeeForm({ ...employeeForm, jobTitle: val });
-                }
-              }}
-            >
-              <option value="">-- اختر الوظيفة --</option>
-              {JOB_TITLES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-              <option value="__CUSTOM__">أخرى (اكتب يدوياً)</option>
-            </select>
+        <form onSubmit={handleEmployeeSubmit} className="form-stack emp-form-modern">
+          {/* Live Interactive Badge Preview */}
+          <div className="emp-preview-card">
+            <div className="emp-preview-avatar">
+              {employeeForm.name?.trim()?.[0] || '👤'}
+            </div>
+            <div className="emp-preview-info">
+              <div className="emp-preview-name">
+                {employeeForm.name?.trim() || 'اسم الموظف الجديد'}
+              </div>
+              <div className="emp-preview-meta">
+                <span className="emp-preview-role-chip">
+                  {jobTitleCustom ? (customTitleInput || 'مسمى مخصص') : (employeeForm.jobTitle || 'الوظيفة')}
+                </span>
+                <span className="emp-preview-salary-chip">
+                  {formatCurrency(employeeForm.baseSalary || 0)} / {
+                    employeeForm.salaryPeriod === 'DAILY' ? 'يومياً' :
+                    employeeForm.salaryPeriod === 'MONTHLY' ? 'شهرياً' : 'أسبوعياً'
+                  }
+                </span>
+              </div>
+            </div>
+            <div className="emp-preview-badge">
+              <Badge variant={employeeForm.active ? 'success' : 'neutral'}>
+                {employeeForm.active ? 'نشط وصالح للصرف' : 'موقوف مؤقتاً'}
+              </Badge>
+            </div>
           </div>
 
-          {jobTitleCustom && (
-            <Input
-              label="المسمى الوظيفي (مخصص)"
-              name="jobTitle"
-              value={employeeForm.jobTitle || ''}
-              onChange={(e) => setEmployeeForm({ ...employeeForm, jobTitle: e.target.value })}
-              placeholder="اكتب المسمى الوظيفي"
-              autoFocus
-            />
-          )}
-
-          <div className="form-group">
-            <label className="form-label">دورية احتساب الراتب</label>
-            <select
-              className="input"
-              value={employeeForm.salaryPeriod || 'WEEKLY'}
-              onChange={(e) => setEmployeeForm({ ...employeeForm, salaryPeriod: e.target.value })}
-            >
-              <option value="DAILY">يومي (اليومية)</option>
-              <option value="WEEKLY">أسبوعي</option>
-              <option value="MONTHLY">شهري</option>
-            </select>
+          {/* Section 1: Full Name */}
+          <div className="emp-form-section">
+            <label className="emp-form-label">الاسم الكامل للموظف <span className="text-danger">*</span></label>
+            <div className="emp-input-with-icon">
+              <User size={18} className="emp-input-icon" />
+              <input
+                type="text"
+                className="emp-modern-input"
+                placeholder="مثال: أحمد محمد علي"
+                value={employeeForm.name}
+                onChange={(e) => setEmployeeForm({ ...employeeForm, name: e.target.value })}
+                required
+                autoFocus
+              />
+            </div>
           </div>
 
-          <Input
-            label={
-              employeeForm.salaryPeriod === 'DAILY' 
-                ? 'قيمة اليومية (ج.م)' 
-                : employeeForm.salaryPeriod === 'MONTHLY' 
-                  ? 'قيمة الراتب الشهري الأساسي (ج.م)' 
-                  : 'قيمة الراتب الأسبوعي الأساسي (ج.م)'
-            }
-            name="baseSalary"
-            type="number"
-            min="0"
-            step="0.5"
-            placeholder="0.00"
-            value={employeeForm.baseSalary}
-            onChange={(e) => setEmployeeForm({ ...employeeForm, baseSalary: parseFloat(e.target.value) || 0 })}
-            required
-          />
+          {/* Section 2: Visual Job Role Selector Cards */}
+          <div className="emp-form-section">
+            <label className="emp-form-label">المسمى الوظيفي والدور بالمنشأة <span className="text-danger">*</span></label>
+            <div className="emp-roles-grid">
+              {PRESET_ROLES.map((r) => {
+                const IconComponent = r.icon;
+                const isSelected = r.id === '__CUSTOM__' ? jobTitleCustom : (!jobTitleCustom && employeeForm.jobTitle === r.id);
 
-          <label className="checkbox-label" style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              name="active"
-              checked={employeeForm.active}
-              onChange={(e) => setEmployeeForm({ ...employeeForm, active: e.target.checked })}
-            />
-            نشط (متاح في كشوفات الرواتب)
-          </label>
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className={`emp-role-card ${isSelected ? 'emp-role-card--active' : ''}`}
+                    onClick={() => handleSelectRole(r.id)}
+                  >
+                    <div className="emp-role-card__icon" style={{ color: r.color, background: `${r.color}18` }}>
+                      <IconComponent size={20} />
+                    </div>
+                    <span className="emp-role-card__title">{r.label}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-            <Button type="button" variant="secondary" onClick={() => setIsEmployeeModalOpen(false)} disabled={savingEmployee}>إلغاء</Button>
-            <Button type="submit" variant="primary" loading={savingEmployee}>حفظ الموظف</Button>
+            {/* Custom Job Title Input */}
+            {jobTitleCustom && (
+              <div className="emp-custom-role-wrap animate-fade-in">
+                <input
+                  type="text"
+                  className="emp-modern-input"
+                  placeholder="اكتب المسمى الوظيفي المخصص (مثال: مدير صالة، محاسب، دليفري...)"
+                  value={customTitleInput}
+                  onChange={(e) => handleCustomRoleChange(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Salary Frequency & Value */}
+          <div className="emp-form-section">
+            <div className="emp-form-row">
+              <div className="emp-form-col">
+                <label className="emp-form-label">دورية احتساب الراتب</label>
+                <div className="emp-period-pills">
+                  <button
+                    type="button"
+                    className={`emp-period-pill ${employeeForm.salaryPeriod === 'DAILY' ? 'emp-period-pill--active' : ''}`}
+                    onClick={() => { sounds.playTap(); setEmployeeForm({ ...employeeForm, salaryPeriod: 'DAILY' }); }}
+                  >
+                    يومي (اليومية)
+                  </button>
+                  <button
+                    type="button"
+                    className={`emp-period-pill ${employeeForm.salaryPeriod === 'WEEKLY' ? 'emp-period-pill--active' : ''}`}
+                    onClick={() => { sounds.playTap(); setEmployeeForm({ ...employeeForm, salaryPeriod: 'WEEKLY' }); }}
+                  >
+                    أسبوعي (القبض)
+                  </button>
+                  <button
+                    type="button"
+                    className={`emp-period-pill ${employeeForm.salaryPeriod === 'MONTHLY' ? 'emp-period-pill--active' : ''}`}
+                    onClick={() => { sounds.playTap(); setEmployeeForm({ ...employeeForm, salaryPeriod: 'MONTHLY' }); }}
+                  >
+                    شهري
+                  </button>
+                </div>
+              </div>
+
+              <div className="emp-form-col">
+                <label className="emp-form-label">
+                  قيمة الراتب الأساسي (ج.م) <span className="text-danger">*</span>
+                </label>
+                <div className="emp-salary-input-wrap">
+                  <span className="emp-salary-curr">ج.م</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    className="emp-modern-input emp-salary-input"
+                    placeholder="0.00"
+                    value={employeeForm.baseSalary}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, baseSalary: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Salary Adjustments */}
+            <div className="emp-quick-salary-row">
+              <span className="emp-quick-label">زيادة سريعة:</span>
+              <button type="button" className="emp-quick-chip" onClick={() => handleQuickSalaryAdjust(100)}>+100</button>
+              <button type="button" className="emp-quick-chip" onClick={() => handleQuickSalaryAdjust(250)}>+250</button>
+              <button type="button" className="emp-quick-chip" onClick={() => handleQuickSalaryAdjust(500)}>+500</button>
+              <button type="button" className="emp-quick-chip" onClick={() => handleQuickSalaryAdjust(1000)}>+1,000</button>
+            </div>
+
+            {/* Salary Estimation Hint Box */}
+            {salaryEstimation && (
+              <div className="emp-salary-estimate-box animate-fade-in">
+                <div className="emp-estimate-item">
+                  <span>اليومي:</span>
+                  <strong>{formatCurrency(salaryEstimation.daily)}</strong>
+                </div>
+                <div className="emp-estimate-item">
+                  <span>الأسبوعي:</span>
+                  <strong>{formatCurrency(salaryEstimation.weekly)}</strong>
+                </div>
+                <div className="emp-estimate-item">
+                  <span>الشهري:</span>
+                  <strong>{formatCurrency(salaryEstimation.monthly)}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 4: Active Status Switch */}
+          <div className="emp-form-section emp-active-toggle-card">
+            <div className="emp-toggle-text">
+              <strong>حالة الموظف التشغيلية</strong>
+              <p>الموظف النشط يظهر تلقائياً في شيت الرواتب ومسير القبض الأسبوعي</p>
+            </div>
+            <button
+              type="button"
+              className={`emp-toggle-btn ${employeeForm.active ? 'emp-toggle-btn--on' : ''}`}
+              onClick={() => { sounds.playTap(); setEmployeeForm({ ...employeeForm, active: !employeeForm.active }); }}
+            >
+              <span className="emp-toggle-handle" />
+            </button>
+          </div>
+
+          {/* Form Actions */}
+          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '1.25rem' }}>
+            <Button type="button" variant="secondary" onClick={() => setIsEmployeeModalOpen(false)} disabled={savingEmployee}>
+              إلغاء
+            </Button>
+            <Button type="submit" variant="primary" loading={savingEmployee} className="btn-save-emp">
+              {employeeModalMode === 'CREATE' ? 'إضافة الموظف للفريق 🚀' : 'حفظ التعديلات ✨'}
+            </Button>
           </div>
         </form>
       </Modal>
