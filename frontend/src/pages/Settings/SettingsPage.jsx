@@ -5,13 +5,15 @@ import { useToast } from '../../context/ToastContext';
 import { usersApi } from '../../api/usersApi';
 import { tenantApi } from '../../api/tenantApi';
 import { storage } from '../../utils/storage';
+import { removeImageBackground } from '../../utils/imageUtils';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
 import Modal from '../../components/Modal/Modal';
 import Spinner from '../../components/Spinner/Spinner';
 import { 
   Building2, User, KeyRound, Shield, RefreshCw, Sparkles, MessageCircle, 
-  Upload, Trash2, Image, Key, CheckCircle, AlertTriangle, Crown, ArrowUpRight, Copy, Check
+  Upload, Trash2, Image, Key, CheckCircle, AlertTriangle, Crown, ArrowUpRight, Copy, Check,
+  Wand2, Sliders, Layers, Eye, Scissors
 } from 'lucide-react';
 import { ROLES } from '../../utils/constants';
 import PrinterSettings from './PrinterSettings';
@@ -30,9 +32,19 @@ export default function SettingsPage() {
     return location.state?.tab || 'facility';
   });
 
-  // Logo state
+  // Logo & AI Background Removal State
   const [logoPreview, setLogoPreview] = useState(user?.logoUrl || '');
   const [isSavingLogo, setIsSavingLogo] = useState(false);
+  const [isBgRemoverOpen, setIsBgRemoverOpen] = useState(false);
+  const [rawUploadedImage, setRawUploadedImage] = useState(null);
+  const [bgRemovalMode, setBgRemovalMode] = useState('auto'); // 'auto' | 'white' | 'black' | 'original'
+  const [bgTolerance, setBgTolerance] = useState(38);
+  const [bgFeather, setBgFeather] = useState(18);
+  const [bgFloodFill, setBgFloodFill] = useState(true);
+  const [bgAutoTrim, setBgAutoTrim] = useState(true);
+  const [isProcessingBg, setIsProcessingBg] = useState(false);
+  const [processedDataUrl, setProcessedDataUrl] = useState('');
+  const [previewBgTheme, setPreviewBgTheme] = useState('checkerboard'); // 'checkerboard' | 'dark' | 'receipt'
 
   // Usage & Subscription state
   const [usage, setUsage] = useState(null);
@@ -78,43 +90,74 @@ export default function SettingsPage() {
     }
   }, [user?.logoUrl]);
 
-  // Handle Logo Upload (Converts to high quality compressed Data URL)
+  // Execute Background Removal Algorithm
+  const runBackgroundRemoval = useCallback(async (sourceImg, mode, tol, feat, flood, trim) => {
+    if (!sourceImg) return;
+    setIsProcessingBg(true);
+    try {
+      if (mode === 'original') {
+        setProcessedDataUrl(sourceImg);
+        return;
+      }
+      const result = await removeImageBackground(sourceImg, {
+        mode,
+        tolerance: Number(tol),
+        feather: Number(feat),
+        floodFillOnly: flood,
+        autoTrim: trim,
+      });
+      setProcessedDataUrl(result.dataUrl);
+    } catch (err) {
+      console.error('Error removing background:', err);
+      toast.error(err.message, 'فشل تفريغ خلفية الصورة');
+    } finally {
+      setIsProcessingBg(false);
+    }
+  }, [toast]);
+
+  // Handle Logo File Selection
   function handleLogoFileChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('حجم الصورة يجب ألا يتجاوز 2 ميجابايت', 'الصورة كبيرة جداً');
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('حجم الصورة يجب ألا يتجاوز 5 ميجابايت', 'الصورة كبيرة جداً');
       return;
     }
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 400;
-
-        if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/png');
-        setLogoPreview(dataUrl);
-      };
-      img.src = event.target.result;
+      const rawUrl = event.target.result;
+      setRawUploadedImage(rawUrl);
+      setBgRemovalMode('auto');
+      setBgTolerance(38);
+      setBgFeather(18);
+      setBgFloodFill(true);
+      setBgAutoTrim(true);
+      setIsBgRemoverOpen(true);
+      runBackgroundRemoval(rawUrl, 'auto', 38, 18, true, true);
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  // Apply Processed Logo from Modal
+  async function handleApplyProcessedLogo() {
+    if (!processedDataUrl) return;
+    setLogoPreview(processedDataUrl);
+    setIsBgRemoverOpen(false);
+
+    // Automatically save to database
+    setIsSavingLogo(true);
+    try {
+      const res = await tenantApi.updateLogo(processedDataUrl);
+      updateTenantInfo({ logoUrl: res.logoUrl });
+      toast.success('تم حفظ وتثبيت الشعار الشفاف (PNG) بنجاح! 🪄✨');
+    } catch (err) {
+      toast.error(err.message, 'فشل حفظ الشعار');
+    } finally {
+      setIsSavingLogo(false);
+    }
   }
 
   async function handleSaveLogo() {
@@ -301,7 +344,7 @@ export default function SettingsPage() {
             </p>
 
             <div className="settings-logo-uploader">
-              <div className="settings-logo-preview-box">
+              <div className="settings-logo-preview-box checkerboard-bg">
                 {logoPreview ? (
                   <img src={logoPreview} alt="Cafe Logo" className="settings-logo-preview-img" />
                 ) : (
@@ -321,17 +364,37 @@ export default function SettingsPage() {
                   style={{ display: 'none' }}
                 />
                 
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload size={14} /> اختيار صورة من الجهاز
-                </Button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload size={14} /> اختيار صورة (تفريغ خلفية تلقائي 🪄)
+                  </Button>
+
+                  {logoPreview && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setRawUploadedImage(logoPreview);
+                        setBgRemovalMode('auto');
+                        setBgTolerance(38);
+                        setBgFeather(18);
+                        setIsBgRemoverOpen(true);
+                        runBackgroundRemoval(logoPreview, 'auto', 38, 18, true, true);
+                      }}
+                    >
+                      <Wand2 size={14} className="text-accent" /> ضبط وتفريغ الشعار
+                    </Button>
+                  )}
+                </div>
 
                 {logoPreview && (
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <Button
                       type="button"
                       variant="primary"
@@ -350,11 +413,210 @@ export default function SettingsPage() {
                     >
                       <Trash2 size={14} /> حذف
                     </Button>
+                    <span className="logo-transparency-pill">
+                      ✨ PNG شفاف مفرغ
+                    </span>
                   </div>
                 )}
               </div>
             </div>
           </div>
+
+          {/* ── AI Logo Background Removal Modal ── */}
+          <Modal
+            isOpen={isBgRemoverOpen}
+            onClose={() => setIsBgRemoverOpen(false)}
+            title="تفريغ وتحويل الشعار إلى PNG شفاف 🪄"
+            icon="🪄"
+            subtitle="إزالة الخلفية البيضاء أو الملونة وتنعيم الحواف ليظهر الشعار باحترافية في السيستم والفواتير"
+            size="lg"
+          >
+            <div className="bg-remover-modal-body">
+              {/* Preview Box with Mode Switcher */}
+              <div className="bg-remover-preview-section">
+                <div className="bg-remover-preview-tabs">
+                  <button
+                    type="button"
+                    className={`preview-tab-btn ${previewBgTheme === 'checkerboard' ? 'active' : ''}`}
+                    onClick={() => setPreviewBgTheme('checkerboard')}
+                  >
+                    🏁 شبكة الشفافية (PNG)
+                  </button>
+                  <button
+                    type="button"
+                    className={`preview-tab-btn ${previewBgTheme === 'dark' ? 'active' : ''}`}
+                    onClick={() => setPreviewBgTheme('dark')}
+                  >
+                    🌙 شريط النظام الداكن
+                  </button>
+                  <button
+                    type="button"
+                    className={`preview-tab-btn ${previewBgTheme === 'receipt' ? 'active' : ''}`}
+                    onClick={() => setPreviewBgTheme('receipt')}
+                  >
+                    🧾 الفاتورة المطبوعة (80mm)
+                  </button>
+                </div>
+
+                <div className={`bg-remover-preview-frame bg-remover-preview-frame--${previewBgTheme}`}>
+                  {isProcessingBg ? (
+                    <div className="bg-remover-spinner-wrap">
+                      <Spinner />
+                      <span>جاري إزالة الخلفية وتنعيم الحواف...</span>
+                    </div>
+                  ) : processedDataUrl ? (
+                    <img
+                      src={processedDataUrl}
+                      alt="Transparent Logo Preview"
+                      className="bg-remover-result-img"
+                    />
+                  ) : (
+                    <span className="text-muted">جاري المعالجة...</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Controls & Sliders */}
+              <div className="bg-remover-controls-section">
+                <div className="control-group">
+                  <label className="control-group__label">نمط التفريغ:</label>
+                  <div className="bg-mode-pills">
+                    <button
+                      type="button"
+                      className={`mode-pill ${bgRemovalMode === 'auto' ? 'mode-pill--active' : ''}`}
+                      onClick={() => {
+                        setBgRemovalMode('auto');
+                        runBackgroundRemoval(rawUploadedImage, 'auto', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                      }}
+                    >
+                      <Wand2 size={13} />
+                      <span>تلقائي ذكي (Auto)</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`mode-pill ${bgRemovalMode === 'white' ? 'mode-pill--active' : ''}`}
+                      onClick={() => {
+                        setBgRemovalMode('white');
+                        runBackgroundRemoval(rawUploadedImage, 'white', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                      }}
+                    >
+                      <span>⚪ خلفية بيضاء</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`mode-pill ${bgRemovalMode === 'black' ? 'mode-pill--active' : ''}`}
+                      onClick={() => {
+                        setBgRemovalMode('black');
+                        runBackgroundRemoval(rawUploadedImage, 'black', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                      }}
+                    >
+                      <span>⚫ خلفية سوداء</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`mode-pill ${bgRemovalMode === 'original' ? 'mode-pill--active' : ''}`}
+                      onClick={() => {
+                        setBgRemovalMode('original');
+                        runBackgroundRemoval(rawUploadedImage, 'original', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                      }}
+                    >
+                      <span>🖼️ الأصلية</span>
+                    </button>
+                  </div>
+                </div>
+
+                {bgRemovalMode !== 'original' && (
+                  <>
+                    <div className="control-slider-box">
+                      <div className="slider-header">
+                        <span>حساسية التسامح (Tolerance):</span>
+                        <strong className="font-mono text-accent">{bgTolerance}%</strong>
+                      </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="90"
+                        value={bgTolerance}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setBgTolerance(val);
+                          runBackgroundRemoval(rawUploadedImage, bgRemovalMode, val, bgFeather, bgFloodFill, bgAutoTrim);
+                        }}
+                        className="bg-range-slider"
+                      />
+                      <span className="slider-hint">زيادة الحساسية تزيل درجات الألوان القريبة من الخلفية</span>
+                    </div>
+
+                    <div className="control-slider-box">
+                      <div className="slider-header">
+                        <span>تنعيم الحواف (Feathering):</span>
+                        <strong className="font-mono text-accent">{bgFeather}px</strong>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="35"
+                        value={bgFeather}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setBgFeather(val);
+                          runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, val, bgFloodFill, bgAutoTrim);
+                        }}
+                        className="bg-range-slider"
+                      />
+                      <span className="slider-hint">لتجنب الحواف الخشنة وجعل الشعار ناعماً ومتدرجاً</span>
+                    </div>
+
+                    <div className="control-toggles-row">
+                      <label className="toggle-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={bgFloodFill}
+                          onChange={(e) => {
+                            const val = e.target.checked;
+                            setBgFloodFill(val);
+                            runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, bgFeather, val, bgAutoTrim);
+                          }}
+                        />
+                        <span>حماية التفاصيل الداخلية (تفريغ الحواف الخارجية فقط)</span>
+                      </label>
+
+                      <label className="toggle-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={bgAutoTrim}
+                          onChange={(e) => {
+                            const val = e.target.checked;
+                            setBgAutoTrim(val);
+                            runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, bgFeather, bgFloodFill, val);
+                          }}
+                        />
+                        <span>قص الحواف الفارغة وتوسيط اللوجو</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                <div className="modal-actions-bar" style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsBgRemoverOpen(false)}
+                  >
+                    إلغاء
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleApplyProcessedLogo}
+                    loading={isSavingLogo}
+                  >
+                    <Check size={16} /> حفظ وتثبيت الشعار الشفاف (PNG)
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Modal>
 
           {/* Facility Info Card */}
           <div className="section-card">
