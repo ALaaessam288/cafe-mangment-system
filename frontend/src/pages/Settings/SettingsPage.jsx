@@ -284,15 +284,35 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="page" dir="rtl">
-      <div className="page__header">
-        <div>
-          <h1 className="page__title">الإعدادات والاشتراكات</h1>
-          <p className="page__subtitle">إدارة هوية المنشأة، الباقات والترخيص، الطابعات، والأمان</p>
+    <div className="page settings-page settings-creative" dir="rtl">
+      {/* ── Executive Hero Header ── */}
+      <div className="page__header settings-header">
+        <div className="settings-header__info">
+          <div className="settings-header__icon-box">
+            <Building2 size={24} className="text-accent" />
+          </div>
+          <div>
+            <div className="settings-header__title-row">
+              <h1 className="page__title">إعدادات النظام والاشتراكات</h1>
+              <span className="settings-slug-badge">{tenantSlug}</span>
+            </div>
+            <p className="page__subtitle">إدارة هوية المنشأة والشعار الشفاف، الباقات والترخيص، الطابعات، والأمان</p>
+          </div>
+        </div>
+
+        <div className="settings-header__quick-stats">
+          <div className="settings-quick-stat-pill">
+            <span className="text-muted text-xs">المنشأة:</span>
+            <strong>{user?.tenantName || 'كافيه ونس'}</strong>
+          </div>
+          <div className="settings-quick-stat-pill">
+            <span className="text-muted text-xs">الباقة:</span>
+            <span className="text-accent font-bold">{usage?.planDisplayName || user?.planDisplayName || 'تجريبية'}</span>
+          </div>
         </div>
       </div>
 
-      {/* Tabs Bar */}
+      {/* ── Glass Tabs Navigation Bar ── */}
       <div className="settings-tabs-bar">
         {role === ROLES.ADMIN && (
           <>
@@ -301,14 +321,16 @@ export default function SettingsPage() {
               className={`settings-tab-btn ${activeTab === 'facility' ? 'settings-tab-btn--active' : ''}`}
               onClick={() => setActiveTab('facility')}
             >
-              <Building2 size={16} /> بيانات المنشأة واللوجو
+              <Building2 size={16} />
+              <span>بيانات المنشأة واللوجو</span>
             </button>
             <button
               type="button"
               className={`settings-tab-btn ${activeTab === 'subscription' ? 'settings-tab-btn--active' : ''}`}
               onClick={() => setActiveTab('subscription')}
             >
-              <Crown size={16} /> الاشتراك والتراخيص
+              <Crown size={16} />
+              <span>الاشتراك والتراخيص</span>
               {usage?.daysRemaining <= 5 && <span className="settings-tab-badge">تجديد</span>}
             </button>
           </>
@@ -318,7 +340,8 @@ export default function SettingsPage() {
           className={`settings-tab-btn ${activeTab === 'security' ? 'settings-tab-btn--active' : ''}`}
           onClick={() => setActiveTab('security')}
         >
-          <KeyRound size={16} /> الحساب والأمان
+          <KeyRound size={16} />
+          <span>الحساب والأمان</span>
         </button>
         {role === ROLES.ADMIN && (
           <button
@@ -326,36 +349,43 @@ export default function SettingsPage() {
             className={`settings-tab-btn ${activeTab === 'hardware' ? 'settings-tab-btn--active' : ''}`}
             onClick={() => setActiveTab('hardware')}
           >
-            <MessageCircle size={16} /> الطابعات والتنبيهات
+            <MessageCircle size={16} />
+            <span>الطابعات والتنبيهات</span>
           </button>
         )}
       </div>
 
-      {/* TAB 1: FACILITY & LOGO */}
+      {/* ── TAB 1: FACILITY & LOGO ── */}
       {activeTab === 'facility' && (
-        <div className="settings-grid">
-          {/* Logo Card */}
-          <div className="section-card">
-            <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Image size={18} style={{ color: 'var(--accent)' }} /> شعار المنشأة (Logo)
-            </h2>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              يظهر الشعار في أعلى شريط النظام، الفواتير المطبوعة، وإيصالات العملاء.
-            </p>
+        <div className="settings-grid settings-grid--facility">
+          {/* ── Card 1: Logo & Visual Identity ── */}
+          <div className="section-card settings-logo-card">
+            <div className="section-card__header">
+              <div className="section-card__icon-wrap">
+                <Image size={18} className="text-accent" />
+              </div>
+              <div>
+                <h2 className="section-card__title">شعار المنشأة والهوية البصرية</h2>
+                <p className="section-card__subtitle">تفريغ الخلفية تلقائياً ليظهر الشعار كـ PNG شفاف في الفواتير والسيستم</p>
+              </div>
+            </div>
 
-            <div className="settings-logo-uploader">
-              <div className="settings-logo-preview-box checkerboard-bg">
+            <div className="settings-logo-body">
+              <div className="settings-logo-preview-frame checkerboard-bg">
                 {logoPreview ? (
                   <img src={logoPreview} alt="Cafe Logo" className="settings-logo-preview-img" />
                 ) : (
                   <div className="settings-logo-placeholder">
-                    <Image size={36} style={{ opacity: 0.4 }} />
+                    <Image size={40} style={{ opacity: 0.35 }} />
                     <span>لا يوجد شعار</span>
                   </div>
                 )}
+                {logoPreview && (
+                  <span className="logo-floating-tag">PNG شفاف ✨</span>
+                )}
               </div>
 
-              <div className="settings-logo-actions">
+              <div className="settings-logo-controls">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -363,22 +393,21 @@ export default function SettingsPage() {
                   accept="image/png, image/jpeg, image/webp, image/svg+xml"
                   style={{ display: 'none' }}
                 />
-                
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+
+                <div className="settings-logo-btn-stack">
                   <Button
                     type="button"
                     variant="primary"
-                    size="sm"
                     onClick={() => fileInputRef.current?.click()}
+                    className="w-full justify-center"
                   >
-                    <Upload size={14} /> اختيار صورة (تفريغ خلفية تلقائي 🪄)
+                    <Upload size={15} /> اختيار صورة (تفريغ خلفية تلقائي 🪄)
                   </Button>
 
                   {logoPreview && (
                     <Button
                       type="button"
                       variant="secondary"
-                      size="sm"
                       onClick={() => {
                         setRawUploadedImage(logoPreview);
                         setBgRemovalMode('auto');
@@ -387,14 +416,15 @@ export default function SettingsPage() {
                         setIsBgRemoverOpen(true);
                         runBackgroundRemoval(logoPreview, 'auto', 38, 18, true, true);
                       }}
+                      className="w-full justify-center"
                     >
-                      <Wand2 size={14} className="text-accent" /> ضبط وتفريغ الشعار
+                      <Wand2 size={15} className="text-accent" /> ضبط وتفريغ الشعار (AI Studio)
                     </Button>
                   )}
                 </div>
 
                 {logoPreview && (
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div className="settings-logo-footer-actions">
                     <Button
                       type="button"
                       variant="primary"
@@ -413,271 +443,79 @@ export default function SettingsPage() {
                     >
                       <Trash2 size={14} /> حذف
                     </Button>
-                    <span className="logo-transparency-pill">
-                      ✨ PNG شفاف مفرغ
-                    </span>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ── AI Logo Background Removal Modal ── */}
-          <Modal
-            isOpen={isBgRemoverOpen}
-            onClose={() => setIsBgRemoverOpen(false)}
-            title="تفريغ وتحويل الشعار إلى PNG شفاف 🪄"
-            icon="🪄"
-            subtitle="إزالة الخلفية البيضاء أو الملونة وتنعيم الحواف ليظهر الشعار باحترافية في السيستم والفواتير"
-            size="lg"
-          >
-            <div className="bg-remover-modal-body">
-              {/* Preview Box with Mode Switcher */}
-              <div className="bg-remover-preview-section">
-                <div className="bg-remover-preview-tabs">
-                  <button
-                    type="button"
-                    className={`preview-tab-btn ${previewBgTheme === 'checkerboard' ? 'active' : ''}`}
-                    onClick={() => setPreviewBgTheme('checkerboard')}
-                  >
-                    🏁 شبكة الشفافية (PNG)
-                  </button>
-                  <button
-                    type="button"
-                    className={`preview-tab-btn ${previewBgTheme === 'dark' ? 'active' : ''}`}
-                    onClick={() => setPreviewBgTheme('dark')}
-                  >
-                    🌙 شريط النظام الداكن
-                  </button>
-                  <button
-                    type="button"
-                    className={`preview-tab-btn ${previewBgTheme === 'receipt' ? 'active' : ''}`}
-                    onClick={() => setPreviewBgTheme('receipt')}
-                  >
-                    🧾 الفاتورة المطبوعة (80mm)
-                  </button>
-                </div>
-
-                <div className={`bg-remover-preview-frame bg-remover-preview-frame--${previewBgTheme}`}>
-                  {isProcessingBg ? (
-                    <div className="bg-remover-spinner-wrap">
-                      <Spinner />
-                      <span>جاري إزالة الخلفية وتنعيم الحواف...</span>
-                    </div>
-                  ) : processedDataUrl ? (
-                    <img
-                      src={processedDataUrl}
-                      alt="Transparent Logo Preview"
-                      className="bg-remover-result-img"
-                    />
-                  ) : (
-                    <span className="text-muted">جاري المعالجة...</span>
-                  )}
-                </div>
+          {/* ── Card 2: Branch Operational Details ── */}
+          <div className="section-card">
+            <div className="section-card__header">
+              <div className="section-card__icon-wrap">
+                <Building2 size={18} className="text-accent" />
               </div>
-
-              {/* Controls & Sliders */}
-              <div className="bg-remover-controls-section">
-                <div className="control-group">
-                  <label className="control-group__label">نمط التفريغ:</label>
-                  <div className="bg-mode-pills">
-                    <button
-                      type="button"
-                      className={`mode-pill ${bgRemovalMode === 'auto' ? 'mode-pill--active' : ''}`}
-                      onClick={() => {
-                        setBgRemovalMode('auto');
-                        runBackgroundRemoval(rawUploadedImage, 'auto', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
-                      }}
-                    >
-                      <Wand2 size={13} />
-                      <span>تلقائي ذكي (Auto)</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`mode-pill ${bgRemovalMode === 'white' ? 'mode-pill--active' : ''}`}
-                      onClick={() => {
-                        setBgRemovalMode('white');
-                        runBackgroundRemoval(rawUploadedImage, 'white', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
-                      }}
-                    >
-                      <span>⚪ خلفية بيضاء</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`mode-pill ${bgRemovalMode === 'black' ? 'mode-pill--active' : ''}`}
-                      onClick={() => {
-                        setBgRemovalMode('black');
-                        runBackgroundRemoval(rawUploadedImage, 'black', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
-                      }}
-                    >
-                      <span>⚫ خلفية سوداء</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`mode-pill ${bgRemovalMode === 'original' ? 'mode-pill--active' : ''}`}
-                      onClick={() => {
-                        setBgRemovalMode('original');
-                        runBackgroundRemoval(rawUploadedImage, 'original', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
-                      }}
-                    >
-                      <span>🖼️ الأصلية</span>
-                    </button>
-                  </div>
-                </div>
-
-                {bgRemovalMode !== 'original' && (
-                  <>
-                    <div className="control-slider-box">
-                      <div className="slider-header">
-                        <span>حساسية التسامح (Tolerance):</span>
-                        <strong className="font-mono text-accent">{bgTolerance}%</strong>
-                      </div>
-                      <input
-                        type="range"
-                        min="5"
-                        max="90"
-                        value={bgTolerance}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setBgTolerance(val);
-                          runBackgroundRemoval(rawUploadedImage, bgRemovalMode, val, bgFeather, bgFloodFill, bgAutoTrim);
-                        }}
-                        className="bg-range-slider"
-                      />
-                      <span className="slider-hint">زيادة الحساسية تزيل درجات الألوان القريبة من الخلفية</span>
-                    </div>
-
-                    <div className="control-slider-box">
-                      <div className="slider-header">
-                        <span>تنعيم الحواف (Feathering):</span>
-                        <strong className="font-mono text-accent">{bgFeather}px</strong>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="35"
-                        value={bgFeather}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setBgFeather(val);
-                          runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, val, bgFloodFill, bgAutoTrim);
-                        }}
-                        className="bg-range-slider"
-                      />
-                      <span className="slider-hint">لتجنب الحواف الخشنة وجعل الشعار ناعماً ومتدرجاً</span>
-                    </div>
-
-                    <div className="control-toggles-row">
-                      <label className="toggle-checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={bgFloodFill}
-                          onChange={(e) => {
-                            const val = e.target.checked;
-                            setBgFloodFill(val);
-                            runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, bgFeather, val, bgAutoTrim);
-                          }}
-                        />
-                        <span>حماية التفاصيل الداخلية (تفريغ الحواف الخارجية فقط)</span>
-                      </label>
-
-                      <label className="toggle-checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={bgAutoTrim}
-                          onChange={(e) => {
-                            const val = e.target.checked;
-                            setBgAutoTrim(val);
-                            runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, bgFeather, bgFloodFill, val);
-                          }}
-                        />
-                        <span>قص الحواف الفارغة وتوسيط اللوجو</span>
-                      </label>
-                    </div>
-                  </>
-                )}
-
-                <div className="modal-actions-bar" style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setIsBgRemoverOpen(false)}
-                  >
-                    إلغاء
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={handleApplyProcessedLogo}
-                    loading={isSavingLogo}
-                  >
-                    <Check size={16} /> حفظ وتثبيت الشعار الشفاف (PNG)
-                  </Button>
-                </div>
+              <div>
+                <h2 className="section-card__title">تفاصيل وبيانات الفرع</h2>
+                <p className="section-card__subtitle">البيانات الأساسية المسجلة للفرع والعملة التشغيلية</p>
               </div>
             </div>
-          </Modal>
 
-          {/* Facility Info Card */}
-          <div className="section-card">
-            <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Building2 size={18} /> تفاصيل الفرع
-            </h2>
-            <div className="settings-info-list">
-              <div className="settings-info-item">
-                <span className="settings-info-label">اسم المنشأة</span>
-                <span className="settings-info-value">{user?.tenantName || 'كافيه ونس'}</span>
+            <div className="settings-tiles-grid">
+              <div className="settings-tile-item">
+                <span className="settings-tile-item__label">اسم المنشأة</span>
+                <strong className="settings-tile-item__val">{user?.tenantName || 'كافيه ونس'}</strong>
               </div>
-              <div className="settings-info-item">
-                <span className="settings-info-label">معرف الفرع (Slug)</span>
-                <span className="settings-info-value" style={{ fontFamily: 'var(--font-mono)' }}>{tenantSlug}</span>
+              <div className="settings-tile-item">
+                <span className="settings-tile-item__label">معرف الفرع (Slug)</span>
+                <strong className="settings-tile-item__val font-mono text-accent">{tenantSlug}</strong>
               </div>
-              <div className="settings-info-item">
-                <span className="settings-info-label">العملة الافتراضية</span>
-                <span className="settings-info-value">الجنيه المصري (EGP)</span>
+              <div className="settings-tile-item">
+                <span className="settings-tile-item__label">العملة الافتراضية</span>
+                <strong className="settings-tile-item__val">الجنيه المصري (EGP)</strong>
               </div>
-              <div className="settings-info-item">
-                <span className="settings-info-label">المنطقة الزمنية</span>
-                <span className="settings-info-value">Africa / Cairo (GMT+3)</span>
+              <div className="settings-tile-item">
+                <span className="settings-tile-item__label">المنطقة الزمنية</span>
+                <strong className="settings-tile-item__val">Africa / Cairo (GMT+3)</strong>
               </div>
             </div>
           </div>
 
-          {/* System Updates */}
+          {/* ── Card 3: System Engine & Updates ── */}
           <div className="section-card">
-            <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <RefreshCw size={18} /> تحديثات النظام
-            </h2>
-            <div className="settings-info-list">
-              <div className="settings-info-item">
-                <span className="settings-info-label">إصدار التطبيق</span>
-                <span className="settings-info-value" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 'bold' }}>v1.0.0</span>
+            <div className="section-card__header">
+              <div className="section-card__icon-wrap">
+                <RefreshCw size={18} className="text-accent" />
+              </div>
+              <div>
+                <h2 className="section-card__title">محرك النظام والتحديثات</h2>
+                <p className="section-card__subtitle">حالة الإصدار الحالي ومزامنة التحديثات السحابية</p>
+              </div>
+            </div>
+
+            <div className="settings-version-box">
+              <div className="settings-version-row">
+                <span className="settings-version-label">الإصدار الحالي:</span>
+                <span className="settings-version-badge">v1.0.0 Stable ✓</span>
               </div>
 
-              {updateStatus && (
-                <div style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-lg)',
-                  background: updateStatus.status === 'downloaded' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  border: `1px solid ${updateStatus.status === 'downloaded' ? 'var(--success)' : 'var(--accent)'}`,
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--text-sm)',
-                  margin: '10px 0'
-                }}>
+              {updateStatus ? (
+                <div className="settings-update-alert">
                   {updateStatus.message}
                 </div>
+              ) : (
+                <p className="text-xs text-muted">أنت تعمل على النسخة الرسمية المستقرة مع كافة ميزات الكاشير السحابي.</p>
               )}
 
-              <div style={{ marginTop: '12px' }}>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleCheckUpdates}
-                  loading={checkingUpdate}
-                >
-                  <RefreshCw size={15} /> فحص وجود تحديثات جديدة
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCheckUpdates}
+                loading={checkingUpdate}
+                className="w-full justify-center mt-2"
+              >
+                <RefreshCw size={15} /> فحص وجود تحديثات جديدة
+              </Button>
             </div>
           </div>
         </div>
@@ -983,6 +821,202 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* ── AI Logo Background Removal Modal ── */}
+      <Modal
+        isOpen={isBgRemoverOpen}
+        onClose={() => setIsBgRemoverOpen(false)}
+        title="تفريغ وتحويل الشعار إلى PNG شفاف 🪄"
+        icon="🪄"
+        subtitle="إزالة الخلفية البيضاء أو الملونة وتنعيم الحواف ليظهر الشعار باحترافية في السيستم والفواتير"
+        size="lg"
+      >
+        <div className="bg-remover-modal-body">
+          {/* Preview Box with Mode Switcher */}
+          <div className="bg-remover-preview-section">
+            <div className="bg-remover-preview-tabs">
+              <button
+                type="button"
+                className={`preview-tab-btn ${previewBgTheme === 'checkerboard' ? 'active' : ''}`}
+                onClick={() => setPreviewBgTheme('checkerboard')}
+              >
+                🏁 شبكة الشفافية (PNG)
+              </button>
+              <button
+                type="button"
+                className={`preview-tab-btn ${previewBgTheme === 'dark' ? 'active' : ''}`}
+                onClick={() => setPreviewBgTheme('dark')}
+              >
+                🌙 شريط النظام الداكن
+              </button>
+              <button
+                type="button"
+                className={`preview-tab-btn ${previewBgTheme === 'receipt' ? 'active' : ''}`}
+                onClick={() => setPreviewBgTheme('receipt')}
+              >
+                🧾 الفاتورة المطبوعة (80mm)
+              </button>
+            </div>
+
+            <div className={`bg-remover-preview-frame bg-remover-preview-frame--${previewBgTheme}`}>
+              {isProcessingBg ? (
+                <div className="bg-remover-spinner-wrap">
+                  <Spinner />
+                  <span>جاري إزالة الخلفية وتنعيم الحواف...</span>
+                </div>
+              ) : processedDataUrl ? (
+                <img
+                  src={processedDataUrl}
+                  alt="Transparent Logo Preview"
+                  className="bg-remover-result-img"
+                />
+              ) : (
+                <span className="text-muted">جاري المعالجة...</span>
+              )}
+            </div>
+          </div>
+
+          {/* Controls & Sliders */}
+          <div className="bg-remover-controls-section">
+            <div className="control-group">
+              <label className="control-group__label">نمط التفريغ:</label>
+              <div className="bg-mode-pills">
+                <button
+                  type="button"
+                  className={`mode-pill ${bgRemovalMode === 'auto' ? 'mode-pill--active' : ''}`}
+                  onClick={() => {
+                    setBgRemovalMode('auto');
+                    runBackgroundRemoval(rawUploadedImage, 'auto', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                  }}
+                >
+                  <Wand2 size={13} />
+                  <span>تلقائي ذكي (Auto)</span>
+                </button>
+                <button
+                  type="button"
+                  className={`mode-pill ${bgRemovalMode === 'white' ? 'mode-pill--active' : ''}`}
+                  onClick={() => {
+                    setBgRemovalMode('white');
+                    runBackgroundRemoval(rawUploadedImage, 'white', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                  }}
+                >
+                  <span>⚪ خلفية بيضاء</span>
+                </button>
+                <button
+                  type="button"
+                  className={`mode-pill ${bgRemovalMode === 'black' ? 'mode-pill--active' : ''}`}
+                  onClick={() => {
+                    setBgRemovalMode('black');
+                    runBackgroundRemoval(rawUploadedImage, 'black', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                  }}
+                >
+                  <span>⚫ خلفية سوداء</span>
+                </button>
+                <button
+                  type="button"
+                  className={`mode-pill ${bgRemovalMode === 'original' ? 'mode-pill--active' : ''}`}
+                  onClick={() => {
+                    setBgRemovalMode('original');
+                    runBackgroundRemoval(rawUploadedImage, 'original', bgTolerance, bgFeather, bgFloodFill, bgAutoTrim);
+                  }}
+                >
+                  <span>🖼️ الأصلية</span>
+                </button>
+              </div>
+            </div>
+
+            {bgRemovalMode !== 'original' && (
+              <>
+                <div className="control-slider-box">
+                  <div className="slider-header">
+                    <span>حساسية التسامح (Tolerance):</span>
+                    <strong className="font-mono text-accent">{bgTolerance}%</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="90"
+                    value={bgTolerance}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setBgTolerance(val);
+                      runBackgroundRemoval(rawUploadedImage, bgRemovalMode, val, bgFeather, bgFloodFill, bgAutoTrim);
+                    }}
+                    className="bg-range-slider"
+                  />
+                  <span className="slider-hint">زيادة الحساسية تزيل درجات الألوان القريبة من الخلفية</span>
+                </div>
+
+                <div className="control-slider-box">
+                  <div className="slider-header">
+                    <span>تنعيم الحواف (Feathering):</span>
+                    <strong className="font-mono text-accent">{bgFeather}px</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="35"
+                    value={bgFeather}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setBgFeather(val);
+                      runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, val, bgFloodFill, bgAutoTrim);
+                    }}
+                    className="bg-range-slider"
+                  />
+                  <span className="slider-hint">لتجنب الحواف الخشنة وجعل الشعار ناعماً ومتدرجاً</span>
+                </div>
+
+                <div className="control-toggles-row">
+                  <label className="toggle-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={bgFloodFill}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setBgFloodFill(val);
+                        runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, bgFeather, val, bgAutoTrim);
+                      }}
+                    />
+                    <span>حماية التفاصيل الداخلية (تفريغ الحواف الخارجية فقط)</span>
+                  </label>
+
+                  <label className="toggle-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={bgAutoTrim}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setBgAutoTrim(val);
+                        runBackgroundRemoval(rawUploadedImage, bgRemovalMode, bgTolerance, bgFeather, bgFloodFill, val);
+                      }}
+                    />
+                    <span>قص الحواف الفارغة وتوسيط اللوجو</span>
+                  </label>
+                </div>
+              </>
+            )}
+
+            <div className="modal-actions-bar" style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsBgRemoverOpen(false)}
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleApplyProcessedLogo}
+                loading={isSavingLogo}
+              >
+                <Check size={16} /> حفظ وتثبيت الشعار الشفاف (PNG)
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
