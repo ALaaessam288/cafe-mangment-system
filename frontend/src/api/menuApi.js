@@ -16,6 +16,7 @@ export const menuApi = {
   getProductById:  (id)      => client.get(`/products/${id}`).then((r) => { const p = r.data; return {...p, name: p.nameAr || p.nameEn}; }),
   createProduct:   (payload) => client.post('/products', { ...payload, nameAr: payload.name }).then((r) => r.data),
   updateProduct:   (id, payload) => client.put(`/products/${id}`, { ...payload, nameAr: payload.name }).then((r) => r.data),
+  deleteProduct:   (id)          => client.delete(`/products/${id}/permanent`).catch(() => client.delete(`/products/${id}`)).then((r) => r.data),
   deactivateProduct: (id)    => client.delete(`/products/${id}`).then((r) => r.data),
   activateProduct:   (id)    => client.put(`/products/${id}/activate`).then((r) => r.data),
   setAvailability: (id, available) =>

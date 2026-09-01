@@ -32,6 +32,24 @@ public class ProductService {
     private final StationRepository stationRepository;
     private final QuotaService quotaService;
     private final ShiftAuditService shiftAuditService;
+    private final com.example.cafemangmentsystem.menu.repository.ProductOptionRepository productOptionRepository;
+    private final com.example.cafemangmentsystem.inventory.repository.ProductRecipeRepository productRecipeRepository;
+
+    public void delete(Long id) {
+        Product product = getOrThrow(id);
+        try {
+            productOptionRepository.deleteAll(productOptionRepository.findAllByProductId(id));
+        } catch (Exception ignored) {}
+        try {
+            productRecipeRepository.deleteAll(productRecipeRepository.findAllByProductId(id));
+        } catch (Exception ignored) {}
+        try {
+            productRepository.delete(product);
+        } catch (Exception e) {
+            product.deactivate(null);
+            productRepository.save(product);
+        }
+    }
 
     public ProductResponse create(ProductRequest request) {
         quotaService.checkProductQuota(productRepository.count());

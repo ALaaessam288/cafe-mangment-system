@@ -69,6 +69,13 @@ public class ProductController {
         return productService.deactivate(id, principal.getId());
     }
 
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePermanent(@PathVariable Long id) {
+        productService.delete(id);
+    }
+
     @PutMapping("/{id}/activate")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public ProductResponse activate(@PathVariable Long id) {

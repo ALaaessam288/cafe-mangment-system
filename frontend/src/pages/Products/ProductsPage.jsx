@@ -653,7 +653,7 @@ export default function ProductsPage() {
                 <th>مكان التجهيز</th>
                 <th>متاح للطلب</th>
                 <th>الحالة</th>
-                {role === ROLES.SUPERVISOR && <th style={{ textAlign: 'left' }}>تحكم</th>}
+                {(role === ROLES.SUPERVISOR || role === ROLES.ADMIN) && <th style={{ textAlign: 'left' }}>تحكم</th>}
               </tr>
             </thead>
             <tbody>
