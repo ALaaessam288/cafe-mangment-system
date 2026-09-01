@@ -746,8 +746,11 @@ export default function POSPage() {
     if (!prod) return false;
     if (prod.revenueLine === 'BEVERAGE') return true;
     if (prod.stationCode === 'BAR') return true;
+
+    const catObj = (state.categories || []).find((c) => c.id === prod.categoryId);
+    const c = (prod.categoryNameAr || prod.categoryName || catObj?.name || catObj?.nameAr || '').toLowerCase();
     const n = (prod.name || prod.nameAr || '').toLowerCase();
-    const c = (prod.categoryNameAr || prod.categoryName || '').toLowerCase();
+
     const drinkKeywords = [
       'شاي', 'قهوة', 'اسبريسو', 'إسبريسو', 'لاتيه', 'كابتشينو', 'موكا', 'كركديه', 
       'ينسون', 'نعناع', 'قرفة', 'زنجبيل', 'سحلب', 'شوكليت', 'كاكاو', 'أمريكانو', 
