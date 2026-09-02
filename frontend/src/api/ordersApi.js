@@ -29,6 +29,10 @@ export const ordersApi = {
     client.delete(`/orders/${orderId}/items/${itemId}`).then((r) => r.data),
 
   /* Payments */
+  checkout: (orderId, payload, idempotencyKey) =>
+    client.post(`/orders/${orderId}/checkout`, payload, {
+      headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}
+    }).then((r) => r.data),
   recordPayment: (orderId, payload) =>
     client.post(`/orders/${orderId}/payments`, payload).then((r) => r.data),
   getPayments: (orderId) =>
