@@ -38,7 +38,7 @@ public class TenantController {
     }
 
     @PutMapping("/plan")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public TenantResponse selectPlan(@RequestBody SelectPlanRequest request) {
         return tenantService.selectTenantPlan(TenantContext.get(), request.plan());
     }

@@ -34,7 +34,7 @@ public record ProvisionTenantRequest(
             String ownerUsername, String ownerPassword, String ownerFullName,
             String timezone, String currency, String templateId, Integer defaultTables
     ) {
-        this(name, slug, businessType, com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO, null,
+        this(name, slug, businessType, com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL, null,
                 ownerUsername, ownerPassword, ownerFullName, timezone, currency, templateId, defaultTables);
     }
 }

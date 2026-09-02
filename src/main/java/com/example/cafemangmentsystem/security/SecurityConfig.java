@@ -71,9 +71,9 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(restAuthenticationEntryPoint)
                 .accessDeniedHandler(restAccessDeniedHandler))
-            .addFilterBefore(platformApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(subscriptionGuardFilter, com.example.cafemangmentsystem.security.jwt.JwtAuthenticationFilter.class);
+            .addFilterAfter(platformApiKeyFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(subscriptionGuardFilter, PlatformApiKeyFilter.class);
 
         return http.build();
     }
@@ -98,9 +98,7 @@ public class SecurityConfig {
                 .filter(s -> !s.isEmpty())
                 .toList();
         
-        // Allow all origins using pattern matching — works for any deployment URL.
-        // Safe to use with credentials because the API uses stateless JWT auth (not cookies).
-        config.setAllowedOriginPatterns(Arrays.asList("*"));
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("*"));
         config.setExposedHeaders(Arrays.asList("Authorization"));

@@ -1,6 +1,7 @@
 package com.example.cafemangmentsystem.security;
 
 import com.example.cafemangmentsystem.common.tenant.TenantContext;
+import com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan;
 import com.example.cafemangmentsystem.tenant.entity.Tenant;
 import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
 import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
@@ -58,7 +59,7 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
             if (tenant != null) {
                 // If suspended by Super Admin, block ALL requests (including GET)
                 if (tenant.getStatus() == TenantStatus.SUSPENDED) {
-                    sendForbiddenResponse(response, "تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني.");
+                    sendForbiddenResponse(response, "ACCOUNT_SUSPENDED", "تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني.");
                     return;
                 }
 
@@ -70,13 +71,26 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
 
                 Instant now = Instant.now();
                 if (tenant.getStatus() == TenantStatus.TRIAL && tenant.getTrialEndsAt() != null && now.isAfter(tenant.getTrialEndsAt())) {
-                    sendForbiddenResponse(response, "انتهت الفترة التجريبية (14 يوم). يرجى ترقية الباقة أو إدخال مفتاح الترخيص لمتابعة العمل.");
+                    sendForbiddenResponse(response, "SUBSCRIPTION_EXPIRED", "انتهت الفترة التجريبية (14 يوم). يرجى ترقية الباقة أو إدخال مفتاح الترخيص لمتابعة العمل.");
                     return;
                 }
 
                 if (tenant.getStatus() == TenantStatus.ACTIVE && tenant.getSubscriptionEndsAt() != null && now.isAfter(tenant.getSubscriptionEndsAt())) {
-                    sendForbiddenResponse(response, "انتهت صلاحية اشتراكك. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد.");
+                    sendForbiddenResponse(response, "SUBSCRIPTION_EXPIRED", "انتهت صلاحية اشتراكك. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد.");
                     return;
+                }
+
+                // Feature entitlement checks for non-GET requests when on paid plans
+                SubscriptionPlan plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : SubscriptionPlan.TRIAL;
+                if (tenant.getStatus() != TenantStatus.TRIAL) {
+                    if (path.startsWith("/api/expenses") && !plan.isIncludesExpenses()) {
+                        sendForbiddenResponse(response, "FEATURE_NOT_INCLUDED", "ميزة إدارة المصروفات غير مشمولة في باقتك الحالية. يرجى ترقية الباقة.");
+                        return;
+                    }
+                    if (path.startsWith("/api/stations") && !plan.isIncludesKds()) {
+                        sendForbiddenResponse(response, "FEATURE_NOT_INCLUDED", "ميزة شاشات التحضير (KDS) غير مشمولة في باقتك الحالية. يرجى ترقية الباقة.");
+                        return;
+                    }
                 }
             }
         }
@@ -90,9 +104,9 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void sendForbiddenResponse(HttpServletResponse response, String message) throws IOException {
+    private void sendForbiddenResponse(HttpServletResponse response, String errorCode, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"error\":\"SUBSCRIPTION_EXPIRED\",\"status\":403,\"message\":\"" + message + "\"}");
+        response.getWriter().write("{\"error\":\"" + errorCode + "\",\"status\":403,\"message\":\"" + message + "\"}");
     }
 }

@@ -11,10 +11,12 @@ import com.example.cafemangmentsystem.user.entity.Role;
 import com.example.cafemangmentsystem.menu.WanasMenuSeeder;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(name = "app.legacy-bootstrap.enabled", havingValue = "true")
 public class DatabaseSeeder implements CommandLineRunner {
 
     private final TenantRepository tenantRepository;

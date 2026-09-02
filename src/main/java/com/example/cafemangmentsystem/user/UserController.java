@@ -40,9 +40,7 @@ public class UserController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@Valid @RequestBody CreateUserRequest request, @AuthenticationPrincipal UserPrincipal principal) {
-        if (principal.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN")) && request.role() == Role.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can manage admin accounts");
-        }
+        assertCanAssignRole(principal, request.role());
         return userService.create(request);
     }
 
@@ -61,15 +59,16 @@ public class UserController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public UserResponse update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request, @AuthenticationPrincipal UserPrincipal principal) {
-        if (principal.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN")) && request.role() == Role.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can manage admin accounts");
-        }
+        assertCanManageTarget(principal, userService.findById(id));
+        assertCanAssignRole(principal, request.role());
         return userService.update(id, request);
     }
 
     @PutMapping("/{id}/password")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
-    public void changePassword(@PathVariable Long id, @Valid @RequestBody ChangePasswordRequest request) {
+    public void changePassword(@PathVariable Long id, @Valid @RequestBody ChangePasswordRequest request,
+                               @AuthenticationPrincipal UserPrincipal principal) {
+        assertCanManageTarget(principal, userService.findById(id));
         userService.changePassword(id, request);
     }
 
@@ -77,15 +76,37 @@ public class UserController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public UserResponse deactivate(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         UserResponse target = userService.findById(id);
-        if (principal.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN")) && target.role() == Role.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can manage admin accounts");
-        }
+        assertCanManageTarget(principal, target);
         return userService.deactivate(id, principal.getId());
     }
 
     @PutMapping("/{id}/activate")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
-    public UserResponse activate(@PathVariable Long id) {
+    public UserResponse activate(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        assertCanManageTarget(principal, userService.findById(id));
         return userService.activate(id);
+    }
+
+    private void assertCanAssignRole(UserPrincipal principal, Role requestedRole) {
+        if (requestedRole == Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SUPER_ADMIN is a platform-only role");
+        }
+        if (!isAdmin(principal) && requestedRole != Role.CASHIER) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Supervisors may create or assign cashier accounts only");
+        }
+    }
+
+    private void assertCanManageTarget(UserPrincipal principal, UserResponse target) {
+        if (target.role() == Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
+        }
+        if (!isAdmin(principal) && target.role() != Role.CASHIER) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Supervisors may manage cashier accounts only");
+        }
+    }
+
+    private boolean isAdmin(UserPrincipal principal) {
+        return principal.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

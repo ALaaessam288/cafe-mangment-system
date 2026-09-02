@@ -40,10 +40,18 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final TenantService tenantService;
     private final TenantRepository tenantRepository;
+    private final com.example.cafemangmentsystem.security.RateLimiterService rateLimiterService;
 
     @GetMapping("/tenants")
     public List<PublicTenantDto> listTenants() {
         return tenantService.findAllPublic();
+    }
+
+    @PostMapping("/register-trial")
+    @ResponseStatus(HttpStatus.CREATED)
+    public com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse registerTrial(
+            @Valid @RequestBody com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest request) {
+        return tenantService.registerTrialTenant(request);
     }
 
     @PostMapping("/login")

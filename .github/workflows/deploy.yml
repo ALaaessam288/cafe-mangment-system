@@ -23,6 +23,8 @@ jobs:
         run: cd frontend && npm run build
         env:
           VITE_API_URL: https://api.yourdomain.com/api
+      - name: Verify Frontend Lint
+        run: cd frontend && npm run lint
 
   test-backend:
     name: Build & Test Spring Boot Backend
@@ -34,8 +36,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'maven'
-      - name: Compile & Package JAR
-        run: ./mvnw clean package -DskipTests
+      - name: Test & Package JAR
+        run: ./mvnw clean package
 
   docker-build:
     name: Build Production Docker Image

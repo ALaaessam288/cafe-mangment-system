@@ -135,20 +135,20 @@ public class TenantService {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
 
-        if (plan != null) {
-            tenant.setSubscriptionPlan(plan);
-            tenant.setMaxTables(plan.getMaxTables());
-            tenant.setMaxUsers(plan.getMaxUsers());
-            tenant.setMaxProducts(plan.getMaxProducts());
-            if (plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL) {
-                tenant.setStatus(TenantStatus.TRIAL);
-                if (tenant.getTrialEndsAt() == null) {
-                    tenant.setTrialEndsAt(java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS));
-                }
-            } else {
-                tenant.setStatus(TenantStatus.ACTIVE);
-                tenant.setSubscriptionEndsAt(java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS));
-            }
+        if (plan != com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL
+                || (tenant.getSubscriptionPlan() != null
+                    && tenant.getSubscriptionPlan() != com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL)) {
+            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
+                    "Paid plans require a valid license or a platform administrator");
+        }
+
+        tenant.setSubscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL);
+        tenant.setMaxTables(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL.getMaxTables());
+        tenant.setMaxUsers(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL.getMaxUsers());
+        tenant.setMaxProducts(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL.getMaxProducts());
+        tenant.setStatus(TenantStatus.TRIAL);
+        if (tenant.getTrialEndsAt() == null) {
+            tenant.setTrialEndsAt(java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS));
         }
         tenant.setPlanSelected(true);
 
@@ -177,14 +177,37 @@ public class TenantService {
      *   3. TenantContext.set(tenantId) — no DB work
      *   4. TenantOwnerProvisioner      — REQUIRES_NEW → commits → releases lock
      */
+    /**
+     * Public trial registration: strictly enforces TRIAL subscription plan (14-day duration),
+     * preventing callers from selecting paid tiers through public signups.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ProvisionTenantResponse registerTrialTenant(ProvisionTenantRequest request) {
+        ProvisionTenantRequest trialReq = new ProvisionTenantRequest(
+                request.name(),
+                request.slug(),
+                request.businessType(),
+                com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL,
+                request.ownerWhatsapp(),
+                request.ownerUsername(),
+                request.ownerPassword(),
+                request.ownerFullName(),
+                request.timezone() == null ? "Africa/Cairo" : request.timezone(),
+                request.currency() == null ? "EGP" : request.currency(),
+                request.templateId(),
+                request.defaultTables()
+        );
+        return provisionWithSetup(trialReq);
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ProvisionTenantResponse provisionWithSetup(ProvisionTenantRequest request) {
         if (tenantSaver.existsBySlug(request.slug())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + request.slug());
         }
 
-        com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan = 
-                request.subscriptionPlan() != null ? request.subscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO;
+        com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan =
+                request.subscriptionPlan() != null ? request.subscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
         TenantStatus status = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? TenantStatus.TRIAL : TenantStatus.ACTIVE;
         java.time.Instant subEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? null : java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS);
         java.time.Instant trialEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS) : null;
@@ -427,7 +450,6 @@ public class TenantService {
         return tenantActivityLogRepository.findTop200ByOrderByCreatedAtDesc();
     }
 }
-
 
 
 

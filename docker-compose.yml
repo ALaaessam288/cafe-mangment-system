@@ -6,15 +6,15 @@ services:
     container_name: caffio-postgres
     restart: always
     environment:
-      POSTGRES_DB: caffio_saas
-      POSTGRES_USER: caffio_admin
-      POSTGRES_PASSWORD: caffio_secret_password
+      POSTGRES_DB: ${POSTGRES_DB:-caffio_saas}
+      POSTGRES_USER: ${POSTGRES_USER:-caffio_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting Docker Compose}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U caffio_admin -d caffio_saas"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -31,17 +31,17 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres:5432/caffio_saas
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-caffio_saas}
       DATABASE_DRIVER: org.postgresql.Driver
-      DATABASE_USERNAME: caffio_admin
-      DATABASE_PASSWORD: caffio_secret_password
+      DATABASE_USERNAME: ${POSTGRES_USER:-caffio_admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting Docker Compose}
       JPA_DIALECT: org.hibernate.dialect.PostgreSQLDialect
       JPA_DDL_AUTO: validate
       FLYWAY_ENABLED: "true"
       SHOW_SQL: "false"
-      JWT_SECRET: "caffio_production_super_secret_jwt_signing_key_2026_at_least_64_bytes_long"
-      APP_PLATFORM_PROVISIONING_KEY: "caffio_platform_provisioning_master_key_2026"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,https://app.yourdomain.com"
+      JWT_SECRET: ${JWT_SECRET:?Set a strong JWT_SECRET before starting Docker Compose}
+      APP_PLATFORM_PROVISIONING_KEY: ${APP_PLATFORM_PROVISIONING_KEY:?Set APP_PLATFORM_PROVISIONING_KEY before starting Docker Compose}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
 
 volumes:
   postgres_data:

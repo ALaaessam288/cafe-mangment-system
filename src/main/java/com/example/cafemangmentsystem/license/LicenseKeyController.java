@@ -19,7 +19,7 @@ public class LicenseKeyController {
     // ── Super-admin endpoints (JWT auth with SUPER_ADMIN role) ───────────────
 
     @GetMapping({"/api/admin/licenses", "/api/platform/licenses"})
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public List<LicenseKey> listAll() {
         return service.listAll();
     }
@@ -31,14 +31,14 @@ public class LicenseKeyController {
     ) {}
 
     @PostMapping({"/api/admin/licenses", "/api/platform/licenses"})
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public LicenseKey generate(@RequestBody GenerateRequest req) {
         return service.generate(SubscriptionPlan.valueOf(req.plan()), req.validDays(), req.notes());
     }
 
     @DeleteMapping({"/api/admin/licenses/{id}/revoke", "/api/platform/licenses/{id}/revoke"})
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public LicenseKey revoke(@PathVariable Long id) {
         return service.revoke(id);
     }
@@ -53,7 +53,7 @@ public class LicenseKeyController {
     // ── Called during tenant provisioning or by Super Admin ──────────────────
 
     @PostMapping({"/api/admin/licenses/activate", "/api/platform/licenses/activate"})
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public LicenseKey activate(@RequestBody Map<String, Object> body) {
         String key = (String) body.get("key");
         Long tenantId = Long.valueOf(body.get("tenantId").toString());
@@ -65,7 +65,7 @@ public class LicenseKeyController {
     public record TenantActivateRequest(@NotBlank String key) {}
 
     @PostMapping("/api/tenant/license/activate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public com.example.cafemangmentsystem.tenant.dto.TenantResponse activateForCurrentTenant(
             @RequestBody TenantActivateRequest req) {
         Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();

@@ -37,6 +37,7 @@ public class UserService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UserResponse create(CreateUserRequest request) {
+        validateTenantRole(request.role());
         Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
         if (tenantId != null && userRepository.findByTenantIdAndUsername(tenantId, request.username().trim()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already taken: " + request.username());
@@ -67,7 +68,11 @@ public class UserService {
     }
 
     public UserResponse update(Long id, UpdateUserRequest request) {
+        validateTenantRole(request.role());
         User user = getOrThrow(id);
+        if (user.getRole() == com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
+        }
         user.setFullName(request.fullName());
         user.setRole(request.role());
         if (request.username() != null && !request.username().isBlank() && !request.username().equals(user.getUsername())) {
@@ -89,19 +94,34 @@ public class UserService {
 
     public void changePassword(Long id, ChangePasswordRequest request) {
         User user = getOrThrow(id);
+        if (user.getRole() == com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
+        }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
     }
 
     public UserResponse deactivate(Long id, Long deactivatedByUserId) {
         User user = getOrThrow(id);
+        if (user.getRole() == com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
+        }
         user.deactivate(deactivatedByUserId);
         return UserResponse.from(user);
     }
 
     public UserResponse activate(Long id) {
         User user = getOrThrow(id);
+        if (user.getRole() == com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
+        }
         user.activate();
         return UserResponse.from(user);
+    }
+
+    private void validateTenantRole(com.example.cafemangmentsystem.user.entity.Role role) {
+        if (role == com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SUPER_ADMIN is a platform-only role");
+        }
     }
 
     private User getOrThrow(Long id) {
