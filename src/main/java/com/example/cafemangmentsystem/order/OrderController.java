@@ -125,4 +125,12 @@ public class OrderController {
     public OrderResponse close(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return orderService.close(id, principal.getId());
     }
+
+    @PostMapping("/{id}/checkout")
+    public OrderResponse checkout(@PathVariable Long id,
+                                  @AuthenticationPrincipal UserPrincipal principal,
+                                  @Valid @RequestBody com.example.cafemangmentsystem.order.dto.CheckoutRequest request,
+                                  @org.springframework.web.bind.annotation.RequestHeader(value = "X-Idempotency-Key", required = false) String headerKey) {
+        return orderService.checkout(id, principal != null ? principal.getId() : null, request, headerKey);
+    }
 }

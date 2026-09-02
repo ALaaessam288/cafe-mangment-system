@@ -21,6 +21,6 @@ public class RefundController {
 
     @PostMapping("/{id}/refund")
     public OrderResponse refundOrder(@PathVariable Long id, @Valid @RequestBody RefundRequest request, @AuthenticationPrincipal UserPrincipal user) {
-        return orderService.refundOrder(id, user.getId(), request.getAmount(), request.getReason());
+        return orderService.refundOrder(id, user.getId(), request.getAmount(), request.getReason(), request.getStockDisposal());
     }
 }

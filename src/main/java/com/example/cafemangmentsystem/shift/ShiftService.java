@@ -69,6 +69,9 @@ public class ShiftService {
         }
 
         Long currentTenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
+        if (shiftRepository.existsByTenantIdAndUserIdAndClosedAtIsNull(currentTenantId, userId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "لديك شيفت مفتوح بالفعل حالياً. يرجى إغلاق الشيفت الحالي أولاً.");
+        }
         if (shiftRepository.existsByTenantIdAndRegisterIdAndClosedAtIsNull(currentTenantId, request.registerId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "يوجد شيفت مفتوح بالفعل على نقطة البيع (الكاشير) المحددة. يرجى إغلاقه أولاً.");
         }

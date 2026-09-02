@@ -38,6 +38,10 @@ public class PaymentService {
     public OrderResponse record(Long orderId, Long userId, RecordPaymentRequest request) {
         Order order = orderService.getOrThrow(orderId);
 
+        if (order.getShift() != null && order.getShift().getClosedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "لا يمكن سداد أو تعديل طلب ينتمي إلى شيفت مغلق");
+        }
+
         if (!PAYABLE_STATUSES.contains(order.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is " + order.getStatus() + " and cannot accept payments");
         }

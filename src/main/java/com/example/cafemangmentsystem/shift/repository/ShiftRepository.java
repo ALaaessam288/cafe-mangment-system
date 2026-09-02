@@ -10,6 +10,8 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
 
     boolean existsByUserIdAndClosedAtIsNull(Long userId);
 
+    boolean existsByTenantIdAndUserIdAndClosedAtIsNull(Long tenantId, Long userId);
+
     boolean existsByTenantIdAndRegisterIdAndClosedAtIsNull(Long tenantId, Long registerId);
 
     boolean existsByRegisterIdAndClosedAtIsNull(Long registerId);

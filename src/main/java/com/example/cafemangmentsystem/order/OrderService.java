@@ -84,27 +84,13 @@ public class OrderService {
     private final TenantRepository tenantRepository;
     private final ProductOptionRepository productOptionRepository;
     private final com.example.cafemangmentsystem.inventory.ShiftAuditService shiftAuditService;
+    private final com.example.cafemangmentsystem.common.idempotency.IdempotencyService idempotencyService;
 
     public OrderResponse open(Long userId, OpenOrderRequest request) {
         User openedBy = userRepository.findById(userId).orElseThrow();
 
         Shift shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId)
-                .or(() -> shiftRepository.findAllByClosedAtIsNull().stream().findFirst())
-                .orElseGet(() -> {
-                    List<Register> registers = registerRepository.findAll();
-                    Register reg = registers.stream().filter(Register::isActive).findFirst()
-                            .orElseGet(() -> {
-                                Register newReg = new Register();
-                                newReg.setName("الكاشير الرئيسي");
-                                return registerRepository.save(newReg);
-                            });
-                    Shift autoShift = new Shift();
-                    autoShift.setUser(openedBy);
-                    autoShift.setRegister(reg);
-                    autoShift.setOpenedAt(Instant.now());
-                    autoShift.setOpeningFloat(BigDecimal.ZERO);
-                    return shiftRepository.save(autoShift);
-                });
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "لا يوجد شيفت مفتوح لك حالياً. يرجى فتح شيفت واستلام العهدة لبدء تسجيل الطلبات."));
 
         CafeTable table = null;
         if (request.type() == OrderType.DINE_IN) {
@@ -840,12 +826,87 @@ public class OrderService {
         return toResponse(order);
     }
 
+    private void assertShiftOpen(Order order) {
+        if (order.getShift() != null && order.getShift().getClosedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "لا يمكن تعديل أو معالجة طلب ينتمي إلى شيفت مغلق");
+        }
+    }
+
     public Order getOrThrow(Long id) {
         return orderRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found: " + id));
     }
 
+    @Transactional
+    public OrderResponse checkout(Long orderId, Long userId, com.example.cafemangmentsystem.order.dto.CheckoutRequest request, String headerKey) {
+        String effectiveKey = headerKey != null && !headerKey.isBlank() ? headerKey : request.getIdempotencyKey();
+        if (effectiveKey != null && !effectiveKey.isBlank()) {
+            Object cached = idempotencyService.get(effectiveKey);
+            if (cached instanceof OrderResponse) {
+                return (OrderResponse) cached;
+            }
+        }
+
+        Order order = getOrThrow(orderId);
+        assertShiftOpen(order);
+
+        if (!OPEN_STATUSES.contains(order.getStatus()) && order.getStatus() != OrderStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is in status " + order.getStatus() + " and cannot be checked out");
+        }
+
+        BigDecimal total = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
+        BigDecimal amountPaidSoFar = paymentRepository.sumAmountByOrderId(orderId);
+        if (amountPaidSoFar == null) amountPaidSoFar = BigDecimal.ZERO;
+        BigDecimal remaining = total.subtract(amountPaidSoFar);
+
+        BigDecimal payAmount = request.getAmount() != null && request.getAmount().compareTo(BigDecimal.ZERO) > 0 ? request.getAmount() : remaining;
+
+        if (payAmount.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal received = null;
+            BigDecimal change = null;
+            if (request.getMethod() == PaymentMethod.CASH) {
+                received = request.getReceived() != null ? request.getReceived() : payAmount;
+                if (received.compareTo(payAmount) < 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "المبلغ المدفوع أقل من الإجمالي المطلوب");
+                }
+                change = received.subtract(payAmount);
+            }
+
+            User cashier = userId != null ? userRepository.findById(userId).orElse(null) : null;
+
+            Payment payment = new Payment();
+            payment.setOrder(order);
+            payment.setMethod(request.getMethod());
+            payment.setAmount(payAmount);
+            payment.setReceived(received);
+            payment.setChange(change);
+            payment.setReference(request.getReference());
+            payment.setNote(request.getNote());
+            payment.setPaidAt(Instant.now());
+            payment.setCashier(cashier);
+            paymentRepository.save(payment);
+
+            BigDecimal newPaid = amountPaidSoFar.add(payAmount);
+            if (newPaid.compareTo(total) >= 0) {
+                order.setStatus(OrderStatus.PAID);
+            }
+        }
+
+        Order saved = orderRepository.save(order);
+        OrderResponse response = toResponse(saved);
+
+        if (effectiveKey != null && !effectiveKey.isBlank()) {
+            idempotencyService.put(effectiveKey, response);
+        }
+
+        return response;
+    }
+
     public OrderResponse refundOrder(Long orderId, Long userId, BigDecimal amount, String reason) {
+        return refundOrder(orderId, userId, amount, reason, com.example.cafemangmentsystem.order.dto.StockDisposalOption.NO_STOCK_EFFECT);
+    }
+
+    public OrderResponse refundOrder(Long orderId, Long userId, BigDecimal amount, String reason, com.example.cafemangmentsystem.order.dto.StockDisposalOption stockDisposal) {
         Order order = getOrThrow(orderId);
         if (order.getStatus() != OrderStatus.PAID && order.getStatus() != OrderStatus.CLOSED && order.getStatus() != OrderStatus.REFUNDED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order must be PAID or CLOSED to be refunded");
