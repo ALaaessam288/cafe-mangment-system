@@ -211,3 +211,13 @@
   box-shadow: 0 6px 20px rgba(245, 158, 11, 0.55) !important;
   transform: translateY(-1px);
 }
+
+/* A paid tier the customer cannot grant themselves: shown for comparison, not selectable. */
+.ft-plan-card--locked {
+  opacity: .62;
+  cursor: not-allowed;
+}
+
+.ft-plan-card--locked:hover {
+  transform: none;
+}

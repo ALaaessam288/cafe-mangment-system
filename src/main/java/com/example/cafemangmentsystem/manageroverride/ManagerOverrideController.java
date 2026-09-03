@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.manageroverride;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.manageroverride.dto.ManagerOverrideResponse;
 import com.example.cafemangmentsystem.manageroverride.dto.VerifyOverrideRequest;
 import com.example.cafemangmentsystem.security.UserPrincipal;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@RequiresFeature(Feature.MANAGER_OVERRIDE)
 @RestController
 @RequestMapping("/api/manager-overrides")
 @RequiredArgsConstructor

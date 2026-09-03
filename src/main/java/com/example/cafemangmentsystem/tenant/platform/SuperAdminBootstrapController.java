@@ -46,7 +46,7 @@ public class SuperAdminBootstrapController {
                 "Caffio Platform",
                 "platform",
                 BusinessType.CAFE,
-                com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE,
+                "ENTERPRISE",
                 req.username(),
                 req.password(),
                 req.fullName(),

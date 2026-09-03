@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.inventory;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.inventory.dto.StockAdjustmentRequest;
 import com.example.cafemangmentsystem.inventory.dto.StockAdjustmentResponse;
 import com.example.cafemangmentsystem.security.UserPrincipal;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.INVENTORY)
 @RestController
 @RequestMapping("/api/products/{productId}/stock-adjustments")
 @RequiredArgsConstructor

@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.station;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.station.dto.AssignPrinterRequest;
 import com.example.cafemangmentsystem.station.dto.StationRequest;
 import com.example.cafemangmentsystem.station.dto.StationResponse;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.KDS)
 @RestController
 @RequestMapping("/api/stations")
 @RequiredArgsConstructor

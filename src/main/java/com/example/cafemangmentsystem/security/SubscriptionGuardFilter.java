@@ -1,10 +1,11 @@
 package com.example.cafemangmentsystem.security;
 
+import com.example.cafemangmentsystem.billing.EntitlementService;
+import com.example.cafemangmentsystem.billing.dto.AccessLevel;
+import com.example.cafemangmentsystem.billing.dto.Entitlements;
+import com.example.cafemangmentsystem.billing.entity.SubscriptionStatus;
+import com.example.cafemangmentsystem.billing.web.BillingErrorWriter;
 import com.example.cafemangmentsystem.common.tenant.TenantContext;
-import com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan;
-import com.example.cafemangmentsystem.tenant.entity.Tenant;
-import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
-import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,99 +15,110 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 
+/**
+ * Decides whether a request is allowed given the tenant's subscription state.
+ *
+ * <p>Scope is deliberately narrower than before: this filter answers only "may this tenant write
+ * at all right now?". Feature entitlement moved to {@code @RequiresFeature} on the handlers, where
+ * it can be seen next to the mapping it protects and applies to reads as well.
+ *
+ * <p>It also no longer falls through open. The old implementation ended with an unconditional
+ * {@code filterChain.doFilter(...)} after its checks, so any path that reached the bottom — a
+ * missing tenant row, a null context — was permitted to write.
+ */
 @Component
 @RequiredArgsConstructor
 public class SubscriptionGuardFilter extends OncePerRequestFilter {
 
-    private final TenantRepository tenantRepository;
-    
+    private final EntitlementService entitlementService;
+    private final BillingErrorWriter errorWriter;
+
+    /**
+     * Paths that must stay reachable even when the subscription is dead, because they are the ways
+     * out of that state: authenticating, seeing what you owe, and paying for it.
+     */
     private static final List<String> EXEMPT_PATHS = List.of(
             "/api/auth/",
             "/api/platform/",
             "/api/admin/",
-            "/api/tenant/license/",
+            "/api/plans",
             "/api/tenant/me",
             "/api/tenant/usage",
+            "/api/tenant/subscription",
             "/api/tenant/logo",
+            "/api/tenant/license/",
             "/api/license/",
+            "/actuator/health",
             "/v3/api-docs",
             "/swagger-ui"
     );
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+
         String path = request.getRequestURI();
-        
-        // NEVER filter static assets or non-API routes
-        if (!path.startsWith("/api/")) {
-            filterChain.doFilter(request, response);
+        if (!path.startsWith("/api/") || isExempt(path)) {
+            chain.doFilter(request, response);
             return;
-        }
-        
-        for (String exempt : EXEMPT_PATHS) {
-            if (path.startsWith(exempt)) {
-                filterChain.doFilter(request, response);
-                return;
-            }
         }
 
         Long tenantId = TenantContext.get();
-        if (tenantId != null) {
-            Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
-            if (tenant != null) {
-                // If suspended by Super Admin, block ALL requests (including GET)
-                if (tenant.getStatus() == TenantStatus.SUSPENDED) {
-                    sendForbiddenResponse(response, "ACCOUNT_SUSPENDED", "تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني.");
-                    return;
-                }
-
-                // Allow GET requests in read-only mode for expired trials/subscriptions
-                if ("GET".equalsIgnoreCase(request.getMethod())) {
-                    filterChain.doFilter(request, response);
-                    return;
-                }
-
-                Instant now = Instant.now();
-                if (tenant.getStatus() == TenantStatus.TRIAL && tenant.getTrialEndsAt() != null && now.isAfter(tenant.getTrialEndsAt())) {
-                    sendForbiddenResponse(response, "SUBSCRIPTION_EXPIRED", "انتهت الفترة التجريبية (14 يوم). يرجى ترقية الباقة أو إدخال مفتاح الترخيص لمتابعة العمل.");
-                    return;
-                }
-
-                if (tenant.getStatus() == TenantStatus.ACTIVE && tenant.getSubscriptionEndsAt() != null && now.isAfter(tenant.getSubscriptionEndsAt())) {
-                    sendForbiddenResponse(response, "SUBSCRIPTION_EXPIRED", "انتهت صلاحية اشتراكك. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد.");
-                    return;
-                }
-
-                // Feature entitlement checks for non-GET requests when on paid plans
-                SubscriptionPlan plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : SubscriptionPlan.TRIAL;
-                if (tenant.getStatus() != TenantStatus.TRIAL) {
-                    if (path.startsWith("/api/expenses") && !plan.isIncludesExpenses()) {
-                        sendForbiddenResponse(response, "FEATURE_NOT_INCLUDED", "ميزة إدارة المصروفات غير مشمولة في باقتك الحالية. يرجى ترقية الباقة.");
-                        return;
-                    }
-                    if (path.startsWith("/api/stations") && !plan.isIncludesKds()) {
-                        sendForbiddenResponse(response, "FEATURE_NOT_INCLUDED", "ميزة شاشات التحضير (KDS) غير مشمولة في باقتك الحالية. يرجى ترقية الباقة.");
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Allow GET requests if no tenant or tenant not expired
-        if ("GET".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
+        if (tenantId == null) {
+            // Unauthenticated or pre-tenant. Spring Security decides; this filter has no opinion.
+            chain.doFilter(request, response);
             return;
         }
 
-        filterChain.doFilter(request, response);
+        Entitlements entitlements = entitlementService.forTenant(tenantId);
+
+        if (entitlements.accessLevel() == AccessLevel.BLOCKED) {
+            errorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_SUSPENDED",
+                    "تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني.",
+                    entitlements.planCode());
+            return;
+        }
+
+        boolean readRequest = isRead(request.getMethod());
+        if (readRequest || entitlements.canWrite()) {
+            // Surface the countdown on every response so the client can warn before the lockout,
+            // instead of discovering it when a cashier's first write of the day fails.
+            annotate(response, entitlements);
+            chain.doFilter(request, response);
+            return;
+        }
+
+        SubscriptionStatus status = entitlements.status();
+        String message = status == SubscriptionStatus.CANCELLED
+                ? "تم إلغاء هذا الاشتراك. يرجى التواصل مع الدعم لإعادة التفعيل."
+                : "انتهت صلاحية اشتراكك وانتهت مهلة السماح. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد للمتابعة.";
+        errorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "SUBSCRIPTION_EXPIRED", message,
+                entitlements.planCode());
     }
 
-    private void sendForbiddenResponse(HttpServletResponse response, String errorCode, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"error\":\"" + errorCode + "\",\"status\":403,\"message\":\"" + message + "\"}");
+    private void annotate(HttpServletResponse response, Entitlements entitlements) {
+        if (entitlements.status() == null) return;
+        response.setHeader("X-Subscription-Status", entitlements.status().name());
+        Long days = entitlements.daysRemaining();
+        if (days != null) {
+            response.setHeader("X-Subscription-Days-Remaining", days.toString());
+        }
+        if (entitlements.inGrace()) {
+            response.setHeader("X-Subscription-Grace", "true");
+        }
+    }
+
+    private boolean isRead(String method) {
+        return "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method)
+                || "OPTIONS".equalsIgnoreCase(method);
+    }
+
+    private boolean isExempt(String path) {
+        for (String exempt : EXEMPT_PATHS) {
+            if (path.startsWith(exempt)) return true;
+        }
+        return false;
     }
 }

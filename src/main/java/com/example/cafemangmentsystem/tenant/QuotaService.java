@@ -1,52 +1,17 @@
 package com.example.cafemangmentsystem.tenant;
 
-import com.example.cafemangmentsystem.common.exception.QuotaExceededException;
-import com.example.cafemangmentsystem.common.tenant.TenantContext;
-import com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan;
-import com.example.cafemangmentsystem.tenant.entity.Tenant;
-import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+/**
+ * @deprecated Superseded by {@link com.example.cafemangmentsystem.billing.QuotaService}, which
+ * resolves limits from the tenant's subscription rather than from a hardcoded enum, understands
+ * {@code UNLIMITED}, and does not treat a limit of {@code 0} as "no limit".
+ *
+ * <p>Kept only as a tombstone so the old fully-qualified name doesn't silently resolve to
+ * something else during review. It is not a Spring bean and has no behaviour; delete the file.
+ */
+@Deprecated(forRemoval = true)
+public final class QuotaService {
 
-@Service
-@RequiredArgsConstructor
-public class QuotaService {
-    
-    private final TenantRepository tenantRepository;
-    
-    public void checkTableQuota(long currentCount) {
-        Tenant tenant = getCurrentTenant();
-        if (tenant == null) return;
-        SubscriptionPlan plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : SubscriptionPlan.TRIAL;
-        int max = tenant.getMaxTables() != null ? tenant.getMaxTables() : plan.getMaxTables();
-        if (max > 0 && currentCount >= max) {
-            throw new QuotaExceededException("لقد وصلت للحد الأقصى لعدد الطاولات المسموح بها في باقتك (" + max + " طاولة). يرجى ترقية الباقة لإضافة المزيد.");
-        }
-    }
-    
-    public void checkUserQuota(long currentCount) {
-        Tenant tenant = getCurrentTenant();
-        if (tenant == null) return;
-        SubscriptionPlan plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : SubscriptionPlan.TRIAL;
-        int max = tenant.getMaxUsers() != null ? tenant.getMaxUsers() : plan.getMaxUsers();
-        if (max > 0 && currentCount >= max) {
-            throw new QuotaExceededException("لقد وصلت للحد الأقصى لعدد المستخدمين المسموح بهم في باقتك (" + max + " مستخدم). يرجى ترقية الباقة لإضافة المزيد.");
-        }
-    }
-    
-    public void checkProductQuota(long currentCount) {
-        Tenant tenant = getCurrentTenant();
-        if (tenant == null) return;
-        SubscriptionPlan plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : SubscriptionPlan.TRIAL;
-        int max = tenant.getMaxProducts() != null ? tenant.getMaxProducts() : plan.getMaxProducts();
-        if (max > 0 && currentCount >= max) {
-            throw new QuotaExceededException("لقد وصلت للحد الأقصى لعدد المنتجات المسموح بها في باقتك (" + max + " منتج). يرجى ترقية الباقة لإضافة المزيد.");
-        }
-    }
-    
-    private Tenant getCurrentTenant() {
-        Long tenantId = TenantContext.get();
-        if (tenantId == null) return null;
-        return tenantRepository.findById(tenantId).orElse(null);
+    private QuotaService() {
+        throw new UnsupportedOperationException("Use com.example.cafemangmentsystem.billing.QuotaService");
     }
 }

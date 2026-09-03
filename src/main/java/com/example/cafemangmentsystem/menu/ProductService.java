@@ -8,7 +8,7 @@ import com.example.cafemangmentsystem.menu.repository.CategoryRepository;
 import com.example.cafemangmentsystem.menu.repository.ProductRepository;
 import com.example.cafemangmentsystem.station.entity.Station;
 import com.example.cafemangmentsystem.station.repository.StationRepository;
-import com.example.cafemangmentsystem.tenant.QuotaService;
+import com.example.cafemangmentsystem.billing.QuotaService;
 import com.example.cafemangmentsystem.inventory.ShiftAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -52,7 +52,7 @@ public class ProductService {
     }
 
     public ProductResponse create(ProductRequest request) {
-        quotaService.checkProductQuota(productRepository.count());
+        quotaService.checkProducts(productRepository::count);
         
         Product product = new Product();
         product.setCategory(getCategoryOrThrow(request.categoryId()));

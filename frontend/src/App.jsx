@@ -29,6 +29,7 @@ import SuperAdminLoginPage from './pages/SuperAdmin/SuperAdminLoginPage';
 import SuperAdminLayout from './layouts/SuperAdminLayout';
 
 import { ROLES, ROUTES } from './utils/constants';
+import SignupPage from './pages/Register/SignupPage';
 
 export default function App() {
   return (
@@ -47,7 +48,9 @@ export default function App() {
             <Route path={ROUTES.SUPER_ADMIN_LOGIN} element={<SuperAdminLoginPage />} />
             <Route path={ROUTES.WELCOME} element={<Navigate to={ROUTES.LOGIN} replace />} />
             <Route path={ROUTES.SETUP} element={<Navigate to={ROUTES.LOGIN} replace />} />
-            <Route path={ROUTES.REGISTER} element={<Navigate to={ROUTES.LOGIN} replace />} />
+            {/* Public self-service signup. This route used to bounce to /login, which meant a
+                café could only be onboarded by hand with a platform ops key. */}
+            <Route path={ROUTES.REGISTER} element={<SignupPage />} />
 
             {/* Protected — Cashier & Supervisor only (Hidden from Admin) */}
             <Route

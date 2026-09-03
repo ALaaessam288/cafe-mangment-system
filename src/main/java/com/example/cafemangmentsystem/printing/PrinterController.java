@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.printing;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.printing.dto.PrinterRequest;
 import com.example.cafemangmentsystem.printing.dto.PrinterResponse;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.THERMAL_PRINT)
 @RestController
 @RequestMapping("/api/printers")
 @RequiredArgsConstructor

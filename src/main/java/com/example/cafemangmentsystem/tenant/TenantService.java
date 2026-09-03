@@ -1,16 +1,31 @@
 package com.example.cafemangmentsystem.tenant;
 
+import com.example.cafemangmentsystem.billing.BillingService;
+import com.example.cafemangmentsystem.billing.EntitlementService;
+import com.example.cafemangmentsystem.billing.PlanService;
+import com.example.cafemangmentsystem.billing.SubscriptionService;
+import com.example.cafemangmentsystem.billing.entity.Plan;
+import com.example.cafemangmentsystem.billing.entity.QuotaType;
+import com.example.cafemangmentsystem.billing.entity.SubscriptionSource;
+import com.example.cafemangmentsystem.billing.entity.SubscriptionStatus;
+import com.example.cafemangmentsystem.billing.entity.TenantSubscription;
+import com.example.cafemangmentsystem.billing.repository.TenantSubscriptionRepository;
+import com.example.cafemangmentsystem.common.tenant.CurrentActor;
 import com.example.cafemangmentsystem.common.tenant.TenantContext;
+import com.example.cafemangmentsystem.security.UserPrincipal;
+import com.example.cafemangmentsystem.security.jwt.JwtService;
+import com.example.cafemangmentsystem.tenant.dto.PublicTenantDto;
 import com.example.cafemangmentsystem.tenant.dto.TenantResponse;
 import com.example.cafemangmentsystem.tenant.entity.Tenant;
 import com.example.cafemangmentsystem.tenant.entity.TenantActivityLog;
 import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
-import com.example.cafemangmentsystem.tenant.dto.PublicTenantDto;
 import com.example.cafemangmentsystem.tenant.platform.TenantOwnerProvisioner;
 import com.example.cafemangmentsystem.tenant.platform.TenantSaver;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest;
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse;
+import com.example.cafemangmentsystem.tenant.repository.TenantActivityLogRepository;
 import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
+import com.example.cafemangmentsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -20,32 +35,51 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
+/**
+ * Tenant identity and provisioning.
+ *
+ * <p>Everything to do with what a tenant is entitled to has moved out of this class. Plan changes,
+ * quotas, extensions, cancellation and expiry belong to {@link SubscriptionService}; usage belongs
+ * to {@code TenantUsageService}. This class had accumulated three mutually inconsistent ways to
+ * change a plan, and that inconsistency was the source of most of the subscription defects.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 @Slf4j
 public class TenantService {
 
-    private static final Set<TenantStatus> LOGINABLE = Set.of(TenantStatus.TRIAL, TenantStatus.ACTIVE);
+    /**
+     * Statuses that may authenticate. A lapsed tenant must still be able to log in — read-only
+     * access, and above all the ability to pay, is the only way out of the state.
+     */
+    private static final Set<TenantStatus> LOGINABLE = Set.of(
+            TenantStatus.TRIAL, TenantStatus.ACTIVE, TenantStatus.GRACE, TenantStatus.EXPIRED);
 
     private final TenantRepository tenantRepository;
     private final TenantOwnerProvisioner tenantOwnerProvisioner;
     private final TenantSaver tenantSaver;
-    private final com.example.cafemangmentsystem.security.jwt.JwtService jwtService;
-    private final com.example.cafemangmentsystem.tenant.repository.TenantActivityLogRepository tenantActivityLogRepository;
-    private final com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository cafeTableRepository;
-    private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
-    private final com.example.cafemangmentsystem.menu.repository.ProductRepository productRepository;
+    private final JwtService jwtService;
+    private final TenantActivityLogRepository tenantActivityLogRepository;
+    private final TenantSubscriptionRepository subscriptionRepository;
+    private final SubscriptionService subscriptionService;
+    private final PlanService planService;
+    private final BillingService billingService;
+    private final EntitlementService entitlementService;
+
+    // ── Identity ────────────────────────────────────────────────────────────
 
     /**
      * Resolves a tenant for login. Deliberately throws the same {@link BadCredentialsException}
-     * for "no such slug" and "tenant not loginable" as a wrong password would - AuthController's
-     * existing handler turns that into a generic 401, so we never reveal whether it was the
-     * tenant, the username, or the password that was wrong.
+     * for "no such slug" and "tenant not loginable" as a wrong password would — AuthController's
+     * handler turns that into a generic 401, so we never reveal which part was wrong.
      */
     @Transactional(readOnly = true)
     public Tenant resolveLoginableTenant(String slug) {
@@ -59,204 +93,154 @@ public class TenantService {
 
     @Transactional(readOnly = true)
     public TenantResponse findById(Long id) {
-        return tenantRepository.findById(id)
-                .map(TenantResponse::from)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + id));
+        Tenant tenant = requireTenant(id);
+        return TenantResponse.from(tenant, currentSubscription(id));
     }
 
     @Transactional(readOnly = true)
     public List<PublicTenantDto> findAllPublic() {
         return tenantRepository.findAll().stream()
-                .filter(t -> LOGINABLE.contains(t.getStatus()) && !"platform".equalsIgnoreCase(t.getSlug()))
+                .filter(t -> LOGINABLE.contains(t.getStatus()) && !isPlatform(t))
                 .map(t -> new PublicTenantDto(t.getSlug(), t.getName(), t.getBusinessType().name()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public List<TenantResponse> findAllTenants() {
         return tenantRepository.findAll().stream()
-                .filter(t -> !"platform".equalsIgnoreCase(t.getSlug()))
-                .map(TenantResponse::from)
-                .collect(Collectors.toList());
+                .filter(t -> !isPlatform(t))
+                .map(t -> TenantResponse.from(t, currentSubscription(t.getId())))
+                .toList();
     }
 
-    public TenantResponse updateTenantSubscription(Long tenantId, com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan, TenantStatus status, Integer extendDays) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
-        
-        String action = "UPDATED";
-        String details = "Updated";
-        
-        if (plan != null) {
-            tenant.setSubscriptionPlan(plan);
-            tenant.setMaxTables(plan.getMaxTables());
-            tenant.setMaxUsers(plan.getMaxUsers());
-            tenant.setMaxProducts(plan.getMaxProducts());
-            action = "PLAN_UPGRADED";
-            details = "Plan changed to " + plan;
-        }
-        if (status != null) {
-            tenant.setStatus(status);
-            if (status == TenantStatus.SUSPENDED) {
-                action = "SUSPENDED";
-                details = "Tenant suspended";
-            }
-        }
-        if (extendDays != null && extendDays > 0) {
-            java.time.Instant now = java.time.Instant.now();
-            boolean trial = tenant.getStatus() == TenantStatus.TRIAL || tenant.getSubscriptionPlan() == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-            java.time.Instant currentEnd = trial ? tenant.getTrialEndsAt() : tenant.getSubscriptionEndsAt();
-            java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
-            if (trial) {
-                tenant.setTrialEndsAt(base.plus(extendDays, java.time.temporal.ChronoUnit.DAYS));
-                action = "TRIAL_EXTENDED";
-                details = "Trial extended by " + extendDays + " days";
-            } else {
-                tenant.setSubscriptionEndsAt(base.plus(extendDays, java.time.temporal.ChronoUnit.DAYS));
-                action = "SUBSCRIPTION_EXTENDED";
-                details = "Subscription extended by " + extendDays + " days";
-            }
-        }
-
+    public TenantResponse updateLogo(Long tenantId, String logoUrl) {
+        Tenant tenant = requireTenant(tenantId);
+        tenant.setLogoUrl(logoUrl);
         Tenant saved = tenantRepository.save(tenant);
-        
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(saved.getId());
-        log.setAction(action);
-        log.setDetails(details);
-        log.setPerformedBy("SYSTEM_OR_ADMIN");
-        tenantActivityLogRepository.save(log);
-                
-        return TenantResponse.from(saved);
+        audit(tenantId, "LOGO_UPDATED", logoUrl != null ? "تم تحديث الشعار" : "تم حذف الشعار");
+        return TenantResponse.from(saved, currentSubscription(tenantId));
     }
 
-    @Transactional
-    public TenantResponse selectTenantPlan(Long tenantId, com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+    /**
+     * Tenant preferences the platform can set on the customer's behalf.
+     *
+     * <p>These travelled on the old {@code customize-plan} endpoint alongside the subscription,
+     * which is why changing a service-charge percentage and changing a plan were the same call —
+     * and why one of them could fail for reasons belonging to the other. They are settings, not
+     * commercial terms, so they get their own verb.
+     */
+    public TenantResponse updateSettings(Long tenantId, Integer serviceChargePercent,
+                                         Boolean whatsappAlertsEnabled) {
+        Tenant tenant = requireTenant(tenantId);
+        if (serviceChargePercent != null) {
+            if (serviceChargePercent < 0 || serviceChargePercent > 100) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "serviceChargePercent must be between 0 and 100");
+            }
+            tenant.setServiceChargePercent(serviceChargePercent);
+        }
+        if (whatsappAlertsEnabled != null) {
+            tenant.setWhatsappAlertsEnabled(whatsappAlertsEnabled);
+        }
+        Tenant saved = tenantRepository.save(tenant);
+        audit(tenantId, "SETTINGS_UPDATED",
+                "نسبة الخدمة: " + saved.getServiceChargePercent()
+                        + "، تنبيهات واتساب: " + saved.getWhatsappAlertsEnabled());
+        return TenantResponse.from(saved, currentSubscription(tenantId));
+    }
 
-        if (plan != com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL
-                || (tenant.getSubscriptionPlan() != null
-                    && tenant.getSubscriptionPlan() != com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL)) {
+    // ── Self-service plan selection ─────────────────────────────────────────
+
+    /**
+     * The onboarding modal's "choose your plan". Only plans flagged {@code selfSelectable} — in
+     * practice the free trial — can be taken this way; a paid tier is a purchase and needs a licence
+     * key or a platform admin. The rejection carries an Arabic message, because the modal renders
+     * the server's message straight to the café owner, and used to show them raw English.
+     */
+    public TenantSubscription selectSelfServicePlan(Long tenantId, String planCode) {
+        Tenant tenant = requireTenant(tenantId);
+        Plan plan = planService.requireByCode(planCode);
+
+        if (!plan.isSelfSelectable()) {
             throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
-                    "Paid plans require a valid license or a platform administrator");
+                    "باقة \"" + plan.getDisplayNameAr() + "\" باقة مدفوعة. "
+                            + "يرجى إدخال مفتاح الترخيص من صفحة الإعدادات أو التواصل مع فريق المبيعات لتفعيلها.");
         }
 
-        tenant.setSubscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL);
-        tenant.setMaxTables(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL.getMaxTables());
-        tenant.setMaxUsers(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL.getMaxUsers());
-        tenant.setMaxProducts(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL.getMaxProducts());
-        tenant.setStatus(TenantStatus.TRIAL);
-        if (tenant.getTrialEndsAt() == null) {
-            tenant.setTrialEndsAt(java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS));
+        TenantSubscription existing = currentSubscription(tenantId);
+        if (existing != null && existing.getSource() != SubscriptionSource.TRIAL_SIGNUP) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "لا يمكن الرجوع إلى الباقة التجريبية بعد تفعيل اشتراك مدفوع.");
         }
+
+        TenantSubscription subscription = existing != null
+                ? existing
+                : subscriptionService.startTrial(tenantId, plan);
+
         tenant.setPlanSelected(true);
-
-        Tenant saved = tenantRepository.save(tenant);
-
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(saved.getId());
-        log.setAction("PLAN_SELECTED");
-        log.setDetails("Tenant selected plan: " + (plan != null ? plan.name() : "DEFAULT"));
-        log.setPerformedBy("TENANT_ADMIN");
-        tenantActivityLogRepository.save(log);
-
-        return TenantResponse.from(saved);
+        tenantRepository.save(tenant);
+        audit(tenantId, "PLAN_SELECTED", "اختار المستخدم باقة " + plan.getDisplayNameAr());
+        entitlementService.invalidate(tenantId);
+        return subscription;
     }
 
-    /**
-     * Provisions a new tenant + its owner user.
-     *
-     * SQLite is single-writer: two concurrent transactions cause SQLITE_BUSY.
-     * We must NOT hold an outer transaction while calling sub-transactions, so
-     * this method runs with NOT_SUPPORTED (suspends any ambient transaction).
-     *
-     * Sequence (each step commits fully before the next opens a connection):
-     *   1. TenantSaver.existsBySlug()  — REQUIRES_NEW → commits → releases lock
-     *   2. TenantSaver.save()          — REQUIRES_NEW → commits → releases lock
-     *   3. TenantContext.set(tenantId) — no DB work
-     *   4. TenantOwnerProvisioner      — REQUIRES_NEW → creates the owner and all setup data atomically
-     *
-     * If step 4 fails, the already-committed tenant shell is removed in a compensating
-     * transaction so the slug remains retryable.
-     */
-    /**
-     * Public trial registration: strictly enforces TRIAL subscription plan (14-day duration),
-     * preventing callers from selecting paid tiers through public signups.
-     */
+    // ── Provisioning ────────────────────────────────────────────────────────
+
+    /** Public trial registration. Forces the trial plan regardless of what the caller asked for. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ProvisionTenantResponse registerTrialTenant(ProvisionTenantRequest request) {
-        ProvisionTenantRequest trialReq = new ProvisionTenantRequest(
-                request.name(),
-                request.slug(),
-                request.businessType(),
-                com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL,
-                request.ownerWhatsapp(),
-                request.ownerUsername(),
-                request.ownerPassword(),
-                request.ownerFullName(),
-                request.timezone() == null ? "Africa/Cairo" : request.timezone(),
-                request.currency() == null ? "EGP" : request.currency(),
-                request.templateId(),
-                request.defaultTables()
-        );
-        return provisionWithSetup(trialReq);
+        return provisionWithSetup(request.withPlanCode(defaultTrialPlan().getCode()));
     }
 
+    /**
+     * Provisions a new tenant, its owner user, and its opening subscription.
+     *
+     * <p>SQLite is single-writer, so this runs with NOT_SUPPORTED and each step commits before the
+     * next opens a connection. If owner creation fails, the committed tenant shell is removed in a
+     * compensating transaction so the slug stays retryable.
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ProvisionTenantResponse provisionWithSetup(ProvisionTenantRequest request) {
-        String normalizedSlug = request.slug().trim().toLowerCase(java.util.Locale.ROOT);
-        String timezone = request.timezone() == null ? "Africa/Cairo" : request.timezone().trim();
-        String currency = request.currency() == null ? "EGP" : request.currency().trim();
-        try {
-            java.time.ZoneId.of(timezone);
-        } catch (java.time.DateTimeException invalidTimezone) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported timezone: " + timezone);
-        }
-        try {
-            java.util.Currency.getInstance(currency);
-        } catch (IllegalArgumentException invalidCurrency) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported currency: " + currency);
+        String slug = request.slug().trim().toLowerCase(Locale.ROOT);
+        String timezone = blankTo(request.timezone(), "Africa/Cairo");
+        String currency = blankTo(request.currency(), "EGP");
+        validateTimezone(timezone);
+        validateCurrency(currency);
+
+        if (tenantSaver.existsBySlug(slug)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + slug);
         }
 
-        if (tenantSaver.existsBySlug(normalizedSlug)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + normalizedSlug);
-        }
+        Plan plan = request.planCode() == null || request.planCode().isBlank()
+                ? defaultTrialPlan()
+                : planService.requireByCode(request.planCode());
 
-        com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan =
-                request.subscriptionPlan() != null ? request.subscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
         int defaultTables = request.defaultTables() != null ? request.defaultTables() : 5;
-        if (defaultTables < 0 || defaultTables > plan.getMaxTables()) {
+        int tableLimit = plan.getMaxTables();
+        if (defaultTables < 0 || (!QuotaType.isUnlimited(tableLimit) && defaultTables > tableLimit)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "defaultTables must be between 0 and the selected plan limit of " + plan.getMaxTables());
+                    "defaultTables must be between 0 and the selected plan limit of " + tableLimit);
         }
-        TenantStatus status = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? TenantStatus.TRIAL : TenantStatus.ACTIVE;
-        java.time.Instant subEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? null : java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS);
-        java.time.Instant trialEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS) : null;
 
         Tenant tenant = new Tenant();
         tenant.setName(request.name().trim());
-        tenant.setSlug(normalizedSlug);
+        tenant.setSlug(slug);
         tenant.setBusinessType(request.businessType());
-        tenant.setStatus(status);
-        tenant.setSubscriptionPlan(plan);
-        tenant.setMaxTables(plan.getMaxTables());
-        tenant.setMaxUsers(plan.getMaxUsers());
-        tenant.setMaxProducts(plan.getMaxProducts());
-        tenant.setSubscriptionEndsAt(subEnd);
-        tenant.setTrialEndsAt(trialEnd);
+        tenant.setStatus(plan.getTrialDays() > 0 ? TenantStatus.TRIAL : TenantStatus.ACTIVE);
         tenant.setPlanSelected(true);
-        tenant.setOwnerWhatsapp(request.ownerWhatsapp() == null || request.ownerWhatsapp().isBlank() ? null : request.ownerWhatsapp().trim());
+        tenant.setOwnerWhatsapp(request.ownerWhatsapp() == null || request.ownerWhatsapp().isBlank()
+                ? null : request.ownerWhatsapp().trim());
         tenant.setTimezone(timezone);
         tenant.setCurrency(currency);
 
         tenant = tenantSaver.save(tenant);
-        
-        com.example.cafemangmentsystem.user.entity.User owner;
+
+        User owner;
         TenantContext.set(tenant.getId());
         try {
             owner = tenantOwnerProvisioner.createOwner(
-                    request.ownerUsername().trim(), request.ownerFullName().trim(), request.ownerPassword(), defaultTables, request.templateId());
+                    request.ownerUsername().trim(), request.ownerFullName().trim(), request.ownerPassword(),
+                    defaultTables, request.templateId());
         } catch (RuntimeException provisioningFailure) {
             TenantContext.clear();
             try {
@@ -270,364 +254,160 @@ public class TenantService {
             TenantContext.clear();
         }
 
+        openingSubscription(tenant.getId(), plan);
+
         try {
-            TenantActivityLog activityLog = new TenantActivityLog();
-            activityLog.setTenantId(tenant.getId());
-            activityLog.setAction("CREATED");
-            activityLog.setDetails("Tenant provisioned");
-            activityLog.setPerformedBy(request.ownerUsername());
-            tenantActivityLogRepository.save(activityLog);
-        } catch (RuntimeException activityLogFailure) {
+            TenantActivityLog created = new TenantActivityLog();
+            created.setTenantId(tenant.getId());
+            created.setAction("CREATED");
+            created.setDetails("تم إنشاء الحساب على باقة " + plan.getDisplayNameAr());
+            created.setPerformedBy(request.ownerUsername());
+            tenantActivityLogRepository.save(created);
+        } catch (RuntimeException auditFailure) {
             // Audit logging must not turn a successfully provisioned tenant into a false failure.
-            log.warn("Tenant {} was provisioned, but its CREATED audit event could not be recorded", tenant.getId(), activityLogFailure);
+            log.warn("Tenant {} was provisioned, but its CREATED audit event could not be recorded",
+                    tenant.getId(), auditFailure);
         }
 
-        String jwtToken = jwtService.generateToken(new com.example.cafemangmentsystem.security.UserPrincipal(owner));
+        String jwtToken = jwtService.generateToken(new UserPrincipal(owner));
         return new ProvisionTenantResponse(tenant.getId(), tenant.getSlug(), request.ownerUsername(), jwtToken);
     }
-    
+
+    /** A trial plan opens a trial; anything else opens a paid period and raises its first invoice. */
+    private void openingSubscription(Long tenantId, Plan plan) {
+        if (plan.getTrialDays() > 0 && plan.getPrice().compareTo(BigDecimal.ZERO) == 0) {
+            subscriptionService.startTrial(tenantId, plan);
+        } else {
+            subscriptionService.changePlan(tenantId, plan.getCode(), null, null,
+                    SubscriptionSource.MANUAL_ADMIN, null, "Opening subscription");
+        }
+    }
+
+    private Plan defaultTrialPlan() {
+        return planService.requireByCode("TRIAL");
+    }
+
+    // ── Platform reporting ──────────────────────────────────────────────────
+
+    /**
+     * Platform headline numbers.
+     *
+     * <p>Counted from live subscription state rather than the tenant's {@code status} column, which
+     * nothing ever moved off ACTIVE — so a tenant that stopped paying a year ago was counted as an
+     * active customer forever.
+     */
     @Transactional(readOnly = true)
-    public java.util.Map<String, Object> getPlatformStats() {
-        List<Tenant> customerTenants = tenantRepository.findAll().stream()
-                .filter(t -> !"platform".equalsIgnoreCase(t.getSlug()))
-                .toList();
-        long totalTenants = customerTenants.size();
-        long activeTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.ACTIVE).count();
-        long trialTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.TRIAL).count();
-        return java.util.Map.of(
-            "totalTenants", totalTenants,
-            "activeTenants", activeTenants,
-            "trialTenants", trialTenants
-        );
-    }
-    
-    @Transactional(readOnly = true)
-    public java.util.Map<String, Object> getTenantUsage(Long tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        return java.util.Map.of(
-            "maxTables", tenant.getMaxTables() != null ? tenant.getMaxTables() : -1,
-            "maxUsers", tenant.getMaxUsers() != null ? tenant.getMaxUsers() : -1,
-            "maxProducts", tenant.getMaxProducts() != null ? tenant.getMaxProducts() : -1
-        );
-    }
-    
-    public TenantResponse updateQuotas(Long tenantId, Integer maxTables, Integer maxUsers, Integer maxProducts) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        validateQuota("maxTables", maxTables);
-        validateQuota("maxUsers", maxUsers);
-        validateQuota("maxProducts", maxProducts);
-        if (maxTables != null) tenant.setMaxTables(maxTables);
-        if (maxUsers != null) tenant.setMaxUsers(maxUsers);
-        if (maxProducts != null) tenant.setMaxProducts(maxProducts);
-        return TenantResponse.from(tenantRepository.save(tenant));
-    }
+    public Map<String, Object> getPlatformStats() {
+        List<Tenant> customers = tenantRepository.findAll().stream().filter(t -> !isPlatform(t)).toList();
 
-    public TenantResponse customizeTenantPlan(Long tenantId, com.example.cafemangmentsystem.tenant.platform.PlatformAdminController.CustomizePlanRequest req) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
-        
-        if (req.plan() != null) {
-            tenant.setSubscriptionPlan(req.plan());
-        }
-        if (req.status() != null) {
-            tenant.setStatus(req.status());
-        }
-        validateQuota("maxTables", req.maxTables());
-        validateQuota("maxUsers", req.maxUsers());
-        validateQuota("maxProducts", req.maxProducts());
-        if (req.serviceChargePercent() != null && (req.serviceChargePercent() < 0 || req.serviceChargePercent() > 100)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceChargePercent must be between 0 and 100");
-        }
-        if (req.maxTables() != null) {
-            tenant.setMaxTables(req.maxTables());
-        }
-        if (req.maxUsers() != null) {
-            tenant.setMaxUsers(req.maxUsers());
-        }
-        if (req.maxProducts() != null) {
-            tenant.setMaxProducts(req.maxProducts());
-        }
-        if (req.serviceChargePercent() != null) {
-            tenant.setServiceChargePercent(req.serviceChargePercent());
-        }
-        if (req.whatsappAlertsEnabled() != null) {
-            tenant.setWhatsappAlertsEnabled(req.whatsappAlertsEnabled());
-        }
-        boolean trial = tenant.getStatus() == TenantStatus.TRIAL
-                || tenant.getSubscriptionPlan() == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-
-        // Route the requested date to the effective lifecycle field. The fallback keeps
-        // older clients safe: they used to send a trial date as subscriptionEndsAt.
-        java.time.Instant requestedEnd = trial
-                ? (req.trialEndsAt() != null ? req.trialEndsAt() : req.subscriptionEndsAt())
-                : (req.subscriptionEndsAt() != null ? req.subscriptionEndsAt() : req.trialEndsAt());
-        if (requestedEnd != null) {
-            if (trial) {
-                tenant.setTrialEndsAt(requestedEnd);
-            } else {
-                tenant.setSubscriptionEndsAt(requestedEnd);
-            }
-        }
-        if (req.extendDays() != null && req.extendDays() > 0) {
-            java.time.Instant now = java.time.Instant.now();
-            java.time.Instant currentEnd = trial ? tenant.getTrialEndsAt() : tenant.getSubscriptionEndsAt();
-            java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
-            if (trial) {
-                tenant.setTrialEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
-            } else {
-                tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
-            }
-        }
-        tenant.setPlanSelected(true);
-
-        Tenant saved = tenantRepository.save(tenant);
-
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(saved.getId());
-        log.setAction("PLAN_CUSTOMIZED");
-        log.setDetails("Plan customized: " + saved.getSubscriptionPlan() + ", Tables: " + saved.getMaxTables() + ", Users: " + saved.getMaxUsers() + ", Products: " + saved.getMaxProducts());
-        log.setPerformedBy("SUPER_ADMIN");
-        tenantActivityLogRepository.save(log);
-
-        return TenantResponse.from(saved);
-    }
-
-    private void validateQuota(String field, Integer value) {
-        if (value != null && (value < 1 || value > 9999)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be between 1 and 9999");
-        }
-    }
-
-    public TenantResponse updateLogo(Long tenantId, String logoUrl) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        tenant.setLogoUrl(logoUrl);
-        Tenant saved = tenantRepository.save(tenant);
-        
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(saved.getId());
-        log.setAction("LOGO_UPDATED");
-        log.setDetails(logoUrl != null ? "Logo updated" : "Logo removed");
-        log.setPerformedBy("TENANT_ADMIN");
-        tenantActivityLogRepository.save(log);
-        return TenantResponse.from(saved);
-    }
-
-    @Transactional
-    public void deleteTenant(Long tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
-        if ("platform".equalsIgnoreCase(tenant.getSlug())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete master platform tenant");
-        }
-
-        String jwtToken = jwtService.generateToken(new com.example.cafemangmentsystem.security.UserPrincipal(owner));
-        return new ProvisionTenantResponse(tenant.getId(), tenant.getSlug(), request.ownerUsername(), jwtToken);
-    }
-    
-    @Transactional(readOnly = true)
-    public java.util.Map<String, Object> getPlatformStats() {
-        List<Tenant> customerTenants = tenantRepository.findAll().stream()
-                .filter(t -> !"platform".equalsIgnoreCase(t.getSlug()))
-                .toList();
-        long totalTenants = customerTenants.size();
-        long activeTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.ACTIVE).count();
-        long trialTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.TRIAL).count();
-        return java.util.Map.of(
-            "totalTenants", totalTenants,
-            "activeTenants", activeTenants,
-            "trialTenants", trialTenants
-        );
-    }
-    
-    @Transactional(readOnly = true)
-    public java.util.Map<String, Object> getTenantUsage(Long tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        return java.util.Map.of(
-            "maxTables", tenant.getMaxTables() != null ? tenant.getMaxTables() : -1,
-            "maxUsers", tenant.getMaxUsers() != null ? tenant.getMaxUsers() : -1,
-            "maxProducts", tenant.getMaxProducts() != null ? tenant.getMaxProducts() : -1
-        );
-    }
-    
-    public TenantResponse updateQuotas(Long tenantId, Integer maxTables, Integer maxUsers, Integer maxProducts) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        validateQuota("maxTables", maxTables);
-        validateQuota("maxUsers", maxUsers);
-        validateQuota("maxProducts", maxProducts);
-        if (maxTables != null) tenant.setMaxTables(maxTables);
-        if (maxUsers != null) tenant.setMaxUsers(maxUsers);
-        if (maxProducts != null) tenant.setMaxProducts(maxProducts);
-        return TenantResponse.from(tenantRepository.save(tenant));
-    }
-
-    public TenantResponse customizeTenantPlan(Long tenantId, com.example.cafemangmentsystem.tenant.platform.PlatformAdminController.CustomizePlanRequest req) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
-        
-        if (req.plan() != null) {
-            tenant.setSubscriptionPlan(req.plan());
-        }
-        if (req.status() != null) {
-            tenant.setStatus(req.status());
-        }
-        validateQuota("maxTables", req.maxTables());
-        validateQuota("maxUsers", req.maxUsers());
-        validateQuota("maxProducts", req.maxProducts());
-        if (req.serviceChargePercent() != null && (req.serviceChargePercent() < 0 || req.serviceChargePercent() > 100)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceChargePercent must be between 0 and 100");
-        }
-        if (req.maxTables() != null) {
-            tenant.setMaxTables(req.maxTables());
-        }
-        if (req.maxUsers() != null) {
-            tenant.setMaxUsers(req.maxUsers());
-        }
-        if (req.maxProducts() != null) {
-            tenant.setMaxProducts(req.maxProducts());
-        }
-        if (req.serviceChargePercent() != null) {
-            tenant.setServiceChargePercent(req.serviceChargePercent());
-        }
-        if (req.whatsappAlertsEnabled() != null) {
-            tenant.setWhatsappAlertsEnabled(req.whatsappAlertsEnabled());
-        }
-        boolean trial = tenant.getStatus() == TenantStatus.TRIAL
-                || tenant.getSubscriptionPlan() == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-
-        // Route the requested date to the effective lifecycle field. The fallback keeps
-        // older clients safe: they used to send a trial date as subscriptionEndsAt.
-        java.time.Instant requestedEnd = trial
-                ? (req.trialEndsAt() != null ? req.trialEndsAt() : req.subscriptionEndsAt())
-                : (req.subscriptionEndsAt() != null ? req.subscriptionEndsAt() : req.trialEndsAt());
-        if (requestedEnd != null) {
-            if (trial) {
-                tenant.setTrialEndsAt(requestedEnd);
-            } else {
-                tenant.setSubscriptionEndsAt(requestedEnd);
-            }
-        }
-        if (req.extendDays() != null && req.extendDays() > 0) {
-            java.time.Instant now = java.time.Instant.now();
-            java.time.Instant currentEnd = trial ? tenant.getTrialEndsAt() : tenant.getSubscriptionEndsAt();
-            java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
-            if (trial) {
-                tenant.setTrialEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
-            } else {
-                tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
-            }
-        }
-        tenant.setPlanSelected(true);
-
-        Tenant saved = tenantRepository.save(tenant);
-
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(saved.getId());
-        log.setAction("PLAN_CUSTOMIZED");
-        log.setDetails("Plan customized: " + saved.getSubscriptionPlan() + ", Tables: " + saved.getMaxTables() + ", Users: " + saved.getMaxUsers() + ", Products: " + saved.getMaxProducts());
-        log.setPerformedBy("SUPER_ADMIN");
-        tenantActivityLogRepository.save(log);
-
-        return TenantResponse.from(saved);
-    }
-
-    private void validateQuota(String field, Integer value) {
-        if (value != null && (value < 1 || value > 9999)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be between 1 and 9999");
-        }
-    }
-
-    public TenantResponse updateLogo(Long tenantId, String logoUrl) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        tenant.setLogoUrl(logoUrl);
-        Tenant saved = tenantRepository.save(tenant);
-        
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(saved.getId());
-        log.setAction("LOGO_UPDATED");
-        log.setDetails(logoUrl != null ? "Logo updated" : "Logo removed");
-        log.setPerformedBy("TENANT_ADMIN");
-        tenantActivityLogRepository.save(log);
-        return TenantResponse.from(saved);
-    }
-
-    @Transactional
-    public void deleteTenant(Long tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
-        if ("platform".equalsIgnoreCase(tenant.getSlug())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete master platform tenant");
-        }
-        userRepository.deleteAll(userRepository.findAll().stream().filter(u -> tenantId.equals(u.getTenantId())).toList());
-        tenantActivityLogRepository.deleteAll(tenantActivityLogRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
-        tenantRepository.delete(tenant);
-    }
-
-    @Transactional(readOnly = true)
-    public java.util.Map<String, Object> getTenantUsageDetails(Long tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-
-        var plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-        int maxTables = tenant.getMaxTables() != null ? tenant.getMaxTables() : plan.getMaxTables();
-        int maxUsers = tenant.getMaxUsers() != null ? tenant.getMaxUsers() : plan.getMaxUsers();
-        int maxProducts = tenant.getMaxProducts() != null ? tenant.getMaxProducts() : plan.getMaxProducts();
-
-        long tablesCount = cafeTableRepository.count();
-        long usersCount = userRepository.count();
-        long productsCount = productRepository.count();
-
-        Long daysRemaining = null;
-        boolean isUnlimited = false;
-        if (tenant.getStatus() == TenantStatus.TRIAL) {
-            if (tenant.getTrialEndsAt() != null) {
-                daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getTrialEndsAt()));
-            } else {
-                daysRemaining = 14L;
-            }
-        } else if (tenant.getStatus() == TenantStatus.ACTIVE) {
-            if (tenant.getSubscriptionEndsAt() != null) {
-                daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getSubscriptionEndsAt()));
-            } else {
-                isUnlimited = true;
+        long trialing = 0, active = 0, grace = 0, expired = 0, suspended = 0, cancelled = 0;
+        for (Tenant tenant : customers) {
+            SubscriptionStatus status = entitlementService.forTenant(tenant.getId()).status();
+            if (status == null) continue;
+            switch (status) {
+                case TRIALING -> trialing++;
+                case ACTIVE -> active++;
+                case GRACE -> grace++;
+                case EXPIRED -> expired++;
+                case SUSPENDED -> suspended++;
+                case CANCELLED -> cancelled++;
             }
         }
 
-        java.util.Map<String, Object> usage = new java.util.LinkedHashMap<>();
-        usage.put("tenantId", tenant.getId());
-        usage.put("tenantName", tenant.getName());
-        usage.put("tenantSlug", tenant.getSlug());
-        usage.put("status", tenant.getStatus().name());
-        usage.put("plan", plan.name());
-        usage.put("planDisplayName", plan.getDisplayName());
-        usage.put("tablesUsed", tablesCount);
-        usage.put("maxTables", maxTables);
-        usage.put("usersUsed", usersCount);
-        usage.put("maxUsers", maxUsers);
-        usage.put("productsUsed", productsCount);
-        usage.put("maxProducts", maxProducts);
-        usage.put("daysRemaining", daysRemaining);
-        usage.put("isUnlimited", isUnlimited);
-        usage.put("subscriptionEndsAt", tenant.getSubscriptionEndsAt() != null ? tenant.getSubscriptionEndsAt().toString() : null);
-        usage.put("trialEndsAt", tenant.getTrialEndsAt() != null ? tenant.getTrialEndsAt().toString() : null);
-        usage.put("logoUrl", tenant.getLogoUrl() != null ? tenant.getLogoUrl() : "");
-        usage.put("includesKds", plan.isIncludesKds());
-        usage.put("includesExpenses", plan.isIncludesExpenses());
-        return usage;
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("totalTenants", customers.size());
+        stats.put("trialTenants", trialing);
+        stats.put("activeTenants", active);
+        stats.put("graceTenants", grace);
+        stats.put("expiredTenants", expired);
+        stats.put("suspendedTenants", suspended);
+        stats.put("cancelledTenants", cancelled);
+        stats.put("payingTenants", active + grace);
+        stats.putAll(billingService.revenueStats());
+        return stats;
     }
 
     @Transactional(readOnly = true)
-    public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getTenantActivityLogs(Long tenantId) {
+    public List<TenantActivityLog> getTenantActivityLogs(Long tenantId) {
         return tenantActivityLogRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
     }
 
     @Transactional(readOnly = true)
-    public List<com.example.cafemangmentsystem.tenant.entity.TenantActivityLog> getPlatformActivityLogs() {
+    public List<TenantActivityLog> getPlatformActivityLogs() {
         return tenantActivityLogRepository.findTop200ByOrderByCreatedAtDesc();
+    }
+
+    // ── Deletion ────────────────────────────────────────────────────────────
+
+    /**
+     * Removes a tenant and everything belonging to it.
+     *
+     * <p>The business data is removed by the database: every tenant-scoped table declares
+     * {@code tenant_id … ON DELETE CASCADE}. The previous implementation deleted only users and
+     * activity logs, leaving orders, products, tables, shifts, expenses and debts behind with a
+     * dangling {@code tenant_id} — rows a future tenant reusing that id would have inherited.
+     */
+    @Transactional
+    public void deleteTenant(Long tenantId) {
+        Tenant tenant = requireTenant(tenantId);
+        if (isPlatform(tenant)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete the master platform tenant");
+        }
+        subscriptionRepository.deleteAll(subscriptionRepository.findByTenantIdOrderByStartedAtDesc(tenantId));
+        tenantActivityLogRepository.deleteAll(tenantActivityLogRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
+        tenantRepository.delete(tenant);
+        entitlementService.invalidate(tenantId);
+        log.info("Tenant {} ({}) deleted by {}", tenantId, tenant.getSlug(), CurrentActor.name());
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private TenantSubscription currentSubscription(Long tenantId) {
+        return subscriptionRepository.findByTenantIdAndCurrentTrue(tenantId).orElse(null);
+    }
+
+    private Tenant requireTenant(Long tenantId) {
+        if (tenantId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No tenant in context");
+        }
+        return tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+    }
+
+    private boolean isPlatform(Tenant tenant) {
+        return "platform".equalsIgnoreCase(tenant.getSlug());
+    }
+
+    private String blankTo(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private void validateTimezone(String timezone) {
+        try {
+            java.time.ZoneId.of(timezone);
+        } catch (java.time.DateTimeException invalid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported timezone: " + timezone);
+        }
+    }
+
+    private void validateCurrency(String currency) {
+        try {
+            java.util.Currency.getInstance(currency);
+        } catch (IllegalArgumentException invalid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported currency: " + currency);
+        }
+    }
+
+    private void audit(Long tenantId, String action, String details) {
+        try {
+            TenantActivityLog entry = new TenantActivityLog();
+            entry.setTenantId(tenantId);
+            entry.setAction(action);
+            entry.setDetails(details);
+            entry.setPerformedBy(CurrentActor.name());
+            tenantActivityLogRepository.save(entry);
+        } catch (RuntimeException failure) {
+            log.warn("Could not record '{}' for tenant {}", action, tenantId, failure);
+        }
     }
 }

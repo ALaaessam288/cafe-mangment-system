@@ -6,7 +6,7 @@ import com.example.cafemangmentsystem.user.dto.UpdateUserRequest;
 import com.example.cafemangmentsystem.user.dto.UserResponse;
 import com.example.cafemangmentsystem.user.entity.User;
 import com.example.cafemangmentsystem.user.repository.UserRepository;
-import com.example.cafemangmentsystem.tenant.QuotaService;
+import com.example.cafemangmentsystem.billing.QuotaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,7 +43,7 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already taken: " + request.username());
         }
         
-        quotaService.checkUserQuota(userRepository.count());
+        quotaService.checkUsers(userRepository::count);
 
         if (request.pin() != null && !request.pin().isBlank()) {
             validateUniquePinInTenant(tenantId, null, request.pin().trim());

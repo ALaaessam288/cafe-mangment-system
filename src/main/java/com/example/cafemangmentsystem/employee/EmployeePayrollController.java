@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.employee;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.employee.dto.EmployeeTransactionDto;
 import com.example.cafemangmentsystem.employee.dto.EmployeeTransactionRequest;
 import com.example.cafemangmentsystem.employee.dto.WeeklyPayrollSummaryDto;
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+@RequiresFeature(Feature.PAYROLL)
 @RestController
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor

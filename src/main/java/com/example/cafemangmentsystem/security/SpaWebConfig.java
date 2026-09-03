@@ -1,12 +1,27 @@
 package com.example.cafemangmentsystem.security;
 
+import com.example.cafemangmentsystem.billing.web.FeatureGuardInterceptor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@RequiredArgsConstructor
 public class SpaWebConfig implements WebMvcConfigurer {
+
+    private final FeatureGuardInterceptor featureGuardInterceptor;
+
+    /**
+     * Plan-feature enforcement runs here rather than in a servlet filter so it can read the
+     * {@code @RequiresFeature} annotation off the resolved handler method.
+     */
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(featureGuardInterceptor).addPathPatterns("/api/**");
+    }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {

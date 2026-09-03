@@ -87,7 +87,8 @@ public class WhatsAppService {
     /**
      * Sends tenant owner credentials only when an explicit caller supplies a public application URL.
      */
-    public void sendTenantCredentials(Tenant tenant, String username, String plainPassword, String appBaseUrl) {
+    public void sendTenantCredentials(Tenant tenant, String username, String plainPassword, String appBaseUrl,
+                                      String planDisplayName) {
         if (tenant.getOwnerWhatsapp() == null || tenant.getOwnerWhatsapp().isBlank()) {
             return;
         }
@@ -120,7 +121,7 @@ public class WhatsAppService {
                 "نتمنى لكم تجربة مميزة وتشغيل ناجح! ✨",
                 tenant.getName(),
                 tenant.getSlug(),
-                tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan().name() : "PRO",
+                planDisplayName != null ? planDisplayName : "—",
                 username,
                 plainPassword,
                 tenantLoginUrl

@@ -40,3 +40,7 @@ dist/
 cafe.db
 .m2-superadmin/
 .m2*/
+
+# Temporary build snapshots staged for an out-of-VM compile
+_to_delete/
+*.tgz

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usersApi } from '../../api/usersApi';
 import { tenantApi } from '../../api/tenantApi';
+import { subscriptionApi } from '../../api/subscriptionApi';
 import { storage } from '../../utils/storage';
 import { removeImageBackground } from '../../utils/imageUtils';
 import Input from '../../components/Input/Input';
@@ -18,6 +19,7 @@ import {
 import { ROLES } from '../../utils/constants';
 import PrinterSettings from './PrinterSettings';
 import './SettingsPage.css';
+import UpgradeRequestCard from '../../components/UpgradeRequest/UpgradeRequestCard';
 
 const SETTINGS_TAB_META = {
   facility: { label: 'هوية المنشأة', description: 'الشعار، بيانات الفرع، العملة وحالة إصدار النظام', index: '01', tone: 'amber' },
@@ -25,6 +27,72 @@ const SETTINGS_TAB_META = {
   security: { label: 'الحساب والأمان', description: 'بيانات الحساب، كلمة المرور وحماية الوصول الإداري', index: '03', tone: 'blue' },
   hardware: { label: 'الأجهزة والتكاملات', description: 'الطابعات، إعدادات الإيصالات وقنوات التنبيه', index: '04', tone: 'emerald' },
 };
+
+
+/*
+ * One place that decides what the subscription panel says.
+ *
+ * The screen used to derive "perpetual" inline, twice, from an expression that read
+ * `!subscriptionEndsAt && daysRemaining === 0` as a lifetime licence. In the old model a null end
+ * date meant two different things — a genuine perpetual licence, and nobody ever having set an
+ * expiry — and this guessed the flattering one. A PRO tenant with no end date therefore rendered
+ * as "مفعل دائم / غير محدود" on the same screen where the banner said the subscription ends today.
+ *
+ * The server now answers the question directly: `perpetual` is true only for a subscription
+ * deliberately granted without an end (a licence key with durationDays = 0), and `daysRemaining`
+ * is null in that case rather than 0. Nothing here infers anything.
+ */
+const UNLIMITED = -1;
+
+const STATUS_VIEW = {
+  TRIALING: { label: 'فترة تجريبية', tone: 'warning' },
+  ACTIVE:   { label: 'اشتراك نشط ✓', tone: 'success' },
+  GRACE:    { label: 'مهلة سماح',    tone: 'warning' },
+  EXPIRED:  { label: 'منتهي',        tone: 'danger'  },
+  SUSPENDED:{ label: 'موقوف',        tone: 'danger'  },
+  CANCELLED:{ label: 'ملغي',         tone: 'danger'  },
+};
+
+function quotaOf(usage, type, fallbackLabel) {
+  const q = usage?.quotas?.find((item) => item.type === type);
+  if (!q) return { used: 0, limit: 0, unlimited: false, label: fallbackLabel, exceeded: false };
+  return {
+    used: q.used ?? 0,
+    limit: q.limit ?? 0,
+    unlimited: q.unlimited ?? q.limit === UNLIMITED,
+    label: q.displayName || fallbackLabel,
+    exceeded: q.exceeded ?? false,
+  };
+}
+
+function limitText(q) {
+  return q.unlimited ? 'غير محدود ♾' : q.limit;
+}
+
+/** Bar width. An unlimited quota has no meaningful fill, so it stays empty rather than dividing by -1. */
+function fillPercent(q) {
+  if (q.unlimited || q.limit <= 0) return 0;
+  return Math.min(100, Math.round((q.used / q.limit) * 100));
+}
+
+function remainingText(usage) {
+  if (!usage) return '—';
+  if (usage.perpetual) return 'مفعل دائم / غير محدود ✓';
+  if (usage.status === 'EXPIRED' || usage.status === 'CANCELLED') return 'انتهى الاشتراك';
+  if (usage.status === 'SUSPENDED') return 'الحساب موقوف';
+  const days = usage.daysRemaining;
+  if (days == null) return '—';
+  if (days === 0) return 'ينتهي اليوم';
+  return `${days} ${days === 1 ? 'يوم' : 'أيام'}`;
+}
+
+function shortRemainingText(usage) {
+  if (!usage) return '—';
+  if (usage.perpetual) return 'مفعل دائم';
+  const days = usage.daysRemaining;
+  if (days == null) return STATUS_VIEW[usage.status]?.label ?? '—';
+  return days === 0 ? 'ينتهي اليوم' : `${days} يوم متبقي`;
+}
 
 export default function SettingsPage() {
   const { user, role, updateTenantInfo } = useAuth();
@@ -86,7 +154,7 @@ export default function SettingsPage() {
   const loadUsage = useCallback(async () => {
     setLoadingUsage(true);
     try {
-      const data = await tenantApi.getUsage();
+      const data = await subscriptionApi.usage();
       setUsage(data);
       if (data.logoUrl && data.logoUrl !== logoPreview) {
         setLogoPreview(data.logoUrl);
@@ -408,7 +476,9 @@ export default function SettingsPage() {
             >
               <span className="settings-tab-btn__icon"><Crown size={16} /></span>
               <span className="settings-tab-btn__copy"><strong>الاشتراك والسعة</strong><small>الباقة وحدود الاستخدام</small></span>
-              {!usage?.isUnlimited && usage?.daysRemaining != null && usage?.daysRemaining <= 5 && usage?.status !== 'ACTIVE' && <span className="settings-tab-badge">تجديد</span>}
+              {!usage?.perpetual && usage?.daysRemaining != null && usage.daysRemaining <= 5 && (
+                <span className="settings-tab-badge">تجديد</span>
+              )}
             </button>
           </>
         )}
@@ -448,11 +518,7 @@ export default function SettingsPage() {
         {role === ROLES.ADMIN && (
           <div className="settings-context-panel__account">
             <span>الباقة الحالية</span><strong>{loadingUsage ? 'جاري التحقق…' : (usage?.planDisplayName || user?.planDisplayName || 'تجريبية')}</strong>
-            <small>
-              {usage?.isUnlimited || (usage?.status === 'ACTIVE' && (usage?.daysRemaining == null || (!usage?.subscriptionEndsAt && usage?.daysRemaining === 0)))
-                ? 'مفعل دائم'
-                : `${usage?.daysRemaining ?? 14} يوم متبقي`}
-            </small>
+            <small>{loadingUsage ? '…' : shortRemainingText(usage)}</small>
           </div>
         )}
       </section>
@@ -643,16 +709,14 @@ export default function SettingsPage() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <h3 className="settings-plan-name">{usage?.planDisplayName || user?.planDisplayName || 'فترة تجريبية'}</h3>
-                    <span className={`badge ${usage?.status === 'ACTIVE' ? 'badge--success' : usage?.status === 'TRIAL' ? 'badge--warning' : 'badge--danger'}`}>
-                      {usage?.status === 'ACTIVE' ? 'اشتراك نشط ✓' : usage?.status === 'TRIAL' ? 'فترة تجريبية' : 'منتهي'}
+                    <span className={`badge badge--${STATUS_VIEW[usage?.status]?.tone ?? 'danger'}`}>
+                      {STATUS_VIEW[usage?.status]?.label ?? '—'}
                     </span>
                   </div>
                   <p className="settings-plan-subtext">
                     المتبقي في الاشتراك الحالي:{' '}
                     <strong style={{ color: 'var(--accent)' }}>
-                      {usage?.isUnlimited || (usage?.status === 'ACTIVE' && (usage?.daysRemaining == null || (!usage?.subscriptionEndsAt && usage?.daysRemaining === 0)))
-                        ? 'مفعل دائم / غير محدود ✓'
-                        : `${usage?.daysRemaining ?? 14} يوم`}
+                      {remainingText(usage)}
                     </strong>
                   </p>
                 </div>
@@ -670,93 +734,66 @@ export default function SettingsPage() {
 
             {/* Live Quota Gauges */}
             <div className="settings-quotas-grid">
-              {/* Tables Quota */}
-              <div className="settings-quota-box">
-                <div className="settings-quota-header">
-                  <span>الطاولات</span>
-                  <strong>{usage?.tablesUsed ?? 0} / {usage?.maxTables === 9999 ? 'غير محدود' : (usage?.maxTables ?? 5)}</strong>
-                </div>
-                <div className="settings-quota-bar">
-                  <div
-                    className="settings-quota-fill"
-                    style={{
-                      width: `${Math.min(100, Math.round(((usage?.tablesUsed ?? 0) / (usage?.maxTables || 5)) * 100))}%`,
-                      background: (usage?.tablesUsed ?? 0) >= (usage?.maxTables || 5) ? 'var(--danger)' : 'var(--accent)'
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Users Quota */}
-              <div className="settings-quota-box">
-                <div className="settings-quota-header">
-                  <span>المستخدمين والموظفين</span>
-                  <strong>{usage?.usersUsed ?? 0} / {usage?.maxUsers === 9999 ? 'غير محدود' : (usage?.maxUsers ?? 2)}</strong>
-                </div>
-                <div className="settings-quota-bar">
-                  <div
-                    className="settings-quota-fill"
-                    style={{
-                      width: `${Math.min(100, Math.round(((usage?.usersUsed ?? 0) / (usage?.maxUsers || 2)) * 100))}%`,
-                      background: (usage?.usersUsed ?? 0) >= (usage?.maxUsers || 2) ? 'var(--danger)' : '#10b981'
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Products Quota */}
-              <div className="settings-quota-box">
-                <div className="settings-quota-header">
-                  <span>أصناف المنيو</span>
-                  <strong>{usage?.productsUsed ?? 0} / {usage?.maxProducts === 9999 ? 'غير محدود' : (usage?.maxProducts ?? 30)}</strong>
-                </div>
-                <div className="settings-quota-bar">
-                  <div
-                    className="settings-quota-fill"
-                    style={{
-                      width: `${Math.min(100, Math.round(((usage?.productsUsed ?? 0) / (usage?.maxProducts || 30)) * 100))}%`,
-                      background: (usage?.productsUsed ?? 0) >= (usage?.maxProducts || 30) ? 'var(--danger)' : '#3b82f6'
-                    }}
-                  />
-                </div>
-              </div>
+              {[
+                { type: 'TABLES', fallback: 'الطاولات', color: 'var(--accent)' },
+                { type: 'USERS', fallback: 'المستخدمين والموظفين', color: '#10b981' },
+                { type: 'PRODUCTS', fallback: 'أصناف المنيو', color: '#3b82f6' },
+              ].map(({ type, fallback, color }) => {
+                const q = quotaOf(usage, type, fallback);
+                return (
+                  <div className="settings-quota-box" key={type}>
+                    <div className="settings-quota-header">
+                      <span>{q.label}</span>
+                      <strong>
+                        {q.used} / {limitText(q)}
+                      </strong>
+                    </div>
+                    <div className="settings-quota-bar">
+                      <div
+                        className="settings-quota-fill"
+                        style={{
+                          width: `${fillPercent(q)}%`,
+                          background: q.exceeded ? 'var(--danger)' : color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Included Plan Features Checklist */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px',
-              marginTop: '16px',
-              paddingTop: '16px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
-                <span>شاشات التحضير للمطبخ (KDS)</span>
+            {/*
+              * The plan's real feature list. This was six hardcoded rows, all ticked, shown to
+              * every tenant regardless of what they had bought — so a STARTER customer saw KDS and
+              * multi-register listed as included on their own subscription page.
+              */}
+            {usage?.features?.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '12px',
+                marginTop: '16px',
+                paddingTop: '16px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                {usage.features.map((feature) => (
+                  <div
+                    key={feature.code}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}
+                  >
+                    <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>{feature.displayName}</span>
+                  </div>
+                ))}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
-                <span>إدارة المصروفات والخزائن والعهد</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
-                <span>تعدد نقاط البيع وتعدد الكاشيرات</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
-                <span>تنبيهات وفواتير الواتساب الذكية</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
-                <span>تكلفة الخامات ومحاكاة ربحية الوصفات</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
-                <span>دخول سريع برمز PIN لكل موظف</span>
-              </div>
-            </div>
+            )}
           </div>
+
+          {/*
+            * Upgrading by bank transfer. The only upgrade path here used to be a WhatsApp link,
+            * so a request existed nowhere in the system and neither side could track it.
+            */}
+          <UpgradeRequestCard currentPlanCode={usage?.planCode} onUpgraded={loadUsage} />
 
           {/* License Key Self-Service Activation Card */}
           <div className="section-card" style={{ marginTop: '20px' }}>

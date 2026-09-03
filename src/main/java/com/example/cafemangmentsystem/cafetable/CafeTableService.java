@@ -4,7 +4,7 @@ import com.example.cafemangmentsystem.cafetable.dto.CafeTableRequest;
 import com.example.cafemangmentsystem.cafetable.dto.CafeTableResponse;
 import com.example.cafemangmentsystem.cafetable.entity.CafeTable;
 import com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository;
-import com.example.cafemangmentsystem.tenant.QuotaService;
+import com.example.cafemangmentsystem.billing.QuotaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ public class CafeTableService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Table already exists for number: " + request.number());
         }
         
-        quotaService.checkTableQuota(cafeTableRepository.count());
+        quotaService.checkTables(cafeTableRepository::count);
 
         CafeTable table = new CafeTable();
         table.setNumber(request.number());

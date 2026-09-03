@@ -217,50 +217,9 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.err.println("[SEEDER] Timestamp cleanup skipped: " + e.getMessage());
         }
 
-        // Ensure Platform Master Tenant and Super Admin exist
-        try {
-            Tenant platformTenant = tenantRepository.findBySlug("platform").orElse(null);
-            if (platformTenant == null) {
-                platformTenant = new Tenant();
-                platformTenant.setName("Caffio Platform");
-                platformTenant.setSlug("platform");
-                platformTenant.setBusinessType(BusinessType.CAFE_AND_RESTAURANT);
-                platformTenant.setStatus(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE);
-                platformTenant.setTimezone("Africa/Cairo");
-                platformTenant.setCurrency("EGP");
-                platformTenant.setSubscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.ENTERPRISE);
-                platformTenant.setMaxTables(9999);
-                platformTenant.setMaxUsers(9999);
-                platformTenant.setMaxProducts(9999);
-                platformTenant.setPlanSelected(true);
-                platformTenant = tenantRepository.save(platformTenant);
-                System.out.println("[SEEDER] Created Master Platform Tenant (ID: " + platformTenant.getId() + ")");
-            }
-
-            if (platformTenant != null) {
-                TenantContext.set(platformTenant.getId());
-                try {
-                    User adminUser = userRepository.findByTenantIdAndUsername(platformTenant.getId(), "alaaHarb").orElse(null);
-                    if (adminUser == null) {
-                        adminUser = new User();
-                        adminUser.setUsername("alaaHarb");
-                        adminUser.setPasswordHash(passwordEncoder.encode("alaa@12345"));
-                        adminUser.setFullName("Alaa Harb");
-                        adminUser.setRole(Role.SUPER_ADMIN);
-                        userRepository.save(adminUser);
-                        System.out.println("[SEEDER] Super Admin 'alaaHarb' initialized successfully.");
-                    } else if (adminUser.getRole() != Role.SUPER_ADMIN) {
-                        adminUser.setRole(Role.SUPER_ADMIN);
-                        userRepository.save(adminUser);
-                        System.out.println("[SEEDER] Existing platform admin promoted to SUPER_ADMIN.");
-                    }
-                } finally {
-                    TenantContext.clear();
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("[SEEDER] Platform bootstrap check: " + e.getMessage());
-        }
+        // The platform tenant and its first SUPER_ADMIN are created by PlatformBootstrap, from
+        // environment variables. They used to be created here with the username and password
+        // written into the source — which put the platform owner's credentials in every build.
 
         // Ensure default Wanas Cafe tenant exists
         try {
@@ -273,10 +232,6 @@ public class DatabaseSeeder implements CommandLineRunner {
                 wanasTenant.setStatus(com.example.cafemangmentsystem.tenant.entity.TenantStatus.ACTIVE);
                 wanasTenant.setTimezone("Africa/Cairo");
                 wanasTenant.setCurrency("EGP");
-                wanasTenant.setSubscriptionPlan(com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.PRO);
-                wanasTenant.setMaxTables(50);
-                wanasTenant.setMaxUsers(10);
-                wanasTenant.setMaxProducts(200);
                 wanasTenant.setPlanSelected(true);
                 wanasTenant = tenantRepository.save(wanasTenant);
                 System.out.println("[SEEDER] Created Wanas Cafe Tenant (ID: " + wanasTenant.getId() + ")");
@@ -285,30 +240,30 @@ public class DatabaseSeeder implements CommandLineRunner {
             if (wanasTenant != null) {
                 TenantContext.set(wanasTenant.getId());
                 try {
-                    User wanasAdmin = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "alaaHarb").orElse(null);
+                    User wanasAdmin = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "demoadmin").orElse(null);
                     if (wanasAdmin == null) {
                         wanasAdmin = new User();
-                        wanasAdmin.setUsername("alaaHarb");
-                        wanasAdmin.setPasswordHash(passwordEncoder.encode("alaa@12345"));
-                        wanasAdmin.setPinHash(passwordEncoder.encode("1234"));
-                        wanasAdmin.setFullName("Alaa Harb");
+                        wanasAdmin.setUsername("demoadmin");
+                        wanasAdmin.setPasswordHash(passwordEncoder.encode(demoPassword("admin")));
+                        wanasAdmin.setPinHash(passwordEncoder.encode(demoPin("admin")));
+                        wanasAdmin.setFullName("Demo Admin");
                         wanasAdmin.setRole(Role.ADMIN);
                         userRepository.save(wanasAdmin);
                     } else if (wanasAdmin.getPinHash() == null) {
-                        wanasAdmin.setPinHash(passwordEncoder.encode("1234"));
+                        wanasAdmin.setPinHash(passwordEncoder.encode(demoPin("admin")));
                         userRepository.save(wanasAdmin);
                     }
                     User cashier = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "cashier1").orElse(null);
                     if (cashier == null) {
                         cashier = new User();
                         cashier.setUsername("cashier1");
-                        cashier.setPasswordHash(passwordEncoder.encode("123456"));
-                        cashier.setPinHash(passwordEncoder.encode("123456"));
+                        cashier.setPasswordHash(passwordEncoder.encode(demoPassword("cashier1")));
+                        cashier.setPinHash(passwordEncoder.encode(demoPin("cashier1")));
                         cashier.setFullName("كاشير 1");
                         cashier.setRole(Role.CASHIER);
                         userRepository.save(cashier);
                     } else if (cashier.getPinHash() == null) {
-                        cashier.setPinHash(passwordEncoder.encode("123456"));
+                        cashier.setPinHash(passwordEncoder.encode(demoPin("cashier1")));
                         userRepository.save(cashier);
                     }
                 } finally {
@@ -337,5 +292,45 @@ public class DatabaseSeeder implements CommandLineRunner {
             // from starting because an idempotent data repair could not run.
             System.err.println("[SEEDER] Coffee recipe repair deferred: " + e.getMessage());
         }
+    }
+
+    /*
+     * Demo credentials for the sample "Wanas" tenant.
+     *
+     * This whole seeder only runs when app.legacy-bootstrap.enabled=true, which is a development
+     * switch. Even so, nothing here is a constant any more: a demo password is read from the
+     * environment, and where none is supplied a random one is generated and printed once. That way
+     * a developer can still sign in, while a database that was seeded on a machine with the flag
+     * left on does not ship a password anyone can look up.
+     */
+    private static final java.util.Map<String, String> GENERATED_DEMO_SECRETS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private String demoPassword(String who) {
+        return demoSecret("APP_DEMO_PASSWORD_" + who.toUpperCase(java.util.Locale.ROOT), who + ":password", 16);
+    }
+
+    private String demoPin(String who) {
+        return demoSecret("APP_DEMO_PIN_" + who.toUpperCase(java.util.Locale.ROOT), who + ":pin", 6);
+    }
+
+    private String demoSecret(String envName, String cacheKey, int length) {
+        String supplied = System.getenv(envName);
+        if (supplied != null && !supplied.isBlank()) {
+            return supplied.trim();
+        }
+        return GENERATED_DEMO_SECRETS.computeIfAbsent(cacheKey, key -> {
+            String generated = randomSecret(length, cacheKey.endsWith(":pin"));
+            System.out.println("[SEEDER] Generated demo secret for " + key + ": " + generated
+                    + "  (set " + envName + " to choose your own)");
+            return generated;
+        });
+    }
+
+    private String randomSecret(int length, boolean digitsOnly) {
+        String alphabet = digitsOnly ? "0123456789" : "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        java.security.SecureRandom rng = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) sb.append(alphabet.charAt(rng.nextInt(alphabet.length())));
+        return sb.toString();
     }
 }

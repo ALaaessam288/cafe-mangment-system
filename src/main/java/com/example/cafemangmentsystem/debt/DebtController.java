@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.debt;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.debt.dto.DebtRequest;
 import com.example.cafemangmentsystem.debt.dto.DebtResponse;
 import com.example.cafemangmentsystem.debt.dto.SettleDebtRequest;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.DEBTS)
 @RestController
 @RequestMapping("/api/debts")
 @RequiredArgsConstructor

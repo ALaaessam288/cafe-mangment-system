@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,25 +42,88 @@ public class AuthController {
     private final TenantService tenantService;
     private final TenantRepository tenantRepository;
     private final com.example.cafemangmentsystem.security.RateLimiterService rateLimiterService;
+    private final com.example.cafemangmentsystem.billing.EntitlementService entitlementService;
 
     @GetMapping("/tenants")
     public List<PublicTenantDto> listTenants() {
         return tenantService.findAllPublic();
     }
 
+    /**
+     * Public self-service signup. Creates a tenant on the free trial and signs the owner straight in.
+     *
+     * <p>Throttled by client address and counting <em>successes as well as failures</em>: on an open
+     * signup endpoint each success is exactly what an abuser wants, so a failure-only limiter would
+     * have let one client mint tenants all day. This endpoint had no limit of any kind.
+     */
     @PostMapping("/register-trial")
     @ResponseStatus(HttpStatus.CREATED)
     public com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse registerTrial(
-            @Valid @RequestBody com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest request) {
+            @Valid @RequestBody com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest request,
+            jakarta.servlet.http.HttpServletRequest http) {
+        rateLimiterService.checkThroughput("signup:" + clientAddress(http), 5, 3600);
         return tenantService.registerTrialTenant(request);
     }
 
+    /**
+     * Whether a workspace address is free, so the signup form can say so before submitting rather
+     * than losing the customer's whole form to a 409.
+     */
+    @GetMapping("/slug-available")
+    public java.util.Map<String, Object> slugAvailable(@RequestParam String slug,
+                                                       jakarta.servlet.http.HttpServletRequest http) {
+        rateLimiterService.checkThroughput("slugcheck:" + clientAddress(http), 60, 60);
+        String normalised = slug == null ? "" : slug.trim().toLowerCase(java.util.Locale.ROOT);
+        boolean valid = normalised.matches("^[a-z0-9]+(?:-[a-z0-9]+)*$") && normalised.length() <= 48;
+        boolean reserved = java.util.Set.of("platform", "admin", "api", "www", "app", "super-admin")
+                .contains(normalised);
+        boolean taken = valid && !reserved && tenantRepository.existsBySlug(normalised);
+        return java.util.Map.of(
+                "slug", normalised,
+                "valid", valid,
+                "available", valid && !reserved && !taken,
+                "reason", !valid ? "INVALID" : reserved ? "RESERVED" : taken ? "TAKEN" : "OK");
+    }
+
+    /**
+     * Best-effort client address. Honours X-Forwarded-For because the app sits behind a proxy on
+     * Railway; a spoofed header only lets an abuser share someone else's bucket, never bypass it,
+     * since an unknown value simply gets its own.
+     */
+    private String clientAddress(jakarta.servlet.http.HttpServletRequest http) {
+        String forwarded = http.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return http.getRemoteAddr();
+    }
+
+    /**
+     * Tenant sign-in.
+     *
+     * <p>The brute-force limiter is wired here now. {@code RateLimiterService} existed in the
+     * codebase and was injected into this class, but no method on it was ever called from anywhere,
+     * so password guessing was unlimited. Attempts are metered per address-and-account rather than
+     * per account alone, so one attacker cannot lock a real café out of its own till.
+     */
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    public LoginResponse login(@Valid @RequestBody LoginRequest request,
+                               jakarta.servlet.http.HttpServletRequest http) {
         if (request.tenantSlug() == null || request.tenantSlug().isBlank()) {
             throw new BadCredentialsException("Tenant is required");
         }
-        Tenant tenant = tenantService.resolveLoginableTenant(request.tenantSlug().trim().toLowerCase());
+        String attemptKey = "login:" + clientAddress(http) + ":"
+                + request.tenantSlug().trim().toLowerCase() + ":"
+                + (request.username() == null ? "-" : request.username().trim().toLowerCase());
+        rateLimiterService.checkLockout(attemptKey);
+
+        Tenant tenant;
+        try {
+            tenant = tenantService.resolveLoginableTenant(request.tenantSlug().trim().toLowerCase());
+        } catch (RuntimeException unknownTenant) {
+            rateLimiterService.recordFailure(attemptKey);
+            throw unknownTenant;
+        }
 
         if (tenant == null) {
             throw new BadCredentialsException("Unknown tenant");
@@ -84,16 +148,12 @@ public class AuthController {
             String refreshToken = refreshTokenService.issue(principal.getId());
             String role = principal.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
 
-            var plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-            int maxTables = tenant.getMaxTables() != null ? tenant.getMaxTables() : plan.getMaxTables();
-            int maxUsers = tenant.getMaxUsers() != null ? tenant.getMaxUsers() : plan.getMaxUsers();
-            int maxProducts = tenant.getMaxProducts() != null ? tenant.getMaxProducts() : plan.getMaxProducts();
-
-            return new LoginResponse(token, "Bearer", refreshToken, principal.getId(), principal.getUsername(),
-                    principal.getFullName(), role, tenant.getName(), tenant.getSlug(),
-                    plan.name(), plan.getDisplayName(), tenant.getTrialEndsAt(), tenant.getSubscriptionEndsAt(),
-                    maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses(), tenant.getLogoUrl(),
-                    Boolean.TRUE.equals(tenant.getPlanSelected()));
+            rateLimiterService.reset(attemptKey);
+            return LoginResponse.of(token, refreshToken, principal.getId(), principal.getUsername(),
+                    principal.getFullName(), role, tenant, entitlementService.forTenant(tenant.getId()));
+        } catch (RuntimeException badCredentials) {
+            rateLimiterService.recordFailure(attemptKey);
+            throw badCredentials;
         } finally {
             TenantContext.clear();
         }
@@ -105,7 +165,10 @@ public class AuthController {
     ) {}
 
     @PostMapping("/super-admin/login")
-    public LoginResponse superAdminLogin(@Valid @RequestBody SuperAdminLoginRequest request) {
+    public LoginResponse superAdminLogin(@Valid @RequestBody SuperAdminLoginRequest request,
+                                         jakarta.servlet.http.HttpServletRequest http) {
+        String attemptKey = "superadmin:" + clientAddress(http) + ":" + request.username().trim().toLowerCase();
+        rateLimiterService.checkLockout(attemptKey);
         // Platform access must never fall back to a customer tenant. A fallback allowed a
         // customer administrator to authenticate through this endpoint when the platform tenant
         // was missing or misconfigured.
@@ -126,10 +189,16 @@ public class AuthController {
             String token = jwtService.generateToken(principal);
             String refreshToken = refreshTokenService.issue(principal.getId());
 
-            return new LoginResponse(token, "Bearer", refreshToken, principal.getId(), principal.getUsername(),
-                    principal.getFullName(), com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN.name(), "Caffio Platform Master", "platform",
-                    "ENTERPRISE", "Platform Master", null, null,
-                    9999, 9999, 9999, true, true, null, true);
+            rateLimiterService.reset(attemptKey);
+            // The platform tenant is not a customer: it has no subscription, and hardcoding one
+            // (the old response claimed ENTERPRISE with 9999 of everything) put a fictional plan in
+            // the super-admin's session that no server-side check would ever have honoured.
+            return LoginResponse.of(token, refreshToken, principal.getId(), principal.getUsername(),
+                    principal.getFullName(), com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN.name(),
+                    platformTenant, com.example.cafemangmentsystem.billing.dto.Entitlements.platform());
+        } catch (RuntimeException badCredentials) {
+            rateLimiterService.recordFailure(attemptKey);
+            throw badCredentials;
         } finally {
             TenantContext.clear();
         }
@@ -150,16 +219,8 @@ public class AuthController {
             String refreshToken = refreshTokenService.issue(principal.getId());
             String role = principal.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
 
-            var plan = tenant.getSubscriptionPlan() != null ? tenant.getSubscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-            int maxTables = tenant.getMaxTables() != null ? tenant.getMaxTables() : plan.getMaxTables();
-            int maxUsers = tenant.getMaxUsers() != null ? tenant.getMaxUsers() : plan.getMaxUsers();
-            int maxProducts = tenant.getMaxProducts() != null ? tenant.getMaxProducts() : plan.getMaxProducts();
-
-            return new LoginResponse(token, "Bearer", refreshToken, principal.getId(), principal.getUsername(),
-                    principal.getFullName(), role, tenant.getName(), tenant.getSlug(),
-                    plan.name(), plan.getDisplayName(), tenant.getTrialEndsAt(), tenant.getSubscriptionEndsAt(),
-                    maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses(), tenant.getLogoUrl(),
-                    Boolean.TRUE.equals(tenant.getPlanSelected()));
+            return LoginResponse.of(token, refreshToken, principal.getId(), principal.getUsername(),
+                    principal.getFullName(), role, tenant, entitlementService.forTenant(tenant.getId()));
         } finally {
             TenantContext.clear();
         }
@@ -177,19 +238,12 @@ public class AuthController {
             throw new DisabledException("تم إيقاف هذا الحساب من قِبل إدارة المنصة. يرجى التواصل مع الدعم الفني للتفعيل.");
         }
 
-        String tenantName = tenant != null ? tenant.getName() : null;
-        String tenantSlug = tenant != null ? tenant.getSlug() : null;
+        var entitlements = tenant != null
+                ? entitlementService.forTenant(tenant.getId())
+                : com.example.cafemangmentsystem.billing.dto.Entitlements.none(null);
 
-        var plan = (tenant != null && tenant.getSubscriptionPlan() != null) ? tenant.getSubscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
-        int maxTables = (tenant != null && tenant.getMaxTables() != null) ? tenant.getMaxTables() : plan.getMaxTables();
-        int maxUsers = (tenant != null && tenant.getMaxUsers() != null) ? tenant.getMaxUsers() : plan.getMaxUsers();
-        int maxProducts = (tenant != null && tenant.getMaxProducts() != null) ? tenant.getMaxProducts() : plan.getMaxProducts();
-
-        return new LoginResponse(token, "Bearer", result.rawRefreshToken(), principal.getId(), principal.getUsername(),
-                principal.getFullName(), role, tenantName, tenantSlug,
-                plan.name(), plan.getDisplayName(), tenant != null ? tenant.getTrialEndsAt() : null, tenant != null ? tenant.getSubscriptionEndsAt() : null,
-                maxTables, maxUsers, maxProducts, plan.isIncludesKds(), plan.isIncludesExpenses(), tenant != null ? tenant.getLogoUrl() : null,
-                tenant != null && Boolean.TRUE.equals(tenant.getPlanSelected()));
+        return LoginResponse.of(token, result.rawRefreshToken(), principal.getId(), principal.getUsername(),
+                principal.getFullName(), role, tenant, entitlements);
     }
 
     @PostMapping("/logout")

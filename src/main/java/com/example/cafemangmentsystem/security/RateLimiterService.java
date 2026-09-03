@@ -7,9 +7,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Thread-safe rate limiter and brute-force protection service.
- * Tracks failed attempts per key (IP, username, or composite action key)
- * and enforces temporary lockouts.
+ * Rate limiting and brute-force protection.
+ *
+ * <p>Two different jobs, because they defend against different things:
+ * <ul>
+ *   <li>{@link #checkLockout}/{@link #recordFailure} count <em>failures</em> — the classic
+ *       password-guessing defence, where a success is legitimate and resets the counter.</li>
+ *   <li>{@link #checkThroughput} counts <em>every</em> attempt, successful ones included. A public
+ *       signup endpoint needs this one: each request succeeding is exactly the abuse, and a
+ *       failure-only limiter would happily let one client create a thousand tenants.</li>
+ * </ul>
+ *
+ * <p>State is per-instance and in memory. That is honest for a single-node deployment and no
+ * defence at all across several; a shared store is the upgrade when the platform scales out.
  */
 @Service
 public class RateLimiterService {
@@ -81,5 +91,33 @@ public class RateLimiterService {
      */
     public void reset(String key) {
         attemptsMap.remove(key);
+    }
+
+    /**
+     * Throughput limit: allows at most {@code maxPerWindow} attempts of any outcome per key within
+     * the window, and counts this one. Throws 429 when the allowance is spent.
+     *
+     * @param key          what to meter on — for an unauthenticated endpoint, the client address
+     * @param maxPerWindow how many are allowed
+     * @param windowSeconds length of the rolling window
+     */
+    public void checkThroughput(String key, int maxPerWindow, long windowSeconds) {
+        Instant now = Instant.now();
+        AttemptRecord record = attemptsMap.compute(key, (k, existing) -> {
+            if (existing == null
+                    || java.time.Duration.between(existing.firstAttemptTime, now).toSeconds() > windowSeconds) {
+                return new AttemptRecord();
+            }
+            existing.failedAttempts++;
+            return existing;
+        });
+
+        if (record.failedAttempts > maxPerWindow) {
+            long retryAfter = Math.max(1,
+                    windowSeconds - java.time.Duration.between(record.firstAttemptTime, now).toSeconds());
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                    "عدد كبير من المحاولات. يرجى المحاولة بعد " + retryAfter + " ثانية.");
+        }
     }
 }

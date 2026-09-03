@@ -5,6 +5,7 @@ import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import ProvisionTenantModal from './components/ProvisionTenantModal';
 import ProvisionSuccessModal from './components/ProvisionSuccessModal';
 import './SuperAdminPage.css';
+import { plansApi, UNLIMITED, formatLimit } from '../../api/plansApi';
 
 const PLAN_PRICES = { TRIAL: 0, STARTER: 499, PRO: 899, ENTERPRISE: 1499, CUSTOM: 0 };
 const AUDIT_ACTIONS = {
@@ -96,21 +97,41 @@ export default function SuperAdminPage() {
   // Custom Plan Form State
   const [customPlanForm, setCustomPlanForm] = useState({
     plan: 'PRO',
-    status: 'ACTIVE',
+    periodDays: '',
+    negotiatedPrice: '',
+    /* Off by default: most plan changes should simply inherit the plan's own limits. */
+    useOverrides: false,
     maxTables: 50,
     maxUsers: 15,
     maxProducts: 500,
-    serviceChargePercent: 0,
-    whatsappAlertsEnabled: false,
-    subscriptionEndsAt: '',
     extendDays: 0,
+    note: '',
   });
 
   // License Generator State
   const [generatingKey, setGeneratingKey] = useState(false);
-  const [keyForm, setKeyForm] = useState({ plan: 'PRO', validDays: 365, notes: '' });
+  const [keyForm, setKeyForm] = useState({
+    plan: 'PRO',
+    /* How much subscription redeeming the key grants. */
+    validDays: 365,
+    /* How long the key may be redeemed. Blank = no deadline. */
+    redeemableForDays: '',
+    maxActivations: 1,
+    notes: '',
+  });
 
   const [createdTenantModal, setCreatedTenantModal] = useState(null);
+
+  /*
+   * The plan catalogue, fetched rather than hardcoded. This page used to carry its own copy of
+   * every plan's limits in applyPlanPreset(), which had to be kept in step by hand with a second
+   * copy in FirstTimePlanModal and a third in the backend enum. It never was.
+   */
+  const [plans, setPlans] = useState([]);
+
+  useEffect(() => {
+    plansApi.listAll().then(setPlans).catch(() => setPlans([]));
+  }, []);
 
   // ── DATA FETCHING ──────────────────────────────────────────────────────────
   const loadData = useCallback(async (isRefresh = false) => {
@@ -150,7 +171,10 @@ export default function SuperAdminPage() {
   async function handleUpdateSubscription(tenantId, plan, status, extendDays) {
     setUpdating(true);
     try {
-      await platformApi.updateSubscription(tenantId, { plan, status, extendDays });
+      if (plan) await platformApi.changePlan(tenantId, { planCode: plan });
+      if (status === 'SUSPENDED') await platformApi.suspendTenant(tenantId, 'إيقاف من لوحة المنصة');
+      if (status === 'ACTIVE') await platformApi.resumeTenant(tenantId);
+      if (extendDays) await platformApi.extendSubscription(tenantId, Number(extendDays));
       toast.success('تم تحديث بيانات الاشتراك بنجاح! 🚀');
       setEditModal(false);
       setSelectedTenant(null);
@@ -164,17 +188,27 @@ export default function SuperAdminPage() {
 
   const handleOpenEditModal = async (t) => {
     setSelectedTenant(t);
-    const effectiveEnd = toDateInputValue(tenantExpiry(t));
+    const plan = plans.find((p) => p.code === t.subscriptionPlan);
+    /*
+     * A tenant's limits are an override only where they differ from the plan's own. Seeding the
+     * switch from that comparison means reopening this dialog and saving no longer converts a
+     * plain plan into a bespoke deal by accident.
+     */
+    const hasOverrides = !!plan && (
+      t.maxTables !== plan.limits.maxTables ||
+      t.maxUsers !== plan.limits.maxUsers ||
+      t.maxProducts !== plan.limits.maxProducts
+    );
     setCustomPlanForm({
       plan: t.subscriptionPlan || 'PRO',
-      status: t.status || 'ACTIVE',
-      maxTables: t.maxTables ?? 50,
-      maxUsers: t.maxUsers ?? 15,
-      maxProducts: t.maxProducts ?? 500,
-      serviceChargePercent: t.serviceChargePercent ?? 0,
-      whatsappAlertsEnabled: Boolean(t.whatsappAlertsEnabled),
-      subscriptionEndsAt: effectiveEnd,
+      periodDays: '',
+      negotiatedPrice: '',
+      useOverrides: hasOverrides,
+      maxTables: t.maxTables ?? plan?.limits.maxTables ?? 50,
+      maxUsers: t.maxUsers ?? plan?.limits.maxUsers ?? 15,
+      maxProducts: t.maxProducts ?? plan?.limits.maxProducts ?? 500,
       extendDays: 0,
+      note: '',
     });
     setEditModal(true);
     setLoadingLogs(true);
@@ -189,91 +223,67 @@ export default function SuperAdminPage() {
     }
   };
 
-  function applyPlanPreset(planName) {
-    if (planName === 'TRIAL') {
-      setCustomPlanForm(prev => ({
-        ...prev,
-        plan: 'TRIAL',
-        status: 'TRIAL',
-        maxTables: 5,
-        maxUsers: 2,
-        maxProducts: 30,
-      }));
-    } else if (planName === 'STARTER') {
-      setCustomPlanForm(prev => ({
-        ...prev,
-        plan: 'STARTER',
-        status: 'ACTIVE',
-        maxTables: 20,
-        maxUsers: 5,
-        maxProducts: 100,
-      }));
-    } else if (planName === 'PRO') {
-      setCustomPlanForm(prev => ({
-        ...prev,
-        plan: 'PRO',
-        status: 'ACTIVE',
-        maxTables: 50,
-        maxUsers: 15,
-        maxProducts: 500,
-      }));
-    } else if (planName === 'ENTERPRISE') {
-      setCustomPlanForm(prev => ({
-        ...prev,
-        plan: 'ENTERPRISE',
-        status: 'ACTIVE',
-        maxTables: 9999,
-        maxUsers: 9999,
-        maxProducts: 9999,
-      }));
-    } else if (planName === 'CUSTOM') {
-      setCustomPlanForm(prev => ({
-        ...prev,
-        plan: 'CUSTOM',
-      }));
+  /** Fills the form from a plan's real limits, whatever the platform currently sells. */
+  function applyPlanPreset(planCode) {
+    const plan = plans.find((p) => p.code === planCode);
+    if (!plan) {
+      setCustomPlanForm((prev) => ({ ...prev, plan: planCode }));
+      return;
     }
+    setCustomPlanForm((prev) => ({
+      ...prev,
+      plan: plan.code,
+      // A CUSTOM plan has no meaningful defaults — its limits are always the operator's to set.
+      maxTables: plan.customPlan ? prev.maxTables : plan.limits.maxTables,
+      maxUsers: plan.customPlan ? prev.maxUsers : plan.limits.maxUsers,
+      maxProducts: plan.customPlan ? prev.maxProducts : plan.limits.maxProducts,
+      useOverrides: plan.customPlan,
+    }));
   }
 
   async function handleSaveCustomPlan(e) {
     if (e) e.preventDefault();
     if (!selectedTenant) return;
+
+    // -1 is the server's "unlimited" sentinel; anything else must be a real positive ceiling.
+    // 0 is rejected, because the old backend treated it as "no limit" — the inverse of its meaning.
     const quotas = [customPlanForm.maxTables, customPlanForm.maxUsers, customPlanForm.maxProducts].map(Number);
-    if (quotas.some((value) => !Number.isInteger(value) || value < 1 || value > 9999)) {
-      toast.error('حدود الطاولات والمستخدمين والأصناف يجب أن تكون بين 1 و9999');
+    if (quotas.some((v) => !Number.isInteger(v) || (v !== UNLIMITED && (v < 1 || v > 100000)))) {
+      toast.error('الحدود يجب أن تكون -1 (بلا حدود) أو رقماً بين 1 و100000');
       return;
     }
-    const servicePercent = Number(customPlanForm.serviceChargePercent);
-    if (!Number.isFinite(servicePercent) || servicePercent < 0 || servicePercent > 100) {
-      toast.error('نسبة الخدمة يجب أن تكون بين 0 و100');
-      return;
-    }
+
     setUpdating(true);
     try {
-      const isTrial = customPlanForm.status === 'TRIAL' || customPlanForm.plan === 'TRIAL';
-      const effectiveExpiry = toEndOfLocalDayInstant(customPlanForm.subscriptionEndsAt);
-      const payload = {
-        plan: customPlanForm.plan,
-        status: customPlanForm.status,
-        maxTables: Number(customPlanForm.maxTables),
-        maxUsers: Number(customPlanForm.maxUsers),
-        maxProducts: Number(customPlanForm.maxProducts),
-        serviceChargePercent: Number(customPlanForm.serviceChargePercent) || 0,
-        whatsappAlertsEnabled: customPlanForm.whatsappAlertsEnabled,
-        subscriptionEndsAt: isTrial ? null : effectiveExpiry,
-        trialEndsAt: isTrial ? effectiveExpiry : null,
-        extendDays: Number(customPlanForm.extendDays) || null,
-      };
-      await platformApi.customizeTenantPlan(selectedTenant.id, payload);
-      toast.success('تم حفظ وتخصيص باقة المنشأة بنجاح! ⚙️🚀');
+      const usesOverrides = customPlanForm.useOverrides;
+      await platformApi.changePlan(selectedTenant.id, {
+        planCode: customPlanForm.plan,
+        periodDays: Number(customPlanForm.periodDays) || null,
+        negotiatedPrice: customPlanForm.negotiatedPrice !== '' ? Number(customPlanForm.negotiatedPrice) : null,
+        // Sending no overrides is meaningful: it drops any previous bespoke deal and falls back to
+        // the plan's own limits, rather than silently carrying stale numbers forward.
+        maxTables: usesOverrides ? Number(customPlanForm.maxTables) : null,
+        maxUsers: usesOverrides ? Number(customPlanForm.maxUsers) : null,
+        maxProducts: usesOverrides ? Number(customPlanForm.maxProducts) : null,
+        note: customPlanForm.note || null,
+      });
+
+      const extraDays = Number(customPlanForm.extendDays) || 0;
+      if (extraDays > 0) {
+        await platformApi.extendSubscription(selectedTenant.id, extraDays, false, 'تمديد يدوي من لوحة المنصة');
+      }
+
+      toast.success('تم حفظ اشتراك المنشأة بنجاح! ⚙️🚀');
       setEditModal(false);
       setSelectedTenant(null);
       loadData(true);
     } catch (err) {
-      toast.error(err.message || 'فشل في حفظ وتخصيص الخطة');
+      toast.error(err.response?.data?.message || err.message || 'فشل في حفظ الاشتراك');
     } finally {
       setUpdating(false);
     }
   }
+
 
   function handleDeleteTenant(tenantId, tenantName) {
     setConfirmModal({
@@ -315,9 +325,9 @@ export default function SuperAdminPage() {
     setUpdating(true);
     try {
       const results = await Promise.allSettled(selectedIds.map((id) => {
-        if (action === 'ACTIVE') return platformApi.updateSubscription(id, { status: 'ACTIVE' });
-        if (action === 'SUSPENDED') return platformApi.updateSubscription(id, { status: 'SUSPENDED' });
-        return platformApi.updateSubscription(id, { extendDays: 7 });
+        if (action === 'ACTIVE') return platformApi.resumeTenant(id);
+        if (action === 'SUSPENDED') return platformApi.suspendTenant(id, 'إيقاف جماعي من لوحة المنصة');
+        return platformApi.extendSubscription(id, 7, false, 'تمديد جماعي');
       }));
       const completed = results.filter((result) => result.status === 'fulfilled').length;
       const failed = results.length - completed;
@@ -388,9 +398,17 @@ export default function SuperAdminPage() {
     }
     setGeneratingKey(true);
     try {
-      await platformApi.generateLicenseKey(keyForm.plan, validDays, keyForm.notes.trim());
+      // durationDays is what the customer buys; redeemableForDays only bounds when they may
+      // claim it. Collapsing the two is what used to shrink a late-redeemed annual key to weeks.
+      await platformApi.generateLicenseKey({
+        planCode: keyForm.plan,
+        durationDays: validDays,
+        redeemableForDays: Number(keyForm.redeemableForDays) || null,
+        maxActivations: Number(keyForm.maxActivations) || 1,
+        notes: keyForm.notes.trim(),
+      });
       toast.success('تم إصدار مفتاح الترخيص بنجاح! 🔑');
-      setKeyForm({ plan: 'PRO', validDays: 365, notes: '' });
+      setKeyForm({ plan: 'PRO', validDays: 365, redeemableForDays: '', maxActivations: 1, notes: '' });
       loadData(true);
     } catch (err) {
       toast.error(err.message || 'فشل في إنشاء المفتاح');
@@ -406,7 +424,7 @@ export default function SuperAdminPage() {
       message: 'هل أنت متأكد من رغبتك في إلغاء صلاحية هذا المفتاح نهائياً؟ لن يتمكن العميل من استخدامه بعد الآن.',
       onConfirm: async () => {
         try {
-          await platformApi.revokeLicenseKey(id);
+          await platformApi.revokeLicenseKey(id, 'إلغاء من لوحة المنصة');
           toast.success('تم إلغاء صلاحية المفتاح');
           loadData(true);
         } catch (err) {
@@ -1949,179 +1967,152 @@ export default function SuperAdminPage() {
                       <span className="text-warning small">تطبيق الإعدادات المسبقة</span>
                     </label>
                     <div className="row g-2">
-                      {[
-                        { id: 'TRIAL', label: 'TRIAL (تجريبي)', color: 'btn-outline-secondary' },
-                        { id: 'STARTER', label: 'STARTER (أساسي)', color: 'btn-outline-info' },
-                        { id: 'PRO', label: 'PRO (احترافي)', color: 'btn-outline-warning' },
-                        { id: 'ENTERPRISE', label: 'ENTERPRISE (شامل)', color: 'btn-outline-success' },
-                        { id: 'CUSTOM', label: '✨ CUSTOM (مخصصة)', color: 'btn-outline-light' },
-                      ].map((p) => (
-                        <div key={p.id} className="col">
+                      {plans.map((p) => (
+                        <div key={p.code} className="col">
                           <button
                             type="button"
-                            className={`btn w-100 py-2 fw-bold text-nowrap ${customPlanForm.plan === p.id ? 'btn-warning text-dark' : p.color}`}
-                            onClick={() => applyPlanPreset(p.id)}
+                            className={`btn w-100 py-2 fw-bold text-nowrap ${
+                              customPlanForm.plan === p.code ? 'btn-warning text-dark' : 'btn-outline-light'
+                            }`}
+                            onClick={() => applyPlanPreset(p.code)}
+                            title={`${formatLimit(p.limits.maxTables, 'طاولة')} · ${formatLimit(p.limits.maxUsers, 'مستخدم')} · ${formatLimit(p.limits.maxProducts, 'صنف')}`}
                           >
-                            {p.label}
+                            {p.code}
+                            <span className="d-block small opacity-75 fw-normal">{p.displayName}</span>
                           </button>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* 2. Custom Quotas Section */}
+                  {/* 2. Quotas — plan defaults unless the operator opts into a bespoke deal */}
                   <div className="p-3 bg-dark rounded border border-secondary">
-                    <h6 className="fw-bold text-white small mb-3">
-                      <i className="bi bi-gear-wide-connected text-warning me-2" />
-                      تعديل وتخصيص حدود المنشأة (Quotas Customization):
-                    </h6>
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <h6 className="fw-bold text-white small mb-0">
+                        <i className="bi bi-gear-wide-connected text-warning me-2" />
+                        حدود المنشأة (Quotas)
+                      </h6>
+                      <div className="form-check form-switch">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="useOverridesSwitch"
+                          checked={customPlanForm.useOverrides}
+                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, useOverrides: e.target.checked })}
+                        />
+                        <label className="form-check-label text-white small" htmlFor="useOverridesSwitch">
+                          حدود مخصصة لهذه المنشأة
+                        </label>
+                      </div>
+                    </div>
+
+                    <p className="small text-muted mb-3">
+                      {customPlanForm.useOverrides
+                        ? 'استخدم -1 لجعل الحد بلا حدود. هذه الحدود تُلغى تلقائياً عند تغيير الباقة مرة أخرى.'
+                        : 'ستُطبَّق حدود الباقة المختارة كما هي، وسيتم إلغاء أي حدود مخصصة سابقة.'}
+                    </p>
 
                     <div className="row g-3">
-                      {/* Max Tables */}
-                      <div className="col-12 col-md-4">
-                        <label className="form-label small text-white opacity-75">
-                          الحد الأقصى للطاولات 🪑
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          min="1"
-                          max="9999"
-                          value={customPlanForm.maxTables}
-                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, maxTables: e.target.value })}
-                          required
-                        />
-                        <span className="small text-muted" style={{ fontSize: '0.75rem' }}>9999 = غير محدود</span>
-                      </div>
-
-                      {/* Max Users */}
-                      <div className="col-12 col-md-4">
-                        <label className="form-label small text-white opacity-75">
-                          الحد الأقصى للمستخدمين 👥
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          min="1"
-                          max="9999"
-                          value={customPlanForm.maxUsers}
-                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, maxUsers: e.target.value })}
-                          required
-                        />
-                        <span className="small text-muted" style={{ fontSize: '0.75rem' }}>كاشيرات ومشرفين</span>
-                      </div>
-
-                      {/* Max Products */}
-                      <div className="col-12 col-md-4">
-                        <label className="form-label small text-white opacity-75">
-                          الحد الأقصى للأصناف ☕
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          min="1"
-                          max="9999"
-                          value={customPlanForm.maxProducts}
-                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, maxProducts: e.target.value })}
-                          required
-                        />
-                        <span className="small text-muted" style={{ fontSize: '0.75rem' }}>أصناف المنيو</span>
-                      </div>
+                      {[
+                        { key: 'maxTables', label: 'الحد الأقصى للطاولات 🪑' },
+                        { key: 'maxUsers', label: 'الحد الأقصى للمستخدمين 👥' },
+                        { key: 'maxProducts', label: 'الحد الأقصى للأصناف ☕' },
+                      ].map((field) => (
+                        <div className="col-12 col-md-4" key={field.key}>
+                          <label className="form-label small text-white opacity-75">{field.label}</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            min="-1"
+                            max="100000"
+                            disabled={!customPlanForm.useOverrides}
+                            value={customPlanForm[field.key]}
+                            onChange={(e) => setCustomPlanForm({ ...customPlanForm, [field.key]: e.target.value })}
+                          />
+                          <span className="small text-muted" style={{ fontSize: '0.72rem' }}>
+                            {formatLimit(Number(customPlanForm[field.key]))}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  {/* 3. Subscription Validity & Status */}
+                  {/* 3. Commercial terms for the new period */}
                   <div className="p-3 bg-dark rounded border border-secondary">
                     <h6 className="fw-bold text-white small mb-3">
                       <i className="bi bi-calendar-check text-info me-2" />
-                      صلاحية وتاريخ انتهاء الباقة:
+                      شروط الفترة الجديدة
                     </h6>
 
                     <div className="row g-3">
-                      {/* Subscription End Date */}
-                      <div className="col-12 col-md-6">
-                        <label className="form-label small text-white opacity-75">
-                          {customPlanForm.status === 'TRIAL' || customPlanForm.plan === 'TRIAL'
-                            ? 'تاريخ انتهاء الفترة التجريبية'
-                            : 'تاريخ انتهاء الاشتراك'}
-                        </label>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small text-white opacity-75">مدة الفترة (يوم)</label>
                         <input
-                          type="date"
+                          type="number"
                           className="form-control"
-                          value={customPlanForm.subscriptionEndsAt}
-                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, subscriptionEndsAt: e.target.value, extendDays: 0 })}
+                          min="1"
+                          max="3650"
+                          placeholder="حسب الباقة"
+                          value={customPlanForm.periodDays}
+                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, periodDays: e.target.value })}
                         />
-                        <span className="small text-muted" style={{ fontSize: '0.75rem' }}>تظل الباقة فعّالة حتى نهاية اليوم المحدد.</span>
                       </div>
 
-                      {/* Quick Extend Buttons */}
-                      <div className="col-12 col-md-6">
-                        <label className="form-label small text-white opacity-75">تمديد سريع بالأيام</label>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small text-white opacity-75">سعر متفق عليه (ج.م)</label>
+                        <input
+                          type="number"
+                          className="form-control"
+                          min="0"
+                          step="0.01"
+                          placeholder="سعر الباقة"
+                          value={customPlanForm.negotiatedPrice}
+                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, negotiatedPrice: e.target.value })}
+                        />
+                        <span className="small text-muted" style={{ fontSize: '0.72rem' }}>
+                          يُثبَّت على الاشتراك والفاتورة ولا يتأثر بتغيير سعر الباقة لاحقاً.
+                        </span>
+                      </div>
+
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small text-white opacity-75">تمديد إضافي (يوم)</label>
                         <div className="d-flex gap-2">
-                          {[
-                            { label: '+30 يوم', days: 30 },
-                            { label: '+90 يوم', days: 90 },
-                            { label: '+365 يوم', days: 365 },
-                          ].map((b) => (
+                          {[30, 90, 365].map((d) => (
                             <button
-                              key={b.days}
+                              key={d}
                               type="button"
-                              className="btn btn-sm btn-outline-info flex-grow-1"
-                              onClick={() => {
-                                const now = new Date();
-                                const selectedEnd = customPlanForm.subscriptionEndsAt ? new Date(customPlanForm.subscriptionEndsAt) : now;
-                                const current = selectedEnd > now ? selectedEnd : now;
-                                current.setDate(current.getDate() + b.days);
-                                setCustomPlanForm({ ...customPlanForm, subscriptionEndsAt: current.toISOString().slice(0, 10), extendDays: 0 });
-                              }}
+                              className={`btn btn-sm flex-grow-1 ${
+                                Number(customPlanForm.extendDays) === d ? 'btn-info' : 'btn-outline-info'
+                              }`}
+                              onClick={() =>
+                                setCustomPlanForm({
+                                  ...customPlanForm,
+                                  extendDays: Number(customPlanForm.extendDays) === d ? 0 : d,
+                                })
+                              }
                             >
-                              {b.label}
+                              +{d}
                             </button>
                           ))}
                         </div>
                       </div>
 
-                      {/* Account Status */}
-                      <div className="col-12 col-md-6">
-                        <label className="form-label small text-white opacity-75">حالة الحساب</label>
-                        <select
-                          className="form-select"
-                          value={customPlanForm.status}
-                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, status: e.target.value })}
-                        >
-                          <option value="ACTIVE">🟢 نشط (ACTIVE)</option>
-                          <option value="TRIAL">🟡 تجريبي (TRIAL)</option>
-                          <option value="SUSPENDED">🔴 معلق / موقوف (SUSPENDED)</option>
-                        </select>
-                      </div>
-
-                      {/* Service Charge % */}
-                      <div className="col-12 col-md-6">
-                        <label className="form-label small text-white opacity-75">نسبة خدمة الصالة الافتراضية (%)</label>
+                      <div className="col-12">
+                        <label className="form-label small text-white opacity-75">ملاحظة (تظهر في سجل النشاط)</label>
                         <input
-                          type="number"
+                          type="text"
                           className="form-control"
-                          min="0"
-                          max="100"
-                          value={customPlanForm.serviceChargePercent}
-                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, serviceChargePercent: e.target.value })}
+                          maxLength={500}
+                          value={customPlanForm.note}
+                          onChange={(e) => setCustomPlanForm({ ...customPlanForm, note: e.target.value })}
                         />
                       </div>
                     </div>
 
-                    {/* WhatsApp Alerts Toggle */}
-                    <div className="form-check form-switch mt-3">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="whatsappAlertsSwitch"
-                        checked={customPlanForm.whatsappAlertsEnabled}
-                        onChange={(e) => setCustomPlanForm({ ...customPlanForm, whatsappAlertsEnabled: e.target.checked })}
-                      />
-                      <label className="form-check-label text-white small fw-bold" htmlFor="whatsappAlertsSwitch">
-                        تفعيل إرسال التقارير اليومية والإشعارات التلقائية عبر واتساب 📲
-                      </label>
-                    </div>
+                    <p className="small text-muted mt-3 mb-0">
+                      لإيقاف أو إعادة تفعيل الحساب استخدم أزرار الحالة في قائمة المنشآت — الإيقاف
+                      إجراء إداري منفصل عن شروط الاشتراك.
+                    </p>
                   </div>
 
                   {/* 4. Activity Logs */}

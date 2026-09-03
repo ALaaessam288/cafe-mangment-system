@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.expense;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.expense.dto.ExpenseRequest;
 import com.example.cafemangmentsystem.expense.dto.ExpenseResponse;
 import com.example.cafemangmentsystem.expense.dto.SettleExpenseRequest;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.EXPENSES)
 @RestController
 @RequestMapping("/api/expenses")
 @RequiredArgsConstructor

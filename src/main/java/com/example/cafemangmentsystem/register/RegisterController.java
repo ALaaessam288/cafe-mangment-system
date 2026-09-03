@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.register;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.register.dto.RegisterRequest;
 import com.example.cafemangmentsystem.register.dto.RegisterResponse;
 import com.example.cafemangmentsystem.security.UserPrincipal;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.MULTI_REGISTER)
 @RestController
 @RequestMapping("/api/registers")
 @RequiredArgsConstructor

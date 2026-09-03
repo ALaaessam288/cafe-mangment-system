@@ -64,6 +64,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/platform/**").permitAll()
                 .requestMatchers("/api/license/validate").permitAll()
+                // The pricing catalogue is public: the signup and onboarding screens render it
+                // before anyone has an account, and a price list is public information anyway.
+                // Only the read side — /api/admin/plans still requires SUPER_ADMIN.
+                .requestMatchers(HttpMethod.GET, "/api/plans", "/api/plans/features").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()

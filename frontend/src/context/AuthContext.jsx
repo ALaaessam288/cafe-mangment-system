@@ -3,6 +3,42 @@ import { authApi } from '../api/authApi';
 import { storage } from '../utils/storage';
 import { ROLE_DEFAULT_ROUTE, ROUTES } from '../utils/constants';
 
+const UNLIMITED = -1;
+
+/*
+ * Flattens the server's LoginResponse into the session object.
+ *
+ * The subscription block is taken verbatim from the same entitlement snapshot the server enforces
+ * with. Previously this function invented fallbacks — `maxTables ?? 5`, `includesExpenses ?? true`
+ * — so a response missing a field left the client believing it had access the API would refuse.
+ * A missing subscription is now recorded as missing.
+ */
+function toUserInfo(data, tenantSlug) {
+  const sub = data.subscription ?? null;
+  return {
+    id:              data.userId,
+    username:        data.username,
+    fullName:        data.fullName,
+    role:            data.role,
+    tenantName:      data.tenantName,
+    tenantSlug:      data.tenantSlug || tenantSlug,
+    logoUrl:         data.logoUrl || null,
+    planSelected:    data.planSelected ?? false,
+    subscriptionPlan: sub?.planCode ?? null,
+    planDisplayName:  sub?.planName ?? null,
+    subscriptionStatus: sub?.status ?? null,
+    accessLevel:      sub?.accessLevel ?? 'READ_ONLY',
+    daysRemaining:    sub?.daysRemaining ?? null,
+    perpetual:        sub?.perpetual ?? false,
+    inGrace:          sub?.inGrace ?? false,
+    periodEnd:        sub?.periodEnd ?? null,
+    maxTables:        sub?.maxTables ?? 0,
+    maxUsers:         sub?.maxUsers ?? 0,
+    maxProducts:      sub?.maxProducts ?? 0,
+    features:         sub?.features ?? [],
+  };
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -57,25 +93,7 @@ export function AuthProvider({ children }) {
       storage.setRefreshToken(data.refreshToken);
       storage.setTenantSlug(tenantSlug);
 
-      const userInfo = {
-        id:                 data.userId,
-        username:           data.username,
-        fullName:           data.fullName,
-        role:               data.role,
-        tenantName:         data.tenantName,
-        tenantSlug:         data.tenantSlug || tenantSlug,
-        subscriptionPlan:   data.subscriptionPlan || 'TRIAL',
-        planDisplayName:    data.planDisplayName || 'فترة تجريبية',
-        trialEndsAt:        data.trialEndsAt,
-        subscriptionEndsAt: data.subscriptionEndsAt,
-        maxTables:          data.maxTables ?? 5,
-        maxUsers:           data.maxUsers ?? 2,
-        maxProducts:        data.maxProducts ?? 30,
-        includesKds:        data.includesKds ?? false,
-        includesExpenses:   data.includesExpenses ?? false,
-        logoUrl:            data.logoUrl || null,
-        planSelected:       data.planSelected ?? true,
-      };
+      const userInfo = toUserInfo(data, tenantSlug);
       storage.setUser(userInfo);
       setUser(userInfo);
       return { success: true, defaultRoute: ROLE_DEFAULT_ROUTE[data.role] };
@@ -95,25 +113,7 @@ export function AuthProvider({ children }) {
       storage.setRefreshToken(data.refreshToken);
       storage.setTenantSlug(tenantSlug);
 
-      const userInfo = {
-        id:                 data.userId,
-        username:           data.username,
-        fullName:           data.fullName,
-        role:               data.role,
-        tenantName:         data.tenantName,
-        tenantSlug:         data.tenantSlug || tenantSlug,
-        subscriptionPlan:   data.subscriptionPlan || 'TRIAL',
-        planDisplayName:    data.planDisplayName || 'فترة تجريبية',
-        trialEndsAt:        data.trialEndsAt,
-        subscriptionEndsAt: data.subscriptionEndsAt,
-        maxTables:          data.maxTables ?? 5,
-        maxUsers:           data.maxUsers ?? 2,
-        maxProducts:        data.maxProducts ?? 30,
-        includesKds:        data.includesKds ?? false,
-        includesExpenses:   data.includesExpenses ?? false,
-        logoUrl:            data.logoUrl || null,
-        planSelected:       data.planSelected ?? true,
-      };
+      const userInfo = toUserInfo(data, tenantSlug);
       storage.setUser(userInfo);
       setUser(userInfo);
       return { success: true, defaultRoute: ROLE_DEFAULT_ROUTE[data.role] };
@@ -133,54 +133,80 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const updateTenantPlan = useCallback((updatedTenant) => {
+  /** Accepts a SubscriptionDto from /tenant/plan or a licence activation. */
+  const updateTenantPlan = useCallback((subscription) => {
     setUser((prev) => {
       if (!prev) return prev;
       const updated = {
         ...prev,
-        subscriptionPlan: updatedTenant.subscriptionPlan || prev.subscriptionPlan,
-        planDisplayName: updatedTenant.planDisplayName || prev.planDisplayName,
-        trialEndsAt: updatedTenant.trialEndsAt !== undefined ? updatedTenant.trialEndsAt : prev.trialEndsAt,
-        subscriptionEndsAt: updatedTenant.subscriptionEndsAt !== undefined ? updatedTenant.subscriptionEndsAt : prev.subscriptionEndsAt,
-        maxTables: updatedTenant.maxTables ?? prev.maxTables,
-        maxUsers: updatedTenant.maxUsers ?? prev.maxUsers,
-        maxProducts: updatedTenant.maxProducts ?? prev.maxProducts,
-        includesKds: updatedTenant.includesKds ?? prev.includesKds,
-        includesExpenses: updatedTenant.includesExpenses ?? prev.includesExpenses,
-        planSelected: true,
+        subscriptionPlan:   subscription.planCode ?? prev.subscriptionPlan,
+        planDisplayName:    subscription.planName ?? prev.planDisplayName,
+        subscriptionStatus: subscription.status ?? prev.subscriptionStatus,
+        periodEnd:          subscription.currentPeriodEnd ?? null,
+        perpetual:          subscription.perpetual ?? false,
+        planSelected:       true,
       };
       storage.setUser(updated);
       return updated;
     });
   }, []);
 
-  const isTrial = user?.subscriptionPlan === 'TRIAL';
-  
-  const isExpired = (() => {
-    if (!user) return false;
-    const now = new Date();
-    if (isTrial && user.trialEndsAt) {
-      return new Date(user.trialEndsAt) < now;
-    }
-    if (user.subscriptionEndsAt) {
-      return new Date(user.subscriptionEndsAt) < now;
-    }
-    return false;
-  })();
+  /** Replaces the session's subscription block from a /tenant/usage payload. */
+  const refreshEntitlements = useCallback((usage) => {
+    setUser((prev) => {
+      if (!prev || !usage) return prev;
+      /*
+       * Ignore a payload that isn't the current shape. A backend still serving the pre-billing
+       * usage response has no `quotas` array, and reading limits off it would resolve every one to
+       * zero — which the quota checks read as "nothing allowed" and would lock the UI down against
+       * a server that is perfectly happy.
+       */
+      if (!Array.isArray(usage.quotas)) return prev;
+      const limitFor = (type) => usage.quotas.find((q) => q.type === type)?.limit ?? 0;
+      const updated = {
+        ...prev,
+        subscriptionPlan:   usage.planCode ?? prev.subscriptionPlan,
+        planDisplayName:    usage.planName ?? prev.planDisplayName,
+        subscriptionStatus: usage.status ?? prev.subscriptionStatus,
+        accessLevel:        usage.accessLevel ?? prev.accessLevel,
+        daysRemaining:      usage.daysRemaining ?? null,
+        perpetual:          usage.perpetual ?? false,
+        inGrace:            usage.inGrace ?? false,
+        periodEnd:          usage.periodEnd ?? null,
+        maxTables:          limitFor('TABLES'),
+        maxUsers:           limitFor('USERS'),
+        maxProducts:        limitFor('PRODUCTS'),
+        features:           usage.features?.map((f) => f.code) ?? prev.features,
+      };
+      storage.setUser(updated);
+      return updated;
+    });
+  }, []);
 
-  const canAccess = useCallback((feature) => {
-    if (!user) return false;
-    if (feature === 'kds') return user.includesKds ?? false;
-    if (feature === 'expenses') return user.includesExpenses ?? true;
-    return true;
-  }, [user]);
+  const isTrial   = user?.subscriptionStatus === 'TRIALING';
+  const inGrace   = user?.inGrace === true;
+  /* Read-only or blocked: the server has stopped accepting writes. */
+  const isExpired = user ? user.accessLevel !== 'FULL' : false;
 
+  /*
+   * Feature checks read the plan's own feature list. The old version hardcoded two features and
+   * defaulted `expenses` to true when unknown, so the UI offered a button the API would reject.
+   */
+  const canAccess = useCallback(
+    (feature) => (user?.features ?? []).includes(String(feature).toUpperCase()),
+    [user],
+  );
+
+  /** null means unlimited — the server's -1 sentinel, not a number to compare against. */
   const quotaRemaining = useCallback((resource, currentCount = 0) => {
-    if (!user) return Infinity;
-    if (resource === 'tables') return Math.max(0, (user.maxTables ?? Infinity) - currentCount);
-    if (resource === 'users') return Math.max(0, (user.maxUsers ?? Infinity) - currentCount);
-    if (resource === 'products') return Math.max(0, (user.maxProducts ?? Infinity) - currentCount);
-    return Infinity;
+    if (!user) return null;
+    const limit = {
+      tables:   user.maxTables,
+      users:    user.maxUsers,
+      products: user.maxProducts,
+    }[resource];
+    if (limit === undefined || limit === UNLIMITED) return null;
+    return Math.max(0, limit - currentCount);
   }, [user]);
 
   /* ── Login Super Admin (Master Platform) ── */
@@ -193,23 +219,9 @@ export function AuthProvider({ children }) {
       storage.setTenantSlug('platform');
 
       const userInfo = {
-        id:                 data.userId,
-        username:           data.username,
-        fullName:           data.fullName || 'Platform Master',
-        role:               'SUPER_ADMIN',
-        tenantName:         'Caffio Platform Master',
-        tenantSlug:         'platform',
-        subscriptionPlan:   'ENTERPRISE',
-        planDisplayName:    'Platform Master',
-        trialEndsAt:        null,
-        subscriptionEndsAt: null,
-        maxTables:          9999,
-        maxUsers:           9999,
-        maxProducts:        9999,
-        includesKds:        true,
-        includesExpenses:   true,
-        logoUrl:            null,
-        planSelected:       true,
+        ...toUserInfo(data, 'platform'),
+        fullName: data.fullName || 'Platform Master',
+        role: 'SUPER_ADMIN',
       };
       storage.setUser(userInfo);
       setUser(userInfo);
@@ -233,9 +245,11 @@ export function AuthProvider({ children }) {
     logout,
     updateTenantInfo,
     updateTenantPlan,
+    refreshEntitlements,
     hasRole:   (...roles) => roles.includes(user?.role),
     isTrial,
     isExpired,
+    inGrace,
     canAccess,
     quotaRemaining
   };

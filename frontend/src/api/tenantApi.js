@@ -31,7 +31,10 @@ export const tenantApi = {
 
   updateLogo: (logoUrl) => client.put('/tenant/logo', { logoUrl }).then((r) => r.data),
 
-  selectPlan: (plan) => client.put('/tenant/plan', { plan }).then((r) => r.data),
+  /** Takes a plan CODE. Only self-selectable plans (the trial) are accepted. */
+  selectPlan: (planCode) => client.put('/tenant/plan', { plan: planCode }).then((r) => r.data),
+
+  getSubscription: () => client.get('/tenant/subscription').then((r) => r.data),
 
   activateLicense: (key) => client.post('/tenant/license/activate', { key }).then((r) => r.data),
 };

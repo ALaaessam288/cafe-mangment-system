@@ -14,6 +14,7 @@ import ShortcutsModal from '../components/ShortcutsModal/ShortcutsModal';
 import NotificationCenter from '../components/NotificationCenter/NotificationCenter';
 import { sounds } from '../utils/soundEffects';
 import './AppLayout.css';
+import TrialBanner from '../components/TrialBanner/TrialBanner';
 
 /* Sections the sidebar folds into. Each one collapses independently and the
    state sticks, so a cashier can keep الكاشير open and everything else shut. */
@@ -367,6 +368,8 @@ export default function AppLayout({ children }) {
             </button>
           </div>
         )}
+        {/* Subscription countdown: shown once, above the page, for every tenant screen. */}
+        <TrialBanner />
         {children}
       </main>
 

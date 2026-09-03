@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.discount;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.discount.dto.ApplyDiscountRequest;
 import com.example.cafemangmentsystem.discount.dto.DiscountResponse;
 import com.example.cafemangmentsystem.order.OrderService;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@RequiresFeature(Feature.DISCOUNTS)
 @RestController
 @RequestMapping("/api/orders/{orderId}")
 @RequiredArgsConstructor

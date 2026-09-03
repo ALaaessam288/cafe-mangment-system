@@ -1,5 +1,7 @@
 package com.example.cafemangmentsystem.report;
 
+import com.example.cafemangmentsystem.billing.RequiresFeature;
+import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.report.dto.BestSellerDto;
 import com.example.cafemangmentsystem.report.dto.FinancialReportDto;
 import com.example.cafemangmentsystem.report.dto.HourlySlotDto;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
+@RequiresFeature(Feature.REPORTS)
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
