@@ -419,9 +419,13 @@ export default function SuperAdminPage() {
   }
 
   function copyToClipboard(text, label = 'النص') {
-    navigator.clipboard.writeText(text).then(() => {
+    return navigator.clipboard.writeText(text).then(() => {
       toast.success(`تم نسخ ${label} إلى الحافظة ✓`);
-    }).catch(() => toast.error(`تعذر نسخ ${label}`));
+      return true;
+    }).catch(() => {
+      toast.error(`تعذر نسخ ${label}`);
+      return false;
+    });
   }
 
   // ── EXPORT DATA ────────────────────────────────────────────────────────────
@@ -2227,6 +2231,10 @@ export default function SuperAdminPage() {
         <ProvisionSuccessModal
           data={createdTenantModal}
           onClose={() => setCreatedTenantModal(null)}
+          onViewTenants={() => {
+            setCreatedTenantModal(null);
+            setActiveSection('tenants');
+          }}
           onCopy={copyToClipboard}
           onWhatsapp={sendWhatsappCredentials}
           formatMessage={formatWhatsappMessage}

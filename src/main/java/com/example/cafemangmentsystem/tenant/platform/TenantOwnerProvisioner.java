@@ -7,6 +7,7 @@ import com.example.cafemangmentsystem.user.entity.User;
 import com.example.cafemangmentsystem.user.repository.UserRepository;
 import com.example.cafemangmentsystem.cafetable.entity.CafeTable;
 import com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository;
+import com.example.cafemangmentsystem.menu.MenuTemplateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -31,9 +32,10 @@ public class TenantOwnerProvisioner {
     private final PasswordEncoder passwordEncoder;
     private final RegisterRepository registerRepository;
     private final CafeTableRepository cafeTableRepository;
+    private final MenuTemplateService menuTemplateService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public User createOwner(String username, String fullName, String rawPassword, Integer defaultTables) {
+    public User createOwner(String username, String fullName, String rawPassword, Integer defaultTables, String templateId) {
         User owner = new User();
         owner.setUsername(username);
         owner.setFullName(fullName);
@@ -53,6 +55,10 @@ public class TenantOwnerProvisioner {
             table.setZone(com.example.cafemangmentsystem.cafetable.entity.TableZone.INDOOR);
             table.setSeats(4);
             cafeTableRepository.save(table);
+        }
+
+        if (templateId != null && !templateId.isBlank()) {
+            menuTemplateService.seedTemplate(templateId);
         }
         
         return owner;

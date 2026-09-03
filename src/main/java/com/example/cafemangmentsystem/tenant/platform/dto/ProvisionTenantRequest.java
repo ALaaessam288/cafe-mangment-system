@@ -3,22 +3,25 @@ package com.example.cafemangmentsystem.tenant.platform.dto;
 import com.example.cafemangmentsystem.tenant.entity.BusinessType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record ProvisionTenantRequest(
-        @NotBlank String name,
-        @NotBlank @Pattern(regexp = "^[a-z0-9-]+$", message = "slug must be lowercase letters, digits and hyphens only") String slug,
+        @NotBlank @Size(min = 2, max = 80) String name,
+        @NotBlank @Size(max = 48) @Pattern(regexp = "^[a-z0-9]+(?:-[a-z0-9]+)*$", message = "slug must be lowercase letters, digits and single hyphens between words") String slug,
         @NotNull BusinessType businessType,
         com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan subscriptionPlan,
-        String ownerWhatsapp,
-        @NotBlank String ownerUsername,
-        @NotBlank @Size(min = 8, message = "password must be at least 8 characters") String ownerPassword,
-        @NotBlank String ownerFullName,
-        String timezone,
-        String currency,
-        String templateId,
-        Integer defaultTables
+        @Size(max = 24) @Pattern(regexp = "^$|^(?=(?:[^0-9]*[0-9]){10,15}[^0-9]*$)[+0-9 ()-]{10,24}$", message = "ownerWhatsapp has an invalid format") String ownerWhatsapp,
+        @NotBlank @Size(min = 3, max = 32) @Pattern(regexp = "^[A-Za-z0-9._-]+$", message = "ownerUsername contains unsupported characters") String ownerUsername,
+        @NotBlank @Size(min = 8, max = 128, message = "password must be between 8 and 128 characters")
+        @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$", message = "password must contain at least one letter and one number") String ownerPassword,
+        @NotBlank @Size(min = 2, max = 80) String ownerFullName,
+        @Size(max = 64) String timezone,
+        @Pattern(regexp = "^[A-Z]{3}$", message = "currency must be a three-letter uppercase code") String currency,
+        @Pattern(regexp = "^$|^(CLASSIC_CAFE|EGYPTIAN_RESTAURANT|CAFE_AND_RESTAURANT)$", message = "unsupported menu template") String templateId,
+        @Min(0) @Max(9999) Integer defaultTables
 ) {
     public ProvisionTenantRequest(
             String name, String slug, BusinessType businessType,

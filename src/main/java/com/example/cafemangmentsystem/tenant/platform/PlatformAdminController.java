@@ -4,6 +4,7 @@ import com.example.cafemangmentsystem.tenant.TenantService;
 import com.example.cafemangmentsystem.tenant.dto.TenantResponse;
 import com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan;
 import com.example.cafemangmentsystem.tenant.entity.TenantStatus;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +32,7 @@ public class PlatformAdminController {
 
     @PostMapping("/provision")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse provisionTenant(@RequestBody com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest request) {
+    public com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse provisionTenant(@Valid @RequestBody com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest request) {
         return tenantService.provisionWithSetup(request);
     }
 

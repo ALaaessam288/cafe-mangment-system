@@ -9,7 +9,6 @@ import com.example.cafemangmentsystem.station.entity.StationCode;
 import com.example.cafemangmentsystem.station.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -31,7 +30,7 @@ public class MenuTemplateService {
         });
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void seedTemplate(String templateId) {
         Station barStation = getOrCreateStation(StationCode.BAR, "البوفيه / البار");
         Station kitchenStation = getOrCreateStation(StationCode.KITCHEN, "المطبخ");

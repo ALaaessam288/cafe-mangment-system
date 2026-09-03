@@ -315,7 +315,6 @@ export default function UsersPage() {
                     <div className="user-card__actions">
                       <Button variant="ghost" size="sm" onClick={() => handleOpenPin(u)} title="تعيين رمز PIN السريع" style={{ color: 'var(--accent)' }}>
                         <KeyRound size={14} />
-                        <span># PIN</span>
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
                         <Shield size={14} />

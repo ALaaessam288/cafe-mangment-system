@@ -19,7 +19,7 @@ public class WhatsAppService {
 
     private static final Logger log = LoggerFactory.getLogger(WhatsAppService.class);
 
-    @Value("${whatsapp.gateway.enabled:true}")
+    @Value("${whatsapp.gateway.enabled:false}")
     private boolean enabled;
 
     @Value("${whatsapp.gateway.provider:GENERIC_HTTP}")
@@ -53,14 +53,10 @@ public class WhatsAppService {
 
         String normalizedPhone = normalizePhone(recipientPhone);
 
-        log.info("[WhatsApp Automation] 📲 Sending background message to {} (Sender: {})", normalizedPhone, senderNumber);
+        log.info("[WhatsApp] Dispatch requested for {}", maskPhone(normalizedPhone));
 
         if (apiUrl == null || apiUrl.isBlank() || token == null || token.isBlank()) {
-            log.info("────────────────────────────────────────────────────────────────────────────");
-            log.info("[WhatsApp Instant Server Dispatch] (Simulated / Ready for Gateway Token)");
-            log.info("To: {}", normalizedPhone);
-            log.info("Message:\n{}", messageText);
-            log.info("────────────────────────────────────────────────────────────────────────────");
+            log.warn("[WhatsApp] Dispatch skipped for {} because gateway credentials are not configured", maskPhone(normalizedPhone));
             return;
         }
 
@@ -79,24 +75,29 @@ public class WhatsAppService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                log.info("[WhatsApp Automation] ✅ Message delivered successfully to {}. Response: {}", normalizedPhone, response.body());
+                log.info("[WhatsApp] Message delivered successfully to {}", maskPhone(normalizedPhone));
             } else {
-                log.warn("[WhatsApp Automation] ⚠️ Gateway responded with status {}: {}", response.statusCode(), response.body());
+                log.warn("[WhatsApp] Gateway returned status {} for {}", response.statusCode(), maskPhone(normalizedPhone));
             }
         } catch (Exception ex) {
-            log.error("[WhatsApp Automation] ❌ Failed to dispatch instant message to {}: {}", normalizedPhone, ex.getMessage());
+            log.error("[WhatsApp] Failed to dispatch message to {}: {}", maskPhone(normalizedPhone), ex.getMessage());
         }
     }
 
     /**
-     * Sends tenant owner credentials instantly upon account creation.
+     * Sends tenant owner credentials only when an explicit caller supplies a public application URL.
      */
     public void sendTenantCredentials(Tenant tenant, String username, String plainPassword, String appBaseUrl) {
         if (tenant.getOwnerWhatsapp() == null || tenant.getOwnerWhatsapp().isBlank()) {
             return;
         }
 
-        String baseUrl = (appBaseUrl != null && !appBaseUrl.isBlank()) ? appBaseUrl : "http://localhost:5173";
+        if (appBaseUrl == null || appBaseUrl.isBlank()) {
+            log.warn("[WhatsApp] Credential delivery skipped because no public application URL was supplied");
+            return;
+        }
+
+        String baseUrl = appBaseUrl;
         if (baseUrl.endsWith("/")) {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
@@ -126,6 +127,12 @@ public class WhatsAppService {
         );
 
         sendInstantMessage(tenant.getOwnerWhatsapp(), message);
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.isBlank()) return "unknown recipient";
+        int visibleDigits = Math.min(4, phone.length());
+        return "***" + phone.substring(phone.length() - visibleDigits);
     }
 
     private String normalizePhone(String raw) {

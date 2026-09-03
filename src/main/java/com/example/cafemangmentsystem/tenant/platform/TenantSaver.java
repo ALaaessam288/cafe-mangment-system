@@ -29,4 +29,10 @@ public class TenantSaver {
     public boolean existsBySlug(String slug) {
         return tenantRepository.existsBySlug(slug);
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void deleteById(Long tenantId) {
+        tenantRepository.deleteById(tenantId);
+        tenantRepository.flush();
+    }
 }

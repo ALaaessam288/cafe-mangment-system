@@ -17,13 +17,47 @@ const INITIAL_DRAFT = {
   defaultTables: 10,
 };
 const PROVISION_DRAFT_KEY = 'caffio:super-admin:provision-draft';
+const PERSISTED_DRAFT_FIELDS = [
+  'name',
+  'slug',
+  'businessType',
+  'subscriptionPlan',
+  'timezone',
+  'currency',
+  'templateId',
+  'defaultTables',
+];
+
+function getPersistableDraft(draft) {
+  return Object.fromEntries(PERSISTED_DRAFT_FIELDS.map((field) => [field, draft[field]]));
+}
 
 function loadSavedDraft() {
   try {
     const saved = window.localStorage.getItem(PROVISION_DRAFT_KEY);
-    return saved ? { ...INITIAL_DRAFT, ...JSON.parse(saved) } : INITIAL_DRAFT;
+    if (!saved) return INITIAL_DRAFT;
+
+    const parsed = JSON.parse(saved);
+    const safeDraft = getPersistableDraft({ ...INITIAL_DRAFT, ...parsed });
+
+    // Rewrite legacy drafts immediately so previously persisted credentials are purged.
+    window.localStorage.setItem(PROVISION_DRAFT_KEY, JSON.stringify(safeDraft));
+    return { ...INITIAL_DRAFT, ...safeDraft };
   } catch {
+    try {
+      window.localStorage.removeItem(PROVISION_DRAFT_KEY);
+    } catch {
+      // Storage can be unavailable in hardened browser contexts.
+    }
     return INITIAL_DRAFT;
+  }
+}
+
+function hasSavedDraft() {
+  try {
+    return Boolean(window.localStorage.getItem(PROVISION_DRAFT_KEY));
+  } catch {
+    return false;
   }
 }
 
@@ -93,7 +127,9 @@ function validateStep(step, draft, tenants) {
 
   if (step === 1) {
     if (draft.name.trim().length < 2) errors.name = 'اكتب اسماً واضحاً للمنشأة.';
+    else if (draft.name.trim().length > 80) errors.name = 'اسم المنشأة يجب ألا يتجاوز 80 حرفاً.';
     if (!slug) errors.slug = 'أنشئ رابطاً مختصراً للمنشأة.';
+    else if (slug.length > 48) errors.slug = 'رابط مساحة العمل يجب ألا يتجاوز 48 حرفاً.';
     else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) errors.slug = 'استخدم حروفاً إنجليزية وأرقاماً وشرطات بين الكلمات.';
     else if (tenants.some((tenant) => tenant.slug?.toLowerCase() === slug)) errors.slug = 'هذا الرابط مستخدم بالفعل. جرّب اسماً مختلفاً.';
   }
@@ -107,10 +143,13 @@ function validateStep(step, draft, tenants) {
 
   if (step === 3) {
     if (draft.ownerFullName.trim().length < 2) errors.ownerFullName = 'اكتب اسم المالك أو المدير المسؤول.';
+    else if (draft.ownerFullName.trim().length > 80) errors.ownerFullName = 'اسم المالك يجب ألا يتجاوز 80 حرفاً.';
     if (!/^[a-zA-Z0-9._-]{3,32}$/.test(draft.ownerUsername)) errors.ownerUsername = 'من 3 إلى 32 حرفاً إنجليزياً، ويمكن استخدام النقطة أو الشرطة.';
     if (draft.ownerPassword.length < 8 || !/[a-z]/i.test(draft.ownerPassword) || !/\d/.test(draft.ownerPassword)) errors.ownerPassword = 'استخدم 8 أحرف على الأقل وتأكد من وجود حرف ورقم.';
+    else if (draft.ownerPassword.length > 128) errors.ownerPassword = 'كلمة المرور يجب ألا تتجاوز 128 حرفاً.';
     const phone = draft.ownerWhatsapp.replace(/\D/g, '');
-    if (phone && (phone.length < 10 || phone.length > 15)) errors.ownerWhatsapp = 'راجع رقم واتساب، أو اترك الحقل فارغاً.';
+    if (draft.ownerWhatsapp && !/^[+0-9 ()-]+$/.test(draft.ownerWhatsapp)) errors.ownerWhatsapp = 'استخدم أرقاماً ورمز + والمسافات والشرطات فقط.';
+    else if (phone && (phone.length < 10 || phone.length > 15)) errors.ownerWhatsapp = 'راجع رقم واتساب، أو اترك الحقل فارغاً.';
   }
 
   return errors;
@@ -124,11 +163,11 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
   const [draft, setDraft] = useState(loadSavedDraft);
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
-  const [slugEdited, setSlugEdited] = useState(false);
+  const [slugEdited, setSlugEdited] = useState(() => Boolean(draft.slug));
   const [showPassword, setShowPassword] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
-  const [restoredDraft] = useState(() => Boolean(window.localStorage.getItem(PROVISION_DRAFT_KEY)));
+  const [restoredDraft] = useState(hasSavedDraft);
   const firstInputRef = useRef(null);
 
   const selectedPlan = useMemo(() => PLANS.find((plan) => plan.value === draft.subscriptionPlan) || PLANS[2], [draft.subscriptionPlan]);
@@ -154,11 +193,13 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
   function setField(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
+    setConfirmed(false);
   }
 
   function handleNameChange(name) {
     setDraft((current) => ({ ...current, name, slug: slugEdited ? current.slug : slugifyName(name) }));
     setErrors((current) => ({ ...current, name: undefined, slug: undefined }));
+    setConfirmed(false);
   }
 
   function handleSlugChange(value) {
@@ -169,6 +210,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
   function selectBusiness(business) {
     setDraft((current) => ({ ...current, businessType: business.value, templateId: business.template, defaultTables: business.tables }));
     setErrors((current) => ({ ...current, businessType: undefined, defaultTables: undefined }));
+    setConfirmed(false);
   }
 
   function continueFlow() {
@@ -196,15 +238,31 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
     }
     if (!confirmed) return;
     try {
-      await onProvision({ ...draft, slug: draft.slug.trim().toLowerCase(), defaultTables: Number(draft.defaultTables) });
-      window.localStorage.removeItem(PROVISION_DRAFT_KEY);
+      await onProvision({
+        ...draft,
+        name: draft.name.trim(),
+        slug: draft.slug.trim().toLowerCase(),
+        ownerFullName: draft.ownerFullName.trim(),
+        ownerUsername: draft.ownerUsername.trim(),
+        ownerWhatsapp: draft.ownerWhatsapp.trim(),
+        defaultTables: Number(draft.defaultTables),
+      });
+      try {
+        window.localStorage.removeItem(PROVISION_DRAFT_KEY);
+      } catch {
+        // Provisioning succeeded; storage cleanup must not turn it into a false failure.
+      }
     } catch {
       // The parent reports the server error; keep this draft available for correction.
     }
   }
 
   function saveDraftAndClose() {
-    window.localStorage.setItem(PROVISION_DRAFT_KEY, JSON.stringify(draft));
+    try {
+      window.localStorage.setItem(PROVISION_DRAFT_KEY, JSON.stringify(getPersistableDraft(draft)));
+    } catch {
+      // The dialog can still close when browser storage is unavailable.
+    }
     onClose();
   }
 
@@ -242,13 +300,13 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
 
                   <div className="sa-pv-field sa-pv-field--wide">
                     <label htmlFor="pv-name">اسم المنشأة <b>إلزامي</b></label>
-                    <div className={`sa-pv-control ${errors.name ? 'has-error' : ''}`}><i className="bi bi-shop" /><input ref={firstInputRef} id="pv-name" value={draft.name} onChange={(event) => handleNameChange(event.target.value)} placeholder="مثال: روقان كافيه — فرع المعادي" /><span>{draft.name.length}/80</span></div>
+                    <div className={`sa-pv-control ${errors.name ? 'has-error' : ''}`}><i className="bi bi-shop" /><input ref={firstInputRef} id="pv-name" maxLength={80} value={draft.name} onChange={(event) => handleNameChange(event.target.value)} placeholder="مثال: روقان كافيه — فرع المعادي" /><span>{draft.name.length}/80</span></div>
                     <FieldError message={errors.name} />
                   </div>
 
                   <div className="sa-pv-field sa-pv-field--wide">
                     <label htmlFor="pv-slug">رابط مساحة العمل <b>إلزامي</b></label>
-                    <div className={`sa-pv-slug ${errors.slug ? 'has-error' : ''}`} dir="ltr"><span>{window.location.host}/</span><input id="pv-slug" value={draft.slug} onChange={(event) => handleSlugChange(event.target.value)} placeholder="rawqan-cafe" /><span>/login</span></div>
+                    <div className={`sa-pv-slug ${errors.slug ? 'has-error' : ''}`} dir="ltr"><span>{window.location.host}/</span><input id="pv-slug" maxLength={48} value={draft.slug} onChange={(event) => handleSlugChange(event.target.value)} placeholder="rawqan-cafe" /><span>/login</span></div>
                     <div className="sa-pv-field-meta"><small>سننشئ اقتراحاً تلقائياً، ويمكنك تعديله.</small>{draft.slug && !errors.slug && <strong><i className="bi bi-check-circle-fill" /> متاح محلياً</strong>}</div>
                     <FieldError message={errors.slug} />
                   </div>
@@ -307,10 +365,10 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
                   <div className="sa-pv-stage__intro"><span>03</span><div><h3>سلّم الحساب بثقة</h3><p>أنشئ حساب المالك وراجع كل قرار قبل تنفيذ التأسيس.</p></div></div>
 
                   <div className="sa-pv-owner-grid">
-                    <div className="sa-pv-field"><label htmlFor="pv-owner">اسم المالك أو المدير <b>إلزامي</b></label><div className={`sa-pv-control ${errors.ownerFullName ? 'has-error' : ''}`}><i className="bi bi-person" /><input id="pv-owner" value={draft.ownerFullName} onChange={(event) => setField('ownerFullName', event.target.value)} placeholder="مثال: أحمد محمود" /></div><FieldError message={errors.ownerFullName} /></div>
-                    <div className="sa-pv-field"><label htmlFor="pv-whatsapp">واتساب التسليم <small>اختياري</small></label><div className={`sa-pv-control ${errors.ownerWhatsapp ? 'has-error' : ''}`} dir="ltr"><i className="bi bi-whatsapp" /><input id="pv-whatsapp" inputMode="tel" value={draft.ownerWhatsapp} onChange={(event) => setField('ownerWhatsapp', event.target.value)} placeholder="010 0000 0000" /></div><FieldError message={errors.ownerWhatsapp} /></div>
-                    <div className="sa-pv-field"><label htmlFor="pv-username">اسم المستخدم <b>إلزامي</b></label><div className={`sa-pv-control ${errors.ownerUsername ? 'has-error' : ''}`} dir="ltr"><i className="bi bi-at" /><input id="pv-username" autoComplete="off" value={draft.ownerUsername} onChange={(event) => setField('ownerUsername', event.target.value.trim())} placeholder="admin.rawqan" /></div><FieldError message={errors.ownerUsername} /></div>
-                    <div className="sa-pv-field"><label htmlFor="pv-password">كلمة المرور الأولى <b>إلزامي</b></label><div className={`sa-pv-control sa-pv-control--password ${errors.ownerPassword ? 'has-error' : ''}`} dir="ltr"><i className="bi bi-key" /><input id="pv-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={draft.ownerPassword} onChange={(event) => setField('ownerPassword', event.target.value)} placeholder="8 أحرف على الأقل" /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}><i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`} /></button><button type="button" onClick={() => { setField('ownerPassword', generatePassword()); setShowPassword(true); }}><i className="bi bi-magic" /> توليد</button></div><div className="sa-pv-strength"><span><i style={{ width: `${Math.max(8, strength * 20)}%` }} /></span><small>{strength <= 2 ? 'ضعيفة' : strength <= 4 ? 'جيدة' : 'قوية جداً'}</small></div><FieldError message={errors.ownerPassword} /></div>
+                    <div className="sa-pv-field"><label htmlFor="pv-owner">اسم المالك أو المدير <b>إلزامي</b></label><div className={`sa-pv-control ${errors.ownerFullName ? 'has-error' : ''}`}><i className="bi bi-person" /><input id="pv-owner" maxLength={80} value={draft.ownerFullName} onChange={(event) => setField('ownerFullName', event.target.value)} placeholder="مثال: أحمد محمود" /></div><FieldError message={errors.ownerFullName} /></div>
+                    <div className="sa-pv-field"><label htmlFor="pv-whatsapp">واتساب التسليم <small>اختياري</small></label><div className={`sa-pv-control ${errors.ownerWhatsapp ? 'has-error' : ''}`} dir="ltr"><i className="bi bi-whatsapp" /><input id="pv-whatsapp" inputMode="tel" maxLength={24} value={draft.ownerWhatsapp} onChange={(event) => setField('ownerWhatsapp', event.target.value)} placeholder="010 0000 0000" /></div><FieldError message={errors.ownerWhatsapp} /></div>
+                    <div className="sa-pv-field"><label htmlFor="pv-username">اسم المستخدم <b>إلزامي</b></label><div className={`sa-pv-control ${errors.ownerUsername ? 'has-error' : ''}`} dir="ltr"><i className="bi bi-at" /><input id="pv-username" autoComplete="off" maxLength={32} value={draft.ownerUsername} onChange={(event) => setField('ownerUsername', event.target.value.trim())} placeholder="admin.rawqan" /></div><FieldError message={errors.ownerUsername} /></div>
+                    <div className="sa-pv-field"><label htmlFor="pv-password">كلمة المرور الأولى <b>إلزامي</b></label><div className={`sa-pv-control sa-pv-control--password ${errors.ownerPassword ? 'has-error' : ''}`} dir="ltr"><i className="bi bi-key" /><input id="pv-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={128} value={draft.ownerPassword} onChange={(event) => setField('ownerPassword', event.target.value)} placeholder="8 أحرف على الأقل" /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}><i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`} /></button><button type="button" onClick={() => { setField('ownerPassword', generatePassword()); setShowPassword(true); }}><i className="bi bi-magic" /> توليد</button></div><div className="sa-pv-strength"><span><i style={{ width: `${Math.max(8, strength * 20)}%` }} /></span><small>{strength <= 2 ? 'ضعيفة' : strength <= 4 ? 'جيدة' : 'قوية جداً'}</small></div><FieldError message={errors.ownerPassword} /></div>
                   </div>
 
                   <section className="sa-pv-review">
@@ -319,7 +377,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
                     <div className="sa-pv-review__url" dir="ltr"><i className="bi bi-link-45deg" /><span>{loginUrl}</span><button type="button" onClick={() => navigator.clipboard?.writeText(loginUrl)}><i className="bi bi-copy" /></button></div>
                   </section>
 
-                  <label className={`sa-pv-confirm ${confirmed ? 'is-confirmed' : ''}`}><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><i className="bi bi-check-lg" /></span><b>راجعت بيانات المنشأة والمالك وأوافق على تنفيذ التأسيس.<small>سيتم إنشاء المنشأة وحساب المدير والمنيو والطاولات في عملية واحدة.</small></b></label>
+                  <label className={`sa-pv-confirm ${confirmed ? 'is-confirmed' : ''}`}><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><i className="bi bi-check-lg" /></span><b>راجعت بيانات المنشأة والمالك وأوافق على تنفيذ التأسيس.<small>سيتم إنشاء المنشأة وحساب المدير وتجهيز نقطة البداية كوحدة واحدة قابلة للاسترجاع عند الخطأ.</small></b></label>
                 </div>
               )}
             </section>
@@ -335,14 +393,14 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
           </main>
 
           <footer className="sa-pv-footer">
-            <button type="button" className="sa-pv-btn sa-pv-btn--ghost" onClick={saveDraftAndClose}><i className="bi bi-cloud-arrow-up" /> حفظ المسودة والخروج</button>
+            <button type="button" className="sa-pv-btn sa-pv-btn--ghost" onClick={saveDraftAndClose}><i className="bi bi-cloud-arrow-up" /> حفظ الإعدادات والخروج</button>
             <span>لن يتم إنشاء أي شيء قبل التأكيد النهائي.</span>
             <div>{step > 1 && <button type="button" className="sa-pv-btn sa-pv-btn--back" onClick={() => { setErrors({}); setStep((current) => current - 1); }}><i className="bi bi-arrow-right" /> السابق</button>}{step < 3 ? <button type="button" className="sa-pv-btn sa-pv-btn--primary" onClick={continueFlow}>التالي <i className="bi bi-arrow-left" /></button> : <button type="submit" className="sa-pv-btn sa-pv-btn--launch" disabled={updating || !confirmed}>{updating ? <><span className="spinner-border spinner-border-sm" /> جاري التأسيس…</> : <>تأسيس المنشأة <i className="bi bi-rocket-takeoff" /></>}</button>}</div>
           </footer>
         </form>
 
         {confirmExit && (
-          <div className="sa-pv-exit" role="alertdialog" aria-modal="true"><div><span><i className="bi bi-box-arrow-right" /></span><h3>الخروج من التأسيس؟</h3><p>يمكنك الاحتفاظ بالبيانات كمسودة والعودة إليها من أي زر «منشأة جديدة».</p><footer><button type="button" onClick={() => setConfirmExit(false)}>متابعة التعديل</button><button type="button" onClick={saveDraftAndClose}>حفظ وخروج</button><button type="button" onClick={() => { window.localStorage.removeItem(PROVISION_DRAFT_KEY); onClose(); }}>خروج بدون حفظ</button></footer></div></div>
+          <div className="sa-pv-exit" role="alertdialog" aria-modal="true"><div><span><i className="bi bi-box-arrow-right" /></span><h3>الخروج من التأسيس؟</h3><p>سنحفظ إعدادات المنشأة فقط. اسم المالك والهاتف وبيانات الدخول لن تُحفظ على هذا الجهاز.</p><footer><button type="button" onClick={() => setConfirmExit(false)}>متابعة التعديل</button><button type="button" onClick={saveDraftAndClose}>حفظ الإعدادات وخروج</button><button type="button" onClick={() => { window.localStorage.removeItem(PROVISION_DRAFT_KEY); onClose(); }}>خروج بدون حفظ</button></footer></div></div>
         )}
       </div>
     </div>,

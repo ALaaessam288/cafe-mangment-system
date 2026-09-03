@@ -12,6 +12,7 @@ import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantRequest
 import com.example.cafemangmentsystem.tenant.platform.dto.ProvisionTenantResponse;
 import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class TenantService {
 
     private static final Set<TenantStatus> LOGINABLE = Set.of(TenantStatus.TRIAL, TenantStatus.ACTIVE);
@@ -34,12 +36,10 @@ public class TenantService {
     private final TenantOwnerProvisioner tenantOwnerProvisioner;
     private final TenantSaver tenantSaver;
     private final com.example.cafemangmentsystem.security.jwt.JwtService jwtService;
-    private final com.example.cafemangmentsystem.menu.MenuTemplateService menuTemplateService;
     private final com.example.cafemangmentsystem.tenant.repository.TenantActivityLogRepository tenantActivityLogRepository;
     private final com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository cafeTableRepository;
     private final com.example.cafemangmentsystem.user.repository.UserRepository userRepository;
     private final com.example.cafemangmentsystem.menu.repository.ProductRepository productRepository;
-    private final com.example.cafemangmentsystem.common.whatsapp.WhatsAppService whatsAppService;
 
     /**
      * Resolves a tenant for login. Deliberately throws the same {@link BadCredentialsException}
@@ -175,7 +175,10 @@ public class TenantService {
      *   1. TenantSaver.existsBySlug()  — REQUIRES_NEW → commits → releases lock
      *   2. TenantSaver.save()          — REQUIRES_NEW → commits → releases lock
      *   3. TenantContext.set(tenantId) — no DB work
-     *   4. TenantOwnerProvisioner      — REQUIRES_NEW → commits → releases lock
+     *   4. TenantOwnerProvisioner      — REQUIRES_NEW → creates the owner and all setup data atomically
+     *
+     * If step 4 fails, the already-committed tenant shell is removed in a compensating
+     * transaction so the slug remains retryable.
      */
     /**
      * Public trial registration: strictly enforces TRIAL subscription plan (14-day duration),
@@ -202,19 +205,38 @@ public class TenantService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ProvisionTenantResponse provisionWithSetup(ProvisionTenantRequest request) {
-        if (tenantSaver.existsBySlug(request.slug())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + request.slug());
+        String normalizedSlug = request.slug().trim().toLowerCase(java.util.Locale.ROOT);
+        String timezone = request.timezone() == null ? "Africa/Cairo" : request.timezone().trim();
+        String currency = request.currency() == null ? "EGP" : request.currency().trim();
+        try {
+            java.time.ZoneId.of(timezone);
+        } catch (java.time.DateTimeException invalidTimezone) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported timezone: " + timezone);
+        }
+        try {
+            java.util.Currency.getInstance(currency);
+        } catch (IllegalArgumentException invalidCurrency) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported currency: " + currency);
+        }
+
+        if (tenantSaver.existsBySlug(normalizedSlug)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Slug already taken: " + normalizedSlug);
         }
 
         com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan plan =
                 request.subscriptionPlan() != null ? request.subscriptionPlan() : com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
+        int defaultTables = request.defaultTables() != null ? request.defaultTables() : 5;
+        if (defaultTables < 0 || defaultTables > plan.getMaxTables()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "defaultTables must be between 0 and the selected plan limit of " + plan.getMaxTables());
+        }
         TenantStatus status = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? TenantStatus.TRIAL : TenantStatus.ACTIVE;
         java.time.Instant subEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? null : java.time.Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS);
         java.time.Instant trialEnd = plan == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL ? java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS) : null;
 
         Tenant tenant = new Tenant();
-        tenant.setName(request.name());
-        tenant.setSlug(request.slug());
+        tenant.setName(request.name().trim());
+        tenant.setSlug(normalizedSlug);
         tenant.setBusinessType(request.businessType());
         tenant.setStatus(status);
         tenant.setSubscriptionPlan(plan);
@@ -224,35 +246,41 @@ public class TenantService {
         tenant.setSubscriptionEndsAt(subEnd);
         tenant.setTrialEndsAt(trialEnd);
         tenant.setPlanSelected(true);
-        tenant.setOwnerWhatsapp(request.ownerWhatsapp());
-        tenant.setTimezone(request.timezone() == null ? "Africa/Cairo" : request.timezone());
-        tenant.setCurrency(request.currency() == null ? "EGP" : request.currency());
+        tenant.setOwnerWhatsapp(request.ownerWhatsapp() == null || request.ownerWhatsapp().isBlank() ? null : request.ownerWhatsapp().trim());
+        tenant.setTimezone(timezone);
+        tenant.setCurrency(currency);
 
         tenant = tenantSaver.save(tenant);
-        
-        // Log CREATED event
-        TenantActivityLog log = new TenantActivityLog();
-        log.setTenantId(tenant.getId());
-        log.setAction("CREATED");
-        log.setDetails("Tenant provisioned");
-        log.setPerformedBy(request.ownerUsername());
-        tenantActivityLogRepository.save(log);
         
         com.example.cafemangmentsystem.user.entity.User owner;
         TenantContext.set(tenant.getId());
         try {
             owner = tenantOwnerProvisioner.createOwner(
-                    request.ownerUsername(), request.ownerFullName(), request.ownerPassword(), request.defaultTables());
-            
-            if (request.templateId() != null && !request.templateId().isBlank()) {
-                menuTemplateService.seedTemplate(request.templateId());
+                    request.ownerUsername().trim(), request.ownerFullName().trim(), request.ownerPassword(), defaultTables, request.templateId());
+        } catch (RuntimeException provisioningFailure) {
+            TenantContext.clear();
+            try {
+                tenantSaver.deleteById(tenant.getId());
+            } catch (RuntimeException cleanupFailure) {
+                provisioningFailure.addSuppressed(cleanupFailure);
+                log.error("Failed to remove tenant shell {} after provisioning failure", tenant.getId(), cleanupFailure);
             }
+            throw provisioningFailure;
         } finally {
             TenantContext.clear();
         }
 
-        // Dispatch instant background WhatsApp message to tenant owner with login credentials
-        whatsAppService.sendTenantCredentials(tenant, request.ownerUsername(), request.ownerPassword(), null);
+        try {
+            TenantActivityLog activityLog = new TenantActivityLog();
+            activityLog.setTenantId(tenant.getId());
+            activityLog.setAction("CREATED");
+            activityLog.setDetails("Tenant provisioned");
+            activityLog.setPerformedBy(request.ownerUsername());
+            tenantActivityLogRepository.save(activityLog);
+        } catch (RuntimeException activityLogFailure) {
+            // Audit logging must not turn a successfully provisioned tenant into a false failure.
+            log.warn("Tenant {} was provisioned, but its CREATED audit event could not be recorded", tenant.getId(), activityLogFailure);
+        }
 
         String jwtToken = jwtService.generateToken(new com.example.cafemangmentsystem.security.UserPrincipal(owner));
         return new ProvisionTenantResponse(tenant.getId(), tenant.getSlug(), request.ownerUsername(), jwtToken);
