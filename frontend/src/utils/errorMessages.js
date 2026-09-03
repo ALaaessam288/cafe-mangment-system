@@ -33,6 +33,8 @@ export const RULES = [
   [/SUBSCRIPTION_EXPIRED|انتهت الفترة التجريبية/i, 'انتهت الفترة التجريبية أو الاشتراك. يرجى تجديد الاشتراك أو تفعيل مفتاح ترخيص جديد.'],
 
   /* ── Validation Messages ── */
+  [/رمز PIN هذا مستخدم بالفعل|PIN.*already in use/i, 'رمز PIN هذا مستخدم بالفعل لموظف آخر في هذا الكافيه. يرجى اختيار رمز PIN فريد.'],
+  [/رمز PIN غير صحيح|Invalid PIN/i, 'رمز PIN غير صحيح أو غير مسجل في هذا الكافيه.'],
   [/must not be null|must not be blank|is required/i, 'يرجى ملء جميع الحقول المطلوبة والتأكد من إدخال البيانات بشكل صحيح.'],
   [/must be greater than 0|must be positive/i, 'يجب أن تكون القيمة المدخلة أكبر من الصفر.'],
   [/must be greater than or equal to 0/i, 'يجب ألا تكون القيمة سالبة (صفر أو أكبر).'],

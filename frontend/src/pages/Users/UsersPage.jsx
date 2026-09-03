@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { 
   Plus, Edit2, KeyRound, LayoutGrid, Table as TableIcon, 
-  Users, Shield, UserCheck, CheckCircle2, XCircle 
+  Users, Shield, UserCheck, CheckCircle2, XCircle, AlertCircle 
 } from 'lucide-react';
 import { usersApi } from '../../api/usersApi';
 import { useToast } from '../../context/ToastContext';
@@ -35,6 +35,11 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Modal Error States (Inline UI Validation)
+  const [editError, setEditError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [pinError, setPinError] = useState('');
+
   // Forms
   const [form, setForm] = useState({ fullName: '', username: '', role: 'CASHIER', password: '', pin: '' });
   const [passwordForm, setPasswordForm] = useState({ newPassword: '' });
@@ -56,6 +61,7 @@ export default function UsersPage() {
 
   function handleOpenEdit(user = null) {
     sounds.playTap();
+    setEditError('');
     if (user) {
       setEditingUser(user);
       setForm({ fullName: user.fullName, username: user.username, role: user.role, password: '', pin: '' });
@@ -77,6 +83,7 @@ export default function UsersPage() {
   function handleOpenPassword(user) {
     sounds.playTap();
     setEditingUser(user);
+    setPasswordError('');
     setPasswordForm({ newPassword: '' });
     setIsPasswordModalOpen(true);
   }
@@ -84,12 +91,14 @@ export default function UsersPage() {
   function handleOpenPin(user) {
     sounds.playTap();
     setEditingUser(user);
+    setPinError('');
     setPinForm({ newPin: '' });
     setIsPinModalOpen(true);
   }
 
   async function handleSaveUser(e) {
     e.preventDefault();
+    setEditError('');
     if (!form.fullName.trim() || !form.username.trim() || !form.role) return;
 
     setIsSaving(true);
@@ -104,7 +113,7 @@ export default function UsersPage() {
         toast.success('تم تحديث بيانات المستخدم ورمز PIN بنجاح');
       } else {
         if (!form.password) {
-          toast.warning('كلمة المرور مطلوبة للمستخدم الجديد');
+          setEditError('كلمة المرور مطلوبة للمستخدم الجديد');
           setIsSaving(false);
           return;
         }
@@ -124,6 +133,7 @@ export default function UsersPage() {
         setIsEditModalOpen(false);
         setQuotaModal({ open: true, message: err.message });
       } else {
+        setEditError(err.message || 'فشل حفظ المستخدم');
         toast.error(err.message, 'فشل حفظ المستخدم');
       }
     } finally {
@@ -133,8 +143,9 @@ export default function UsersPage() {
 
   async function handleChangePassword(e) {
     e.preventDefault();
+    setPasswordError('');
     if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
-      toast.warning('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      setPasswordError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
     setIsSaving(true);
@@ -143,6 +154,7 @@ export default function UsersPage() {
       toast.success('تم تغيير كلمة المرور بنجاح');
       setIsPasswordModalOpen(false);
     } catch (err) {
+      setPasswordError(err.message || 'فشل تغيير كلمة المرور');
       toast.error(err.message, 'فشل تغيير كلمة المرور');
     } finally {
       setIsSaving(false);
@@ -151,8 +163,9 @@ export default function UsersPage() {
 
   async function handleChangePin(e) {
     e.preventDefault();
+    setPinError('');
     if (!pinForm.newPin || pinForm.newPin.length < 4) {
-      toast.warning('رمز PIN يجب أن يكون 4 أرقام على الأقل');
+      setPinError('رمز PIN يجب أن يكون من 4 إلى 8 أرقام');
       return;
     }
     setIsSaving(true);
@@ -167,6 +180,7 @@ export default function UsersPage() {
       setIsPinModalOpen(false);
       await loadUsers();
     } catch (err) {
+      setPinError(err.message || 'فشل تعيين رمز PIN');
       toast.error(err.message, 'فشل تعيين رمز PIN');
     } finally {
       setIsSaving(false);
@@ -392,19 +406,38 @@ export default function UsersPage() {
       {canManageUsers && (
         <Modal
           isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
+          onClose={() => { setIsEditModalOpen(false); setEditError(''); }}
           title={editingUser ? 'تعديل بيانات المستخدم' : 'إضافة مستخدم جديد'}
           icon={editingUser ? '✏️' : '👤'}
           subtitle={editingUser ? `تعديل صلاحيات وحساب: ${editingUser.fullName || editingUser.username}` : 'إنشاء حساب جديد للموظف وتحديد الصلاحية وكلمة المرور'}
           size="md"
         >
           <form onSubmit={handleSaveUser} className="modal-form">
+            {editError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '14px',
+                lineHeight: 1.5
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <span>{editError}</span>
+              </div>
+            )}
+
             <div className="modal-field-group">
               <label className="modal-field-label">الاسم بالكامل <span className="required">*</span></label>
               <input
                 className="modal-field-input"
                 value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                onChange={(e) => { setForm({ ...form, fullName: e.target.value }); setEditError(''); }}
                 placeholder="مثال: أحمد محمد"
                 required
                 autoFocus
@@ -416,7 +449,7 @@ export default function UsersPage() {
               <input
                 className="modal-field-input"
                 value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                onChange={(e) => { setForm({ ...form, username: e.target.value }); setEditError(''); }}
                 placeholder="مثال: ahmed_pos"
                 required
               />
@@ -427,7 +460,7 @@ export default function UsersPage() {
               <select
                 className="modal-field-select"
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                onChange={(e) => { setForm({ ...form, role: e.target.value }); setEditError(''); }}
                 required
               >
                 <option value="CASHIER">كاشير (نقطة البيع والتحضير فقط)</option>
@@ -444,7 +477,7 @@ export default function UsersPage() {
                     className="modal-field-input"
                     type="password"
                     value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    onChange={(e) => { setForm({ ...form, password: e.target.value }); setEditError(''); }}
                     placeholder="على الأقل 6 خانات"
                     required
                   />
@@ -455,7 +488,7 @@ export default function UsersPage() {
                     className="modal-field-input"
                     type="password"
                     value={form.pin}
-                    onChange={(e) => setForm({ ...form, pin: e.target.value })}
+                    onChange={(e) => { setForm({ ...form, pin: e.target.value }); setEditError(''); }}
                     placeholder="من 4 إلى 8 أرقام"
                   />
                 </div>
@@ -467,14 +500,14 @@ export default function UsersPage() {
                   className="modal-field-input"
                   type="password"
                   value={form.pin}
-                  onChange={(e) => setForm({ ...form, pin: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, pin: e.target.value }); setEditError(''); }}
                   placeholder="أدخل رمز PIN جديد (4 إلى 8 أرقام)"
                 />
               </div>
             )}
 
             <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <Button variant="secondary" onClick={() => setIsEditModalOpen(false)} type="button">إلغاء</Button>
+              <Button variant="secondary" onClick={() => { setIsEditModalOpen(false); setEditError(''); }} type="button">إلغاء</Button>
               <Button type="submit" loading={isSaving} variant="primary">حفظ البيانات</Button>
             </div>
           </form>
@@ -485,27 +518,46 @@ export default function UsersPage() {
       {canManageUsers && (
         <Modal
           isOpen={isPasswordModalOpen}
-          onClose={() => setIsPasswordModalOpen(false)}
+          onClose={() => { setIsPasswordModalOpen(false); setPasswordError(''); }}
           title="تغيير كلمة المرور"
           icon="🔑"
           subtitle={`تعيين كلمة مرور جديدة للمستخدم: ${editingUser?.fullName || editingUser?.username}`}
           size="sm"
         >
           <form onSubmit={handleChangePassword} className="modal-form">
+            {passwordError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '14px',
+                lineHeight: 1.5
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
             <div className="modal-field-group">
               <label className="modal-field-label">كلمة المرور الجديدة <span className="required">*</span></label>
               <input
                 className="modal-field-input"
                 type="password"
                 value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ newPassword: e.target.value })}
+                onChange={(e) => { setPasswordForm({ newPassword: e.target.value }); setPasswordError(''); }}
                 placeholder="أدخل 6 خانات على الأقل"
                 required
                 autoFocus
               />
             </div>
             <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <Button variant="secondary" onClick={() => setIsPasswordModalOpen(false)} type="button">إلغاء</Button>
+              <Button variant="secondary" onClick={() => { setIsPasswordModalOpen(false); setPasswordError(''); }} type="button">إلغاء</Button>
               <Button type="submit" loading={isSaving} variant="primary">تحديث كلمة المرور</Button>
             </div>
           </form>
@@ -516,20 +568,39 @@ export default function UsersPage() {
       {canManageUsers && (
         <Modal
           isOpen={isPinModalOpen}
-          onClose={() => setIsPinModalOpen(false)}
+          onClose={() => { setIsPinModalOpen(false); setPinError(''); }}
           title="تعيين / تغيير رمز PIN للدخول السريع"
           icon="#️⃣"
           subtitle={`تعيين رمز PIN سريع للمستخدم: ${editingUser?.fullName || editingUser?.username}`}
           size="sm"
         >
           <form onSubmit={handleChangePin} className="modal-form">
+            {pinError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '14px',
+                lineHeight: 1.5
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <span>{pinError}</span>
+              </div>
+            )}
+
             <div className="modal-field-group">
               <label className="modal-field-label">رمز PIN الجديد <span className="required">*</span></label>
               <input
                 className="modal-field-input"
                 type="password"
                 value={pinForm.newPin}
-                onChange={(e) => setPinForm({ newPin: e.target.value })}
+                onChange={(e) => { setPinForm({ newPin: e.target.value }); setPinError(''); }}
                 placeholder="أدخل من 4 إلى 8 أرقام (مثال: 1234)"
                 required
                 autoFocus
@@ -540,7 +611,7 @@ export default function UsersPage() {
               يُستخدم هذا الرمز في شاشة تسجيل الدخول السريع (PIN) للتنقل بين الكاشيرات وبدء الشيفت بسرعة.
             </p>
             <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <Button variant="secondary" onClick={() => setIsPinModalOpen(false)} type="button">إلغاء</Button>
+              <Button variant="secondary" onClick={() => { setIsPinModalOpen(false); setPinError(''); }} type="button">إلغاء</Button>
               <Button type="submit" loading={isSaving} variant="primary">حفظ رمز PIN</Button>
             </div>
           </form>

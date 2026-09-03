@@ -13,7 +13,7 @@ import Spinner from '../../components/Spinner/Spinner';
 import { 
   Building2, User, KeyRound, Shield, RefreshCw, Sparkles, MessageCircle, 
   Upload, Trash2, Image, Key, CheckCircle, Crown, ArrowUpRight, Check,
-  Wand2, ZoomIn, ZoomOut, RotateCcw, Download, Columns2, CheckCircle2
+  Wand2, ZoomIn, ZoomOut, RotateCcw, Download, Columns2, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { ROLES } from '../../utils/constants';
 import PrinterSettings from './PrinterSettings';
@@ -68,6 +68,7 @@ export default function SettingsPage() {
     confirmPassword: '',
   });
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [passwordFormError, setPasswordFormError] = useState('');
 
   // PIN state
   const [pinForm, setPinForm] = useState({
@@ -75,6 +76,7 @@ export default function SettingsPage() {
     confirmPin: '',
   });
   const [isSavingPin, setIsSavingPin] = useState(false);
+  const [pinFormError, setPinFormError] = useState('');
 
   // Update state
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -292,11 +294,14 @@ export default function SettingsPage() {
   // Password change
   async function handlePasswordChange(e) {
     e.preventDefault();
+    setPasswordFormError('');
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordFormError('كلمات المرور الجديدة غير متطابقة');
       toast.warning('كلمات المرور الجديدة غير متطابقة');
       return;
     }
     if (passwordForm.newPassword.length < 6) {
+      setPasswordFormError('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل');
       toast.warning('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل');
       return;
     }
@@ -307,6 +312,7 @@ export default function SettingsPage() {
       toast.success('تم تغيير كلمة المرور بنجاح');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
+      setPasswordFormError(err.message || 'فشل تغيير كلمة المرور');
       toast.error(err.message, 'فشل تغيير كلمة المرور');
     } finally {
       setIsSavingPassword(false);
@@ -316,11 +322,14 @@ export default function SettingsPage() {
   // PIN change
   async function handlePinChange(e) {
     e.preventDefault();
+    setPinFormError('');
     if (pinForm.newPin !== pinForm.confirmPin) {
+      setPinFormError('رمز PIN غير متطابق');
       toast.warning('رمز PIN غير متطابق');
       return;
     }
     if (pinForm.newPin.length < 4) {
+      setPinFormError('رمز PIN يجب أن يكون من 4 إلى 8 أرقام');
       toast.warning('رمز PIN يجب أن يكون من 4 إلى 8 أرقام');
       return;
     }
@@ -336,6 +345,7 @@ export default function SettingsPage() {
       toast.success('تم تعيين رمز PIN بنجاح! يمكنك استخدامه في شاشة الدخول السريع 🚀');
       setPinForm({ newPin: '', confirmPin: '' });
     } catch (err) {
+      setPinFormError(err.message || 'فشل تعيين رمز PIN');
       toast.error(err.message, 'فشل تعيين رمز PIN');
     } finally {
       setIsSavingPin(false);
@@ -840,19 +850,38 @@ export default function SettingsPage() {
             <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <KeyRound size={18} /> تغيير كلمة المرور
             </h2>
-            <form onSubmit={handlePasswordChange} className="form-grid">
+            {passwordFormError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '12px',
+                marginBottom: '14px',
+                lineHeight: 1.5
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <span>{passwordFormError}</span>
+              </div>
+            )}
+            <form onSubmit={handlePasswordChange} className="form-grid" style={{ marginTop: passwordFormError ? '0' : '14px' }}>
               <Input
                 label="كلمة المرور الحالية"
                 type="password"
                 value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                onChange={(e) => { setPasswordForm({ ...passwordForm, currentPassword: e.target.value }); setPasswordFormError(''); }}
                 required
               />
               <Input
                 label="كلمة المرور الجديدة"
                 type="password"
                 value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                onChange={(e) => { setPasswordForm({ ...passwordForm, newPassword: e.target.value }); setPasswordFormError(''); }}
                 required
                 hint="على الأقل 6 حروف أو أرقام"
               />
@@ -860,7 +889,7 @@ export default function SettingsPage() {
                 label="تأكيد كلمة المرور الجديدة"
                 type="password"
                 value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                onChange={(e) => { setPasswordForm({ ...passwordForm, confirmPassword: e.target.value }); setPasswordFormError(''); }}
                 required
               />
               <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
@@ -877,12 +906,30 @@ export default function SettingsPage() {
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
               رمز PIN يتيح لك ولطاقم العمل تسجيل الدخول السريع بضغطة زر واحدة دون الحاجة لكتابة اسم المستخدم وكلمة المرور كل مرة.
             </p>
+            {pinFormError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '14px',
+                lineHeight: 1.5
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <span>{pinFormError}</span>
+              </div>
+            )}
             <form onSubmit={handlePinChange} className="form-grid">
               <Input
                 label="رمز PIN الجديد (4 - 8 أرقام)"
                 type="password"
                 value={pinForm.newPin}
-                onChange={(e) => setPinForm({ ...pinForm, newPin: e.target.value })}
+                onChange={(e) => { setPinForm({ ...pinForm, newPin: e.target.value }); setPinFormError(''); }}
                 placeholder="مثال: 1234"
                 maxLength={8}
                 required
@@ -891,7 +938,7 @@ export default function SettingsPage() {
                 label="تأكيد رمز PIN"
                 type="password"
                 value={pinForm.confirmPin}
-                onChange={(e) => setPinForm({ ...pinForm, confirmPin: e.target.value })}
+                onChange={(e) => { setPinForm({ ...pinForm, confirmPin: e.target.value }); setPinFormError(''); }}
                 placeholder="أعد كتابة نفس الرمز"
                 maxLength={8}
                 required
