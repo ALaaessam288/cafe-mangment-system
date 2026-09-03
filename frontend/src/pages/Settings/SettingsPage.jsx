@@ -69,6 +69,13 @@ export default function SettingsPage() {
   });
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
+  // PIN state
+  const [pinForm, setPinForm] = useState({
+    newPin: '',
+    confirmPin: '',
+  });
+  const [isSavingPin, setIsSavingPin] = useState(false);
+
   // Update state
   const [updateStatus, setUpdateStatus] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -303,6 +310,35 @@ export default function SettingsPage() {
       toast.error(err.message, 'فشل تغيير كلمة المرور');
     } finally {
       setIsSavingPassword(false);
+    }
+  }
+
+  // PIN change
+  async function handlePinChange(e) {
+    e.preventDefault();
+    if (pinForm.newPin !== pinForm.confirmPin) {
+      toast.warning('رمز PIN غير متطابق');
+      return;
+    }
+    if (pinForm.newPin.length < 4) {
+      toast.warning('رمز PIN يجب أن يكون من 4 إلى 8 أرقام');
+      return;
+    }
+
+    setIsSavingPin(true);
+    try {
+      await usersApi.update(user.id, {
+        fullName: user.fullName || user.username,
+        username: user.username,
+        role: user.role,
+        pin: pinForm.newPin.trim(),
+      });
+      toast.success('تم تعيين رمز PIN بنجاح! يمكنك استخدامه في شاشة الدخول السريع 🚀');
+      setPinForm({ newPin: '', confirmPin: '' });
+    } catch (err) {
+      toast.error(err.message, 'فشل تعيين رمز PIN');
+    } finally {
+      setIsSavingPin(false);
     }
   }
 
@@ -829,6 +865,39 @@ export default function SettingsPage() {
               />
               <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
                 <Button type="submit" loading={isSavingPassword}>تحديث كلمة المرور</Button>
+              </div>
+            </form>
+          </div>
+
+          {/* Change PIN Form */}
+          <div className="section-card">
+            <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)' }}>
+              <Key size={18} /> تعيين / تغيير رمز PIN للدخول السريع
+            </h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+              رمز PIN يتيح لك ولطاقم العمل تسجيل الدخول السريع بضغطة زر واحدة دون الحاجة لكتابة اسم المستخدم وكلمة المرور كل مرة.
+            </p>
+            <form onSubmit={handlePinChange} className="form-grid">
+              <Input
+                label="رمز PIN الجديد (4 - 8 أرقام)"
+                type="password"
+                value={pinForm.newPin}
+                onChange={(e) => setPinForm({ ...pinForm, newPin: e.target.value })}
+                placeholder="مثال: 1234"
+                maxLength={8}
+                required
+              />
+              <Input
+                label="تأكيد رمز PIN"
+                type="password"
+                value={pinForm.confirmPin}
+                onChange={(e) => setPinForm({ ...pinForm, confirmPin: e.target.value })}
+                placeholder="أعد كتابة نفس الرمز"
+                maxLength={8}
+                required
+              />
+              <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <Button type="submit" variant="primary" loading={isSavingPin}>حفظ وتفعيل رمز PIN</Button>
               </div>
             </form>
           </div>

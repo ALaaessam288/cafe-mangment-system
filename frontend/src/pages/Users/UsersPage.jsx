@@ -29,6 +29,7 @@ export default function UsersPage() {
   // Modals
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [quotaModal, setQuotaModal] = useState({ open: false, message: '' });
   
   const [editingUser, setEditingUser] = useState(null);
@@ -37,6 +38,7 @@ export default function UsersPage() {
   // Forms
   const [form, setForm] = useState({ fullName: '', username: '', role: 'CASHIER', password: '', pin: '' });
   const [passwordForm, setPasswordForm] = useState({ newPassword: '' });
+  const [pinForm, setPinForm] = useState({ newPin: '' });
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -79,6 +81,13 @@ export default function UsersPage() {
     setIsPasswordModalOpen(true);
   }
 
+  function handleOpenPin(user) {
+    sounds.playTap();
+    setEditingUser(user);
+    setPinForm({ newPin: '' });
+    setIsPinModalOpen(true);
+  }
+
   async function handleSaveUser(e) {
     e.preventDefault();
     if (!form.fullName.trim() || !form.username.trim() || !form.role) return;
@@ -90,8 +99,9 @@ export default function UsersPage() {
           fullName: form.fullName.trim(),
           username: form.username.trim(),
           role: form.role,
+          pin: form.pin && form.pin.trim() ? form.pin.trim() : undefined,
         });
-        toast.success('تم تحديث بيانات المستخدم بنجاح');
+        toast.success('تم تحديث بيانات المستخدم ورمز PIN بنجاح');
       } else {
         if (!form.password) {
           toast.warning('كلمة المرور مطلوبة للمستخدم الجديد');
@@ -134,6 +144,30 @@ export default function UsersPage() {
       setIsPasswordModalOpen(false);
     } catch (err) {
       toast.error(err.message, 'فشل تغيير كلمة المرور');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleChangePin(e) {
+    e.preventDefault();
+    if (!pinForm.newPin || pinForm.newPin.length < 4) {
+      toast.warning('رمز PIN يجب أن يكون 4 أرقام على الأقل');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await usersApi.update(editingUser.id, {
+        fullName: editingUser.fullName,
+        username: editingUser.username,
+        role: editingUser.role,
+        pin: pinForm.newPin.trim(),
+      });
+      toast.success(`تم تعيين رمز PIN بنجاح للمستخدم ${editingUser.fullName || editingUser.username}`);
+      setIsPinModalOpen(false);
+      await loadUsers();
+    } catch (err) {
+      toast.error(err.message, 'فشل تعيين رمز PIN');
     } finally {
       setIsSaving(false);
     }
@@ -265,8 +299,12 @@ export default function UsersPage() {
 
                   {canManageUsers && (
                     <div className="user-card__actions">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenPin(u)} title="تعيين رمز PIN السريع" style={{ color: 'var(--accent)' }}>
                         <KeyRound size={14} />
+                        <span># PIN</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
+                        <Shield size={14} />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)} title="تعديل البيانات">
                         <Edit2 size={14} />
@@ -318,8 +356,12 @@ export default function UsersPage() {
                   {canManageUsers && (
                     <td>
                       <div className="data-table__actions" style={{ justifyContent: 'flex-end', gap: '6px' }}>
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenPin(u)} title="تعيين رمز PIN السريع" style={{ color: 'var(--accent)' }}>
                           <KeyRound size={14} />
+                          <span>رمز PIN</span>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenPassword(u)} title="تغيير كلمة المرور">
+                          <Shield size={14} />
                           <span>كلمة المرور</span>
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)} title="تعديل المستخدم">
@@ -394,7 +436,7 @@ export default function UsersPage() {
               </select>
             </div>
 
-            {!editingUser && (
+            {!editingUser ? (
               <div className="modal-form-grid">
                 <div className="modal-field-group">
                   <label className="modal-field-label">كلمة المرور (Password) <span className="required">*</span></label>
@@ -408,7 +450,7 @@ export default function UsersPage() {
                   />
                 </div>
                 <div className="modal-field-group">
-                  <label className="modal-field-label">رمز PIN السريع (اختياري)</label>
+                  <label className="modal-field-label">رمز PIN السريع للدخول (اختياري)</label>
                   <input
                     className="modal-field-input"
                     type="password"
@@ -417,6 +459,17 @@ export default function UsersPage() {
                     placeholder="من 4 إلى 8 أرقام"
                   />
                 </div>
+              </div>
+            ) : (
+              <div className="modal-field-group">
+                <label className="modal-field-label">رمز PIN السريع للدخول (اتركه فارغاً إذا كنت لا تريد تغييره)</label>
+                <input
+                  className="modal-field-input"
+                  type="password"
+                  value={form.pin}
+                  onChange={(e) => setForm({ ...form, pin: e.target.value })}
+                  placeholder="أدخل رمز PIN جديد (4 إلى 8 أرقام)"
+                />
               </div>
             )}
 
@@ -454,6 +507,41 @@ export default function UsersPage() {
             <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <Button variant="secondary" onClick={() => setIsPasswordModalOpen(false)} type="button">إلغاء</Button>
               <Button type="submit" loading={isSaving} variant="primary">تحديث كلمة المرور</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Change PIN Modal */}
+      {canManageUsers && (
+        <Modal
+          isOpen={isPinModalOpen}
+          onClose={() => setIsPinModalOpen(false)}
+          title="تعيين / تغيير رمز PIN للدخول السريع"
+          icon="#️⃣"
+          subtitle={`تعيين رمز PIN سريع للمستخدم: ${editingUser?.fullName || editingUser?.username}`}
+          size="sm"
+        >
+          <form onSubmit={handleChangePin} className="modal-form">
+            <div className="modal-field-group">
+              <label className="modal-field-label">رمز PIN الجديد <span className="required">*</span></label>
+              <input
+                className="modal-field-input"
+                type="password"
+                value={pinForm.newPin}
+                onChange={(e) => setPinForm({ newPin: e.target.value })}
+                placeholder="أدخل من 4 إلى 8 أرقام (مثال: 1234)"
+                required
+                autoFocus
+                maxLength={8}
+              />
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 12px 0' }}>
+              يُستخدم هذا الرمز في شاشة تسجيل الدخول السريع (PIN) للتنقل بين الكاشيرات وبدء الشيفت بسرعة.
+            </p>
+            <div className="modal__footer" style={{ padding: '10px 0 0 0', background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <Button variant="secondary" onClick={() => setIsPinModalOpen(false)} type="button">إلغاء</Button>
+              <Button type="submit" loading={isSaving} variant="primary">حفظ رمز PIN</Button>
             </div>
           </form>
         </Modal>

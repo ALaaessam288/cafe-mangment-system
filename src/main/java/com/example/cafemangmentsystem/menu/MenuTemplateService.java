@@ -4,6 +4,9 @@ import com.example.cafemangmentsystem.menu.entity.Category;
 import com.example.cafemangmentsystem.menu.entity.Product;
 import com.example.cafemangmentsystem.menu.repository.CategoryRepository;
 import com.example.cafemangmentsystem.menu.repository.ProductRepository;
+import com.example.cafemangmentsystem.station.entity.Station;
+import com.example.cafemangmentsystem.station.entity.StationCode;
+import com.example.cafemangmentsystem.station.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -17,9 +20,22 @@ public class MenuTemplateService {
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final StationRepository stationRepository;
+
+    private Station getOrCreateStation(StationCode code, String nameAr) {
+        return stationRepository.findByCode(code).orElseGet(() -> {
+            Station station = new Station();
+            station.setCode(code);
+            station.setNameAr(nameAr);
+            return stationRepository.save(station);
+        });
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void seedTemplate(String templateId) {
+        Station barStation = getOrCreateStation(StationCode.BAR, "البوفيه / البار");
+        Station kitchenStation = getOrCreateStation(StationCode.KITCHEN, "المطبخ");
+
         if ("CLASSIC_CAFE".equalsIgnoreCase(templateId)) {
             Category drinks = new Category();
             drinks.setNameAr("مشروبات");
@@ -31,6 +47,7 @@ public class MenuTemplateService {
             p1.setNameAr("إسبريسو");
             p1.setPrice(new BigDecimal("30.00"));
             p1.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.BUFFET);
+            p1.setStation(barStation);
             productRepository.save(p1);
 
             Product p2 = new Product();
@@ -38,6 +55,7 @@ public class MenuTemplateService {
             p2.setNameAr("لاتيه");
             p2.setPrice(new BigDecimal("45.00"));
             p2.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.BUFFET);
+            p2.setStation(barStation);
             productRepository.save(p2);
 
             Category pastry = new Category();
@@ -50,6 +68,7 @@ public class MenuTemplateService {
             p3.setNameAr("كرواسون");
             p3.setPrice(new BigDecimal("50.00"));
             p3.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.FOOD);
+            p3.setStation(kitchenStation);
             productRepository.save(p3);
         } else if ("EGYPTIAN_RESTAURANT".equalsIgnoreCase(templateId)) {
             Category food = new Category();
@@ -62,6 +81,7 @@ public class MenuTemplateService {
             p1.setNameAr("كشري");
             p1.setPrice(new BigDecimal("40.00"));
             p1.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.FOOD);
+            p1.setStation(kitchenStation);
             productRepository.save(p1);
 
             Product p2 = new Product();
@@ -69,6 +89,7 @@ public class MenuTemplateService {
             p2.setNameAr("حواوشي");
             p2.setPrice(new BigDecimal("60.00"));
             p2.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.FOOD);
+            p2.setStation(kitchenStation);
             productRepository.save(p2);
         } else if ("CAFE_AND_RESTAURANT".equalsIgnoreCase(templateId)) {
             Category drinks = new Category();
@@ -81,6 +102,7 @@ public class MenuTemplateService {
             p1.setNameAr("إسبريسو");
             p1.setPrice(new BigDecimal("30.00"));
             p1.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.BUFFET);
+            p1.setStation(barStation);
             productRepository.save(p1);
 
             Category food = new Category();
@@ -93,6 +115,7 @@ public class MenuTemplateService {
             p2.setNameAr("كشري");
             p2.setPrice(new BigDecimal("40.00"));
             p2.setRevenueLine(com.example.cafemangmentsystem.menu.entity.RevenueLine.FOOD);
+            p2.setStation(kitchenStation);
             productRepository.save(p2);
         }
     }
