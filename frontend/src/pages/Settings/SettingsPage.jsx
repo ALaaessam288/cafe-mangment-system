@@ -721,6 +721,41 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Included Plan Features Checklist */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px',
+              marginTop: '16px',
+              paddingTop: '16px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>شاشات التحضير للمطبخ (KDS)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>إدارة المصروفات والخزائن والعهد</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>تعدد نقاط البيع وتعدد الكاشيرات</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>تنبيهات وفواتير الواتساب الذكية</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>تكلفة الخامات ومحاكاة ربحية الوصفات</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>دخول سريع برمز PIN لكل موظف</span>
+              </div>
+            </div>
           </div>
 
           {/* License Key Self-Service Activation Card */}
