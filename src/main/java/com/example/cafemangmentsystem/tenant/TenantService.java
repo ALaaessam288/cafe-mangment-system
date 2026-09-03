@@ -422,6 +422,147 @@ public class TenantService {
         if ("platform".equalsIgnoreCase(tenant.getSlug())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete master platform tenant");
         }
+
+        String jwtToken = jwtService.generateToken(new com.example.cafemangmentsystem.security.UserPrincipal(owner));
+        return new ProvisionTenantResponse(tenant.getId(), tenant.getSlug(), request.ownerUsername(), jwtToken);
+    }
+    
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getPlatformStats() {
+        List<Tenant> customerTenants = tenantRepository.findAll().stream()
+                .filter(t -> !"platform".equalsIgnoreCase(t.getSlug()))
+                .toList();
+        long totalTenants = customerTenants.size();
+        long activeTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.ACTIVE).count();
+        long trialTenants = customerTenants.stream().filter(t -> t.getStatus() == TenantStatus.TRIAL).count();
+        return java.util.Map.of(
+            "totalTenants", totalTenants,
+            "activeTenants", activeTenants,
+            "trialTenants", trialTenants
+        );
+    }
+    
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getTenantUsage(Long tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        return java.util.Map.of(
+            "maxTables", tenant.getMaxTables() != null ? tenant.getMaxTables() : -1,
+            "maxUsers", tenant.getMaxUsers() != null ? tenant.getMaxUsers() : -1,
+            "maxProducts", tenant.getMaxProducts() != null ? tenant.getMaxProducts() : -1
+        );
+    }
+    
+    public TenantResponse updateQuotas(Long tenantId, Integer maxTables, Integer maxUsers, Integer maxProducts) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        validateQuota("maxTables", maxTables);
+        validateQuota("maxUsers", maxUsers);
+        validateQuota("maxProducts", maxProducts);
+        if (maxTables != null) tenant.setMaxTables(maxTables);
+        if (maxUsers != null) tenant.setMaxUsers(maxUsers);
+        if (maxProducts != null) tenant.setMaxProducts(maxProducts);
+        return TenantResponse.from(tenantRepository.save(tenant));
+    }
+
+    public TenantResponse customizeTenantPlan(Long tenantId, com.example.cafemangmentsystem.tenant.platform.PlatformAdminController.CustomizePlanRequest req) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+        
+        if (req.plan() != null) {
+            tenant.setSubscriptionPlan(req.plan());
+        }
+        if (req.status() != null) {
+            tenant.setStatus(req.status());
+        }
+        validateQuota("maxTables", req.maxTables());
+        validateQuota("maxUsers", req.maxUsers());
+        validateQuota("maxProducts", req.maxProducts());
+        if (req.serviceChargePercent() != null && (req.serviceChargePercent() < 0 || req.serviceChargePercent() > 100)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "serviceChargePercent must be between 0 and 100");
+        }
+        if (req.maxTables() != null) {
+            tenant.setMaxTables(req.maxTables());
+        }
+        if (req.maxUsers() != null) {
+            tenant.setMaxUsers(req.maxUsers());
+        }
+        if (req.maxProducts() != null) {
+            tenant.setMaxProducts(req.maxProducts());
+        }
+        if (req.serviceChargePercent() != null) {
+            tenant.setServiceChargePercent(req.serviceChargePercent());
+        }
+        if (req.whatsappAlertsEnabled() != null) {
+            tenant.setWhatsappAlertsEnabled(req.whatsappAlertsEnabled());
+        }
+        boolean trial = tenant.getStatus() == TenantStatus.TRIAL
+                || tenant.getSubscriptionPlan() == com.example.cafemangmentsystem.tenant.entity.SubscriptionPlan.TRIAL;
+
+        // Route the requested date to the effective lifecycle field. The fallback keeps
+        // older clients safe: they used to send a trial date as subscriptionEndsAt.
+        java.time.Instant requestedEnd = trial
+                ? (req.trialEndsAt() != null ? req.trialEndsAt() : req.subscriptionEndsAt())
+                : (req.subscriptionEndsAt() != null ? req.subscriptionEndsAt() : req.trialEndsAt());
+        if (requestedEnd != null) {
+            if (trial) {
+                tenant.setTrialEndsAt(requestedEnd);
+            } else {
+                tenant.setSubscriptionEndsAt(requestedEnd);
+            }
+        }
+        if (req.extendDays() != null && req.extendDays() > 0) {
+            java.time.Instant now = java.time.Instant.now();
+            java.time.Instant currentEnd = trial ? tenant.getTrialEndsAt() : tenant.getSubscriptionEndsAt();
+            java.time.Instant base = currentEnd != null && currentEnd.isAfter(now) ? currentEnd : now;
+            if (trial) {
+                tenant.setTrialEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
+            } else {
+                tenant.setSubscriptionEndsAt(base.plus(req.extendDays(), java.time.temporal.ChronoUnit.DAYS));
+            }
+        }
+        tenant.setPlanSelected(true);
+
+        Tenant saved = tenantRepository.save(tenant);
+
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(saved.getId());
+        log.setAction("PLAN_CUSTOMIZED");
+        log.setDetails("Plan customized: " + saved.getSubscriptionPlan() + ", Tables: " + saved.getMaxTables() + ", Users: " + saved.getMaxUsers() + ", Products: " + saved.getMaxProducts());
+        log.setPerformedBy("SUPER_ADMIN");
+        tenantActivityLogRepository.save(log);
+
+        return TenantResponse.from(saved);
+    }
+
+    private void validateQuota(String field, Integer value) {
+        if (value != null && (value < 1 || value > 9999)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be between 1 and 9999");
+        }
+    }
+
+    public TenantResponse updateLogo(Long tenantId, String logoUrl) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        tenant.setLogoUrl(logoUrl);
+        Tenant saved = tenantRepository.save(tenant);
+        
+        TenantActivityLog log = new TenantActivityLog();
+        log.setTenantId(saved.getId());
+        log.setAction("LOGO_UPDATED");
+        log.setDetails(logoUrl != null ? "Logo updated" : "Logo removed");
+        log.setPerformedBy("TENANT_ADMIN");
+        tenantActivityLogRepository.save(log);
+        return TenantResponse.from(saved);
+    }
+
+    @Transactional
+    public void deleteTenant(Long tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId));
+        if ("platform".equalsIgnoreCase(tenant.getSlug())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete master platform tenant");
+        }
         userRepository.deleteAll(userRepository.findAll().stream().filter(u -> tenantId.equals(u.getTenantId())).toList());
         tenantActivityLogRepository.deleteAll(tenantActivityLogRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
         tenantRepository.delete(tenant);
@@ -441,11 +582,20 @@ public class TenantService {
         long usersCount = userRepository.count();
         long productsCount = productRepository.count();
 
-        long daysRemaining = 0;
-        if (tenant.getStatus() == TenantStatus.TRIAL && tenant.getTrialEndsAt() != null) {
-            daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getTrialEndsAt()));
-        } else if (tenant.getStatus() == TenantStatus.ACTIVE && tenant.getSubscriptionEndsAt() != null) {
-            daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getSubscriptionEndsAt()));
+        Long daysRemaining = null;
+        boolean isUnlimited = false;
+        if (tenant.getStatus() == TenantStatus.TRIAL) {
+            if (tenant.getTrialEndsAt() != null) {
+                daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getTrialEndsAt()));
+            } else {
+                daysRemaining = 14L;
+            }
+        } else if (tenant.getStatus() == TenantStatus.ACTIVE) {
+            if (tenant.getSubscriptionEndsAt() != null) {
+                daysRemaining = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.now(), tenant.getSubscriptionEndsAt()));
+            } else {
+                isUnlimited = true;
+            }
         }
 
         java.util.Map<String, Object> usage = new java.util.LinkedHashMap<>();
@@ -462,6 +612,9 @@ public class TenantService {
         usage.put("productsUsed", productsCount);
         usage.put("maxProducts", maxProducts);
         usage.put("daysRemaining", daysRemaining);
+        usage.put("isUnlimited", isUnlimited);
+        usage.put("subscriptionEndsAt", tenant.getSubscriptionEndsAt() != null ? tenant.getSubscriptionEndsAt().toString() : null);
+        usage.put("trialEndsAt", tenant.getTrialEndsAt() != null ? tenant.getTrialEndsAt().toString() : null);
         usage.put("logoUrl", tenant.getLogoUrl() != null ? tenant.getLogoUrl() : "");
         usage.put("includesKds", plan.isIncludesKds());
         usage.put("includesExpenses", plan.isIncludesExpenses());
@@ -478,8 +631,3 @@ public class TenantService {
         return tenantActivityLogRepository.findTop200ByOrderByCreatedAtDesc();
     }
 }
-
-
-
-
-

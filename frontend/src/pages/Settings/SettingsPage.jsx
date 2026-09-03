@@ -408,7 +408,7 @@ export default function SettingsPage() {
             >
               <span className="settings-tab-btn__icon"><Crown size={16} /></span>
               <span className="settings-tab-btn__copy"><strong>الاشتراك والسعة</strong><small>الباقة وحدود الاستخدام</small></span>
-              {usage?.daysRemaining <= 5 && <span className="settings-tab-badge">تجديد</span>}
+              {!usage?.isUnlimited && usage?.daysRemaining != null && usage?.daysRemaining <= 5 && usage?.status !== 'ACTIVE' && <span className="settings-tab-badge">تجديد</span>}
             </button>
           </>
         )}
@@ -447,7 +447,12 @@ export default function SettingsPage() {
         </div>
         {role === ROLES.ADMIN && (
           <div className="settings-context-panel__account">
-            <span>الباقة الحالية</span><strong>{loadingUsage ? 'جاري التحقق…' : (usage?.planDisplayName || user?.planDisplayName || 'تجريبية')}</strong><small>{usage?.daysRemaining ?? 14} يوم متبقي</small>
+            <span>الباقة الحالية</span><strong>{loadingUsage ? 'جاري التحقق…' : (usage?.planDisplayName || user?.planDisplayName || 'تجريبية')}</strong>
+            <small>
+              {usage?.isUnlimited || (usage?.status === 'ACTIVE' && (usage?.daysRemaining == null || (!usage?.subscriptionEndsAt && usage?.daysRemaining === 0)))
+                ? 'مفعل دائم'
+                : `${usage?.daysRemaining ?? 14} يوم متبقي`}
+            </small>
           </div>
         )}
       </section>
@@ -643,7 +648,12 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <p className="settings-plan-subtext">
-                    المتبقي في الاشتراك الحالي: <strong style={{ color: 'var(--accent)' }}>{usage?.daysRemaining ?? 14} يوم</strong>
+                    المتبقي في الاشتراك الحالي:{' '}
+                    <strong style={{ color: 'var(--accent)' }}>
+                      {usage?.isUnlimited || (usage?.status === 'ACTIVE' && (usage?.daysRemaining == null || (!usage?.subscriptionEndsAt && usage?.daysRemaining === 0)))
+                        ? 'مفعل دائم / غير محدود ✓'
+                        : `${usage?.daysRemaining ?? 14} يوم`}
+                    </strong>
                   </p>
                 </div>
               </div>
