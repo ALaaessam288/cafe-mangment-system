@@ -656,15 +656,16 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
                 >
                   {currentShift && (
                     <option value={String(currentShift.id)}>
-                      ⚡ الشيفت الحالي #{currentShift.id} (مفتوح)
+                      ⚡ الشيفت الحالي #{currentShift.id} {currentShift.userFullName || currentShift.username ? `(بواسطة: ${currentShift.userFullName || currentShift.username})` : ''} - مفتوح
                     </option>
                   )}
                   <option value="ALL">كل الشيفتات (عرض الكل)</option>
                   {shifts.map(s => {
                     if (currentShift && s.id === currentShift.id) return null;
+                    const cashier = s.userFullName || s.username || '';
                     return (
                       <option key={s.id} value={String(s.id)}>
-                        شيفت #{s.id} ({s.closedAt ? 'مغلق' : 'مفتوح'})
+                        شيفت #{s.id} {cashier ? `(بواسطة: ${cashier})` : ''} - {s.closedAt ? 'مغلق' : 'مفتوح'}
                       </option>
                     );
                   })}

@@ -47,7 +47,7 @@ export const RULES = [
   /* ── Shifts ── */
   [/You must have an open shift/i, 'لازم تفتح الشيفت الأول. اضغط على «ابدأ الشيفت» وأدخل الفلوس اللي في الدرج.'],
   [/No open shift for the current user/i, 'لا يوجد شيفت مفتوح باسمك حالياً. افتح شيفت جديد لتتمكن من العمل.'],
-  [/(There is already an open shift for this register|Register already has an open shift|يوجد شيفت مفتوح بالفعل)/i,
+  [/(There is already an open shift for this register|Register already has an open shift)/i,
     'يوجد شيفت مفتوح بالفعل على نقطة البيع (الكاشير) المحددة. يرجى إغلاقه أولاً قبل فتح شيفت جديد.'],
   [/Shift is already closed/i, 'هذا الشيفت مغلق بالفعل.'],
   [/You can only close your own shift/i, 'هذا الشيفت باسم مستخدم آخر. سجّل الدخول بصاحب الشيفت، أو اطلب من المشرف/المدير إغلاقه.'],

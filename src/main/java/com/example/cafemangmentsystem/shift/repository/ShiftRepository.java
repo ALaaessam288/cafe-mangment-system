@@ -20,6 +20,10 @@ public interface ShiftRepository extends JpaRepository<Shift, Long> {
 
     Optional<Shift> findByUserIdAndClosedAtIsNull(Long userId);
 
+    Optional<Shift> findByTenantIdAndUserIdAndClosedAtIsNull(Long tenantId, Long userId);
+
+    Optional<Shift> findByTenantIdAndRegisterIdAndClosedAtIsNull(Long tenantId, Long registerId);
+
     List<Shift> findAllByClosedAtIsNull();
 
     List<Shift> findAllByUserId(Long userId);

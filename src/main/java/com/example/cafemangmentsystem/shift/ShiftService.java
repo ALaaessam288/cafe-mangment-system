@@ -70,10 +70,9 @@ public class ShiftService {
 
         Long currentTenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
         if (shiftRepository.existsByTenantIdAndUserIdAndClosedAtIsNull(currentTenantId, userId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "لديك شيفت مفتوح بالفعل حالياً. يرجى إغلاق الشيفت الحالي أولاً.");
-        }
-        if (shiftRepository.existsByTenantIdAndRegisterIdAndClosedAtIsNull(currentTenantId, request.registerId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "يوجد شيفت مفتوح بالفعل على نقطة البيع (الكاشير) المحددة. يرجى إغلاقه أولاً.");
+            Shift openShift = shiftRepository.findByTenantIdAndUserIdAndClosedAtIsNull(currentTenantId, userId).orElse(null);
+            String regName = (openShift != null && openShift.getRegister() != null) ? openShift.getRegister().getName() : "الخزينة";
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "لديك شيفت مفتوح بالفعل حالياً على " + regName + ". يرجى إغلاقه أولاً قبل فتح شيفت جديد.");
         }
 
         Register register = registerRepository.findById(request.registerId())
@@ -81,8 +80,13 @@ public class ShiftService {
         if (!register.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "نقطة البيع (الكاشير) غير مفعلة حالياً");
         }
-        if (shiftRepository.existsByRegisterIdAndClosedAtIsNull(register.getId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "يوجد شيفت مفتوح بالفعل لنقطة البيع هذه");
+
+        Optional<Shift> existingRegShift = shiftRepository.findByTenantIdAndRegisterIdAndClosedAtIsNull(currentTenantId, request.registerId());
+        if (existingRegShift.isPresent()) {
+            Shift s = existingRegShift.get();
+            String cashierName = s.getUser() != null ? (s.getUser().getFullName() != null && !s.getUser().getFullName().isBlank() ? s.getUser().getFullName() : s.getUser().getUsername()) : "كاشير آخر";
+            String regName = register.getName() != null ? register.getName() : "نقطة البيع";
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "يوجد شيفت مفتوح بالفعل على " + regName + " بواسطة الكاشير (" + cashierName + "). يرجى إغلاقه أولاً قبل فتح شيفت جديد.");
         }
 
         User user = userRepository.findById(userId)

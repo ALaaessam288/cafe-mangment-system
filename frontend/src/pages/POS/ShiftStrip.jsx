@@ -281,9 +281,11 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
         <div className="shift-strip__identity">
           <span className="shift-strip__live-dot" />
           <span>
-            <strong>الشيفت شغّال</strong>
+            <strong>الشيفت شغّال {shift?.userFullName || shift?.username ? `(بواسطة: ${shift.userFullName || shift.username})` : ''}</strong>
             {shift?.openedAt && (
-              <small>من {new Date(shift.openedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</small>
+              <small>
+                {shift?.registerName ? `${shift.registerName} • ` : ''}من {new Date(shift.openedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              </small>
             )}
           </span>
         </div>
