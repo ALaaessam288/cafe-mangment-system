@@ -15,6 +15,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.username = :username AND u.tenantId = :tenantId")
     List<User> findAllByTenantIdAndUsername(@Param("tenantId") Long tenantId, @Param("username") String username);
 
+    @Query("SELECT u FROM User u WHERE u.tenantId = :tenantId")
+    List<User> findAllByTenantId(@Param("tenantId") Long tenantId);
+
     default Optional<User> findByTenantIdAndUsername(Long tenantId, String username) {
         List<User> users = findAllByTenantIdAndUsername(tenantId, username);
         if (users.isEmpty()) return Optional.empty();

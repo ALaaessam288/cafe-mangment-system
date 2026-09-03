@@ -45,11 +45,15 @@ public class UserService {
         
         quotaService.checkUserQuota(userRepository.count());
 
+        if (request.pin() != null && !request.pin().isBlank()) {
+            validateUniquePinInTenant(tenantId, null, request.pin().trim());
+        }
+
         User user = new User();
         user.setUsername(request.username());
         user.setFullName(request.fullName());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setPinHash(request.pin() == null ? null : passwordEncoder.encode(request.pin()));
+        user.setPinHash(request.pin() == null || request.pin().isBlank() ? null : passwordEncoder.encode(request.pin().trim()));
         user.setRole(request.role());
 
         return UserResponse.from(userRepository.save(user));
@@ -86,8 +90,10 @@ public class UserService {
             }
             user.setUsername(request.username().trim());
         }
-        if (request.pin() != null) {
-            user.setPinHash(passwordEncoder.encode(request.pin()));
+        if (request.pin() != null && !request.pin().isBlank()) {
+            Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
+            validateUniquePinInTenant(tenantId != null ? tenantId : user.getTenantId(), user.getId(), request.pin().trim());
+            user.setPinHash(passwordEncoder.encode(request.pin().trim()));
         }
         return UserResponse.from(user);
     }
@@ -116,6 +122,20 @@ public class UserService {
         }
         user.activate();
         return UserResponse.from(user);
+    }
+
+    private void validateUniquePinInTenant(Long tenantId, Long excludeUserId, String pin) {
+        if (tenantId == null || pin == null || pin.isBlank()) return;
+        List<User> tenantUsers = userRepository.findAllByTenantId(tenantId);
+        for (User u : tenantUsers) {
+            if (excludeUserId != null && excludeUserId.equals(u.getId())) {
+                continue;
+            }
+            if (u.isActive() && u.getPinHash() != null && passwordEncoder.matches(pin, u.getPinHash())) {
+                String existingName = u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername();
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "رمز PIN هذا مستخدم بالفعل للمستخدم (" + existingName + ") في هذا الكافيه. يرجى اختيار رمز PIN فريد.");
+            }
+        }
     }
 
     private void validateTenantRole(com.example.cafemangmentsystem.user.entity.Role role) {
