@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ShoppingBag, Bike, Search, UserCheck, MapPin, Phone, Sparkles, UserPlus } from 'lucide-react';
+import { ShoppingBag, Bike, Search, UserCheck, MapPin, Phone, Sparkles, UserPlus, AlertCircle } from 'lucide-react';
 import { tablesApi } from '../../api/tablesApi';
 import { ordersApi } from '../../api/ordersApi';
 import { menuApi }   from '../../api/menuApi';
@@ -172,6 +172,8 @@ export default function POSPage() {
   const [registers, setRegisters] = useState([]);
   const [startShiftForm, setStartShiftForm] = useState({ openingFloat: '', registerId: '' });
   const [isLoadingShift, setIsLoadingShift] = useState(true);
+  const [openShiftError, setOpenShiftError] = useState('');
+  const [isOpenShiftLoading, setIsOpenShiftLoading] = useState(false);
   
   const [showCloseShift, setShowCloseShift] = useState(false);
   const [closeShiftForm, setCloseShiftForm] = useState({ countedCash: '' });
@@ -468,7 +470,12 @@ export default function POSPage() {
   /* ── Open Shift ── */
   async function handleOpenShift(e) {
     e.preventDefault();
-    if (!startShiftForm.openingFloat || !startShiftForm.registerId) return;
+    setOpenShiftError('');
+    if (!startShiftForm.openingFloat || !startShiftForm.registerId) {
+      setOpenShiftError('يرجى اختيار الدرج وإدخال العهدة الافتتاحية بدقة');
+      return;
+    }
+    setIsOpenShiftLoading(true);
     try {
       const shift = await shiftsApi.open({
         openingFloat: parseFloat(startShiftForm.openingFloat),
@@ -478,7 +485,10 @@ export default function POSPage() {
       toast.success('تم فتح الشيفت بنجاح!');
       setShowOpeningAudit(true);
     } catch (err) {
+      setOpenShiftError(err.message || 'يوجد شيفت مفتوح بالفعل على نقطة البيع (الكاشير) المحددة. يرجى إغلاقه أولاً.');
       toast.error(err.message, 'فشل في فتح الشيفت');
+    } finally {
+      setIsOpenShiftLoading(false);
     }
   }
 
@@ -1426,15 +1436,38 @@ export default function POSPage() {
     }
     return (
       <div className="pos" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <div className="pos__open-modal" style={{ maxWidth: '400px' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>فتح شيفت جديد</h2>
+        <div className="pos__open-modal" style={{ maxWidth: '420px', width: '100%' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-2)' }}>فتح شيفت جديد</h2>
+          <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)' }}>
+            أدخل العهدة النقدية في الدرج لبدء استقبال الطلبات
+          </p>
+
+          {openShiftError && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              color: '#fca5a5',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '14px',
+              lineHeight: 1.5
+            }}>
+              <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+              <span>{openShiftError}</span>
+            </div>
+          )}
+
           <form onSubmit={handleOpenShift} className="form-grid">
             <div className="field">
               <label className="field__label">الكاشير (الدرج)</label>
               <select
                 className="field-select__control"
                 value={startShiftForm.registerId}
-                onChange={e => setStartShiftForm({...startShiftForm, registerId: e.target.value})}
+                onChange={e => { setStartShiftForm({...startShiftForm, registerId: e.target.value}); setOpenShiftError(''); }}
                 required
               >
                 <option value="">-- اختار الدرج --</option>
@@ -1451,9 +1484,20 @@ export default function POSPage() {
             </div>
             <div className="field">
               <label className="field__label">العهدة الافتتاحية (Float)</label>
-              <input type="number" step="0.01" min="0" required className="field__input field__wrapper" value={startShiftForm.openingFloat} onChange={e => setStartShiftForm({...startShiftForm, openingFloat: e.target.value})} />
+              <input 
+                type="number" 
+                step="0.01" 
+                min="0" 
+                required 
+                placeholder="أدخل مبلغ العهدة"
+                className="field__input field__wrapper" 
+                value={startShiftForm.openingFloat} 
+                onChange={e => { setStartShiftForm({...startShiftForm, openingFloat: e.target.value}); setOpenShiftError(''); }} 
+              />
             </div>
-            <button type="submit" className="btn btn--primary btn--md" style={{ gridColumn: '1/-1' }}>ابدأ الشيفت</button>
+            <button type="submit" className="btn btn--primary btn--md" disabled={isOpenShiftLoading} style={{ gridColumn: '1/-1' }}>
+              {isOpenShiftLoading ? 'جاري فتح الشيفت...' : 'ابدأ الشيفت'}
+            </button>
           </form>
         </div>
       </div>
