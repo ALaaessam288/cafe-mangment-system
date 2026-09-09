@@ -1,6 +1,6 @@
 package com.example.cafemangmentsystem.ledger.entity;
 
-import com.example.cafemangmentsystem.common.entity.BaseEntity;
+import com.example.cafemangmentsystem.common.entity.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,7 +14,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FinancialLedgerEntry extends BaseEntity {
+public class FinancialLedgerEntry extends TenantScopedEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "entry_type", nullable = false)
