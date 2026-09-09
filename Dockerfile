@@ -13,7 +13,9 @@ COPY pom.xml .
 RUN mvn dependency:go-offline -B -P saas-prod
 COPY src ./src
 # Copy built React assets directly to Spring Boot static resources
-COPY --from=frontend-builder /frontend/dist ./src/main/resources/static
+# vite.config.js builds straight into src/main/resources/static (see its comment for why),
+# which resolves outside /frontend in this stage since it's one level up from the Vite root.
+COPY --from=frontend-builder /src/main/resources/static ./src/main/resources/static
 RUN mvn clean package -DskipTests -P saas-prod
 
 # ── Stage 3: Production Runtime ──
