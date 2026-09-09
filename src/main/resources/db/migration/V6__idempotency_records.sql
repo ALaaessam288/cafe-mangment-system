@@ -7,7 +7,7 @@
 --
 -- Entity: com.example.cafemangmentsystem.common.idempotency.IdempotencyRecord (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS idempotency_records (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -4,7 +4,11 @@ WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
-RUN npm run build
+# Build to an explicit absolute path rather than relying on vite.config.js's relative outDir.
+# That outDir is '../src/main/resources/static', which is correct for a developer's checkout but
+# resolves to /src/main/resources/static here — the image's filesystem root, outside the WORKDIR.
+# It happens to work, and would break silently the moment this WORKDIR changed.
+RUN npm run build -- --outDir /build/static --emptyOutDir
 
 # ── Stage 2: Build Spring Boot JAR with embedded Frontend ──
 FROM maven:3.9-eclipse-temurin-17 AS backend-builder
@@ -12,10 +16,9 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline -B -P saas-prod
 COPY src ./src
-# Copy built React assets directly to Spring Boot static resources
-# vite.config.js builds straight into src/main/resources/static (see its comment for why),
-# which resolves outside /frontend in this stage since it's one level up from the Vite root.
-COPY --from=frontend-builder /src/main/resources/static ./src/main/resources/static
+# Copy built React assets into Spring Boot's static resources. This must come AFTER `COPY src`,
+# which would otherwise overwrite it with whatever build happens to be committed in the repo.
+COPY --from=frontend-builder /build/static ./src/main/resources/static
 RUN mvn clean package -DskipTests -P saas-prod
 
 # ── Stage 3: Production Runtime ──
@@ -33,6 +36,8 @@ RUN chown -R appuser:appgroup /app
 
 USER appuser
 
+# Documentation only — the platform decides the real port via PORT, which application.properties
+# now actually reads. Nothing here binds it.
 EXPOSE 8080
 
 # Configure JVM flags for containerized environment

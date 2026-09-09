@@ -8,7 +8,7 @@
 --
 -- Entity: com.example.cafemangmentsystem.inventory.entity.RawMaterialMovement (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS raw_material_movements (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

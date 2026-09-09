@@ -1,0 +1,14 @@
+-- shift_audit_items.cost_per_unit
+--
+-- The column was added to the ShiftAuditItem entity when the shift audit began reporting variances
+-- in money as well as in grams, and no migration was ever written for it. With ddl-auto=none — which
+-- is what a Postgres deployment runs — the column simply does not exist, so Hibernate's mapping does
+-- not match the table and every read of a raw material fails.
+--
+-- It went unnoticed because the desktop build runs SQLite with JPA_DDL_AUTO=update, where Hibernate
+-- silently adds the column itself. Only a server deployment, where migrations own the schema, sees
+-- the gap. Found by applying the migrations to a real PostgreSQL instance.
+--
+-- Zero is the honest default: a material that has never had a priced delivery has no known cost, and
+-- the ledger's weighted-average costing sets a real one on the first RESTOCK.
+ALTER TABLE shift_audit_items ADD COLUMN ${add_col_if_not_exists}cost_per_unit DOUBLE PRECISION DEFAULT 0;
