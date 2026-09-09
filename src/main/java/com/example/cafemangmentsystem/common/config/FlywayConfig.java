@@ -34,7 +34,9 @@ public class FlywayConfig {
                 .dataSource(dataSource)
                 .baselineOnMigrate(baselineOnMigrate)
                 .locations(locations)
-                .placeholders(Map.of("pk_id", primaryKeyDdl(dataSource)))
+                .placeholders(Map.of(
+                        "pk_id", primaryKeyDdl(dataSource),
+                        "add_col_if_not_exists", addColumnIfNotExistsDdl(dataSource)))
                 .load();
         if (enabled) {
             flyway.migrate();
@@ -59,6 +61,20 @@ public class FlywayConfig {
                 case "MySQL" -> "BIGINT PRIMARY KEY AUTO_INCREMENT";
                 default -> "BIGSERIAL PRIMARY KEY"; // PostgreSQL and anything else Postgres-compatible
             };
+        }
+    }
+
+    /**
+     * SQLite's {@code ALTER TABLE ADD COLUMN} has no {@code IF NOT EXISTS} clause at all, so a
+     * script using it there needs the column to genuinely never exist yet (see
+     * {@code V2_1__SqliteLegacyCompat}, which guarantees exactly that by stripping it first).
+     * Postgres does support the clause, and needs it here: {@code JPA_DDL_AUTO=update} can have
+     * already added the column from the entity mapping - with real data in it - before this
+     * migration runs, and re-adding it unconditionally would fail instead of being a no-op.
+     */
+    private String addColumnIfNotExistsDdl(DataSource dataSource) throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            return "SQLite".equals(connection.getMetaData().getDatabaseProductName()) ? "" : "IF NOT EXISTS ";
         }
     }
 }

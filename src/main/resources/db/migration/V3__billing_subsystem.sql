@@ -188,11 +188,12 @@ CREATE INDEX IF NOT EXISTS idx_license_activations_key ON license_key_activation
 
 -- ── Columns V1 never declared but the entities have long carried ────────────
 
--- No IF NOT EXISTS: SQLite's ALTER TABLE doesn't support it at all, and on both engines these two
--- columns are guaranteed absent here - V2_1 (SQLite only) strips them first if a pre-Flyway
--- ddl-auto=update database already had them; a fresh Postgres or SQLite database never did.
-ALTER TABLE tenants ADD COLUMN logo_url TEXT;
-ALTER TABLE tenants ADD COLUMN plan_selected BOOLEAN NOT NULL DEFAULT FALSE;
+-- ${add_col_if_not_exists} is "" on SQLite (whose ALTER TABLE has no such clause at all - V2_1
+-- strips these columns first there, so a fresh add is always safe) and "IF NOT EXISTS " on
+-- Postgres, where a pre-Flyway ddl-auto=update database can already have them with real tenant
+-- data (e.g. an uploaded logo) that an unconditional re-add would collide with.
+ALTER TABLE tenants ADD COLUMN ${add_col_if_not_exists}logo_url TEXT;
+ALTER TABLE tenants ADD COLUMN ${add_col_if_not_exists}plan_selected BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ── Seed the catalogue ──────────────────────────────────────────────────────
 -- Limits are the ones the server actually enforced. Where the frontend's pricing cards claimed
