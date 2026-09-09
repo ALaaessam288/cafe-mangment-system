@@ -1,9 +1,13 @@
 package com.example.cafemangmentsystem.common.config;
 
+import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.ObjectUtils;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -20,10 +24,33 @@ import java.util.Map;
  *
  * <p>Depending on {@link DataSource} forces this bean, and therefore the migration, to run during
  * context refresh before any {@code ApplicationRunner} (the plan/tenant seeders included) gets a
- * chance to query a table that doesn't exist yet.
+ * chance to query a table that doesn't exist yet. It does NOT, by itself, run before Hibernate's own
+ * schema management - that ordering is what {@link #entityManagerFactoryDependsOnFlyway} adds. Real
+ * Spring Boot Flyway auto-configuration wires that dependency automatically
+ * ({@code FlywayJpaDependencyConfiguration}); hand-rolling Flyway here skipped it, so whenever
+ * {@code JPA_DDL_AUTO} is anything but {@code none} Hibernate was racing Flyway on every entity that
+ * didn't have a row in {@code flyway_schema_history} yet - and, being wired first, always won: it
+ * created each new table straight from the entity mapping (no column defaults, no CHECK constraints,
+ * no partial unique indexes - none of those come from annotations), so a migration's own
+ * {@code CREATE TABLE IF NOT EXISTS} for that table silently no-opped against the wrong shape.
  */
 @Configuration
 public class FlywayConfig {
+
+    /**
+     * Forces every {@link EntityManagerFactory} bean to wait for {@code flyway} to finish before
+     * Hibernate touches the schema, so {@code JPA_DDL_AUTO=update} (or any other non-{@code none}
+     * value) can never again race a migration for the same table.
+     */
+    @Bean
+    static BeanFactoryPostProcessor entityManagerFactoryDependsOnFlyway() {
+        return (ConfigurableListableBeanFactory beanFactory) -> {
+            for (String name : beanFactory.getBeanNamesForType(EntityManagerFactory.class, false, false)) {
+                var definition = beanFactory.getBeanDefinition(name);
+                definition.setDependsOn(ObjectUtils.addObjectToArray(definition.getDependsOn(), "flyway"));
+            }
+        };
+    }
 
     @Bean
     public Flyway flyway(DataSource dataSource,
