@@ -1,6 +1,7 @@
 import { Crown, Sparkles, X, ArrowUpRight, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/constants';
+import { isUnlimited, quotaText } from '../../api/plansApi';
 import Button from '../Button/Button';
 import './QuotaExceededModal.css';
 
@@ -15,6 +16,13 @@ export default function QuotaExceededModal({
   const navigate = useNavigate();
 
   if (!isOpen) return null;
+
+  /* An unlimited plan has no ceiling to be at, so this dialog should never have been opened for
+     one. It was, because the callers compared against the UNLIMITED sentinel (-1) as if it were a
+     real number. Guard here too: a meter dividing by -1 draws a negative bar, and the copy read
+     "3 من أصل -1". */
+  const unlimited = isUnlimited(maxLimit);
+  const hasMeter = !unlimited && Number(maxLimit) > 0;
 
   function handleUpgrade() {
     onClose();
@@ -44,14 +52,17 @@ export default function QuotaExceededModal({
         <h2 className="quota-modal-title">وصلت للحد الأقصى للباقة!</h2>
         
         <p className="quota-modal-desc">
-          {customMessage || `لقد بلغت الحد الأقصى المسموح به لعدد ${resourceName} في باقتك الحالية (${currentCount} من أصل ${maxLimit}).`}
+          {unlimited
+            ? `باقتك الحالية بتسمح بعدد غير محدود من ${resourceName}. لو ظهرت الرسالة دي، يبقى في حاجة غلط — كلّم الدعم.`
+            : customMessage
+              || `لقد بلغت الحد الأقصى المسموح به لعدد ${resourceName} في باقتك الحالية (${quotaText(currentCount, maxLimit)}).`}
         </p>
 
-        {maxLimit > 0 && (
+        {hasMeter && (
           <div className="quota-modal-meter-box">
             <div className="quota-modal-meter-info">
               <span>السعة المستخدمة:</span>
-              <span className="quota-modal-meter-val text-warning font-mono">{currentCount} / {maxLimit}</span>
+              <span className="quota-modal-meter-val text-warning font-mono">{quotaText(currentCount, maxLimit)}</span>
             </div>
             <div className="quota-modal-meter-bar">
               <div

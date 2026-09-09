@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +45,18 @@ public class AuthController {
     private final com.example.cafemangmentsystem.security.RateLimiterService rateLimiterService;
     private final com.example.cafemangmentsystem.billing.EntitlementService entitlementService;
 
+    /**
+     * The tenant directory. Requires a signed-in caller.
+     *
+     * <p>It sits under {@code /api/auth/**}, which the filter chain permits anonymously, so until
+     * now anyone who knew the URL could read the platform's entire customer list — every active
+     * cafe's name, slug and business type — with no credentials at all. Nothing in the app has
+     * ever called it: the login screen takes its slug from the URL or from local storage, never
+     * from a directory. Method security still applies under an anonymous filter chain, so this
+     * annotation is what closes it.
+     */
     @GetMapping("/tenants")
+    @PreAuthorize("isAuthenticated()")
     public List<PublicTenantDto> listTenants() {
         return tenantService.findAllPublic();
     }
@@ -70,7 +82,7 @@ public class AuthController {
      * than losing the customer's whole form to a 409.
      */
     @GetMapping("/slug-available")
-    public java.util.Map<String, Object> slugAvailable(@RequestParam String slug,
+    public java.util.Map<String, Object> slugAvailable(@RequestParam(name = "slug") String slug,
                                                        jakarta.servlet.http.HttpServletRequest http) {
         rateLimiterService.checkThroughput("slugcheck:" + clientAddress(http), 60, 60);
         String normalised = slug == null ? "" : slug.trim().toLowerCase(java.util.Locale.ROOT);

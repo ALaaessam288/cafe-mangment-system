@@ -31,6 +31,7 @@ import java.time.Instant;
 @Getter
 @Setter
 @NoArgsConstructor
+
 public class TenantSubscription extends BaseEntity {
 
     @Column(name = "tenant_id", nullable = false)

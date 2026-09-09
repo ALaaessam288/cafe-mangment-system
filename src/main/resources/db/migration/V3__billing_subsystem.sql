@@ -16,7 +16,7 @@
 -- ── Catalogue ───────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS plans (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS plan_features (
 -- ── Subscriptions ───────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS tenant_subscriptions (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -90,7 +90,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_tenant_subscriptions_one_current
 -- ── Money ───────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS subscription_invoices (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -119,7 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_subscription_invoices_status ON subscription_invo
 CREATE INDEX IF NOT EXISTS idx_subscription_invoices_issued ON subscription_invoices(issued_at);
 
 CREATE TABLE IF NOT EXISTS subscription_payments (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -143,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_subscription_payments_received ON subscription_pa
 -- ── Licence keys ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS license_keys (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS license_keys (
 CREATE INDEX IF NOT EXISTS idx_license_keys_plan ON license_keys(plan_id);
 
 CREATE TABLE IF NOT EXISTS license_key_activations (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -188,8 +188,11 @@ CREATE INDEX IF NOT EXISTS idx_license_activations_key ON license_key_activation
 
 -- ── Columns V1 never declared but the entities have long carried ────────────
 
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT;
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS plan_selected BOOLEAN NOT NULL DEFAULT FALSE;
+-- No IF NOT EXISTS: SQLite's ALTER TABLE doesn't support it at all, and on both engines these two
+-- columns are guaranteed absent here - V2_1 (SQLite only) strips them first if a pre-Flyway
+-- ddl-auto=update database already had them; a fresh Postgres or SQLite database never did.
+ALTER TABLE tenants ADD COLUMN logo_url TEXT;
+ALTER TABLE tenants ADD COLUMN plan_selected BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ── Seed the catalogue ──────────────────────────────────────────────────────
 -- Limits are the ones the server actually enforced. Where the frontend's pricing cards claimed
@@ -207,8 +210,11 @@ VALUES
     ('CUSTOM',     'باقة مخصصة',          'Custom',       0.00, 'EGP', 30,  0,    1,   1,    1, 4, TRUE, FALSE, TRUE)
 ON CONFLICT (code) DO NOTHING;
 
+-- f.column1/column2 rather than a named column list on the VALUES clause: SQLite has no
+-- "AS f(code, feature)" column-aliasing syntax for a table-valued VALUES constructor, only the
+-- default columnN names, which Postgres assigns the same way when none are given.
 INSERT INTO plan_features (plan_id, feature)
-SELECT p.id, f.feature FROM plans p
+SELECT p.id, f.column2 FROM plans p
 JOIN (VALUES
     ('TRIAL','POS'), ('TRIAL','THERMAL_PRINT'),
 
@@ -228,7 +234,7 @@ JOIN (VALUES
     ('CUSTOM','KDS'), ('CUSTOM','DEBTS'), ('CUSTOM','INVENTORY'), ('CUSTOM','PAYROLL'),
     ('CUSTOM','REPORTS'), ('CUSTOM','MULTI_REGISTER'), ('CUSTOM','MANAGER_OVERRIDE'),
     ('CUSTOM','WHATSAPP_ALERTS'), ('CUSTOM','CUSTOM_BRANDING'), ('CUSTOM','MULTI_BRANCH')
-) AS f(code, feature) ON f.code = p.code
+) AS f ON f.column1 = p.code
 ON CONFLICT DO NOTHING;
 
 -- ── Carry every existing tenant into a subscription ─────────────────────────
@@ -269,9 +275,9 @@ WHERE t.slug <> 'platform'
   AND NOT EXISTS (SELECT 1 FROM tenant_subscriptions s WHERE s.tenant_id = t.id);
 
 -- Bring the tenant's own status in line with the richer lifecycle it now mirrors.
-UPDATE tenants t
+UPDATE tenants AS t
 SET status = s.status
-FROM tenant_subscriptions s
+FROM tenant_subscriptions AS s
 WHERE s.tenant_id = t.id
   AND s.current_subscription
   AND s.status IN ('EXPIRED', 'CANCELLED')
@@ -282,10 +288,12 @@ WHERE id IN (SELECT tenant_id FROM tenant_subscriptions WHERE current_subscripti
   AND status <> 'SUSPENDED';
 
 -- ── Retire the columns the subscription now owns ────────────────────────────
+-- No IF EXISTS: SQLite's ALTER TABLE doesn't support it, and V1 guarantees every one of these
+-- columns exists on both engines at this point, so an unconditional DROP is safe.
 
-ALTER TABLE tenants DROP COLUMN IF EXISTS subscription_plan;
-ALTER TABLE tenants DROP COLUMN IF EXISTS trial_ends_at;
-ALTER TABLE tenants DROP COLUMN IF EXISTS subscription_ends_at;
-ALTER TABLE tenants DROP COLUMN IF EXISTS max_tables;
-ALTER TABLE tenants DROP COLUMN IF EXISTS max_users;
-ALTER TABLE tenants DROP COLUMN IF EXISTS max_products;
+ALTER TABLE tenants DROP COLUMN subscription_plan;
+ALTER TABLE tenants DROP COLUMN trial_ends_at;
+ALTER TABLE tenants DROP COLUMN subscription_ends_at;
+ALTER TABLE tenants DROP COLUMN max_tables;
+ALTER TABLE tenants DROP COLUMN max_users;
+ALTER TABLE tenants DROP COLUMN max_products;

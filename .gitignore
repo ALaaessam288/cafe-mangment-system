@@ -44,3 +44,5 @@ cafe.db
 # Temporary build snapshots staged for an out-of-VM compile
 _to_delete/
 *.tgz
+.attach_pid*
+*_tmp

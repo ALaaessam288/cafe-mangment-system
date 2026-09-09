@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Package, Search, Plus, Trash2, Edit, Coffee, CheckCircle, AlertTriangle, FlaskConical } from 'lucide-react';
+import { Package, Search, Plus, Trash2, Edit, AlertTriangle, FlaskConical, Layers } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { auditApi } from '../../api/auditApi';
 import { useToast } from '../../context/ToastContext';
@@ -36,11 +36,7 @@ export default function InventoryPage() {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [editingAuditItem, setEditingAuditItem] = useState(null);
   const [auditForm, setAuditForm] = useState({
-    name: '',
-    unit: 'جرام',
-    stockQuantity: '1000',
-    minThreshold: '200',
-    requiresAudit: true
+    name: '', unit: 'جرام', stockQuantity: '0', minThreshold: '0', costPerUnit: '0', requiresAudit: true,
   });
   const [isSavingAuditItem, setIsSavingAuditItem] = useState(false);
 
@@ -126,12 +122,24 @@ export default function InventoryPage() {
     [allProducts]
   );
 
+  /*
+   * Raw materials carry their own minThreshold, but nothing ever watched it — the alert covered
+   * finished products only. Running out of milk is at least as disruptive as running out of a
+   * finished sandwich, and it silently breaks every recipe that depends on it.
+   */
+  const lowStockMaterials = useMemo(
+    () => auditItems.filter(i => i.active !== false && (i.stockQuantity ?? 0) <= (i.minThreshold ?? 0)),
+    [auditItems]
+  );
+
 
   const filteredProducts = useMemo(() => {
     if (!searchTerm.trim()) return products;
     const term = searchTerm.toLowerCase();
     return products.filter(p => (p.name || '').toLowerCase().includes(term));
   }, [products, searchTerm]);
+
+  const isMaterialLow = (item) => (item.stockQuantity ?? 0) <= (item.minThreshold ?? 0);
 
   function handleOpenAdjustmentModal(product) {
     setSelectedProduct(product);
@@ -170,22 +178,24 @@ export default function InventoryPage() {
   function handleOpenAuditModal(item = null) {
     if (item) {
       setEditingAuditItem(item);
+      /*
+       * Read the fields the API actually returns. This used to look for `currentStock` and
+       * `alertThreshold`, which do not exist on ShiftAuditItemDto — so opening a material to
+       * change its name silently refilled the form with the 1000/200 defaults and saving it
+       * overwrote the real stock. It also forced requiresAudit back to true, quietly re-adding a
+       * material the owner had deliberately excluded from the shift count.
+       */
       setAuditForm({
         name: item.name || '',
         unit: item.unit || 'جرام',
-        stockQuantity: item.currentStock !== undefined ? String(item.currentStock) : '1000',
-        minThreshold: item.alertThreshold !== undefined ? String(item.alertThreshold) : '200',
-        requiresAudit: true
+        stockQuantity: item.stockQuantity != null ? String(item.stockQuantity) : '0',
+        minThreshold: item.minThreshold != null ? String(item.minThreshold) : '0',
+        costPerUnit: item.costPerUnit != null ? String(item.costPerUnit) : '0',
+        requiresAudit: item.requiresAudit !== false
       });
     } else {
       setEditingAuditItem(null);
-      setAuditForm({
-        name: '',
-        unit: 'جرام',
-        stockQuantity: '1000',
-        minThreshold: '200',
-        requiresAudit: true
-      });
+      setAuditForm({ name: '', unit: 'جرام', stockQuantity: '0', minThreshold: '0', costPerUnit: '0', requiresAudit: true });
     }
     setIsAuditModalOpen(true);
   }
@@ -198,12 +208,16 @@ export default function InventoryPage() {
     }
     setIsSavingAuditItem(true);
     try {
+      // stockQuantity / minThreshold / costPerUnit — the payload previously sent currentStock and
+      // alertThreshold, which the server does not bind, so neither value was ever saved.
       const payload = {
         id: editingAuditItem ? editingAuditItem.id : undefined,
         name: auditForm.name.trim(),
         unit: auditForm.unit.trim(),
-        currentStock: parseFloat(auditForm.stockQuantity) || 0,
-        alertThreshold: parseFloat(auditForm.minThreshold) || 0,
+        stockQuantity: parseFloat(auditForm.stockQuantity) || 0,
+        minThreshold: parseFloat(auditForm.minThreshold) || 0,
+        costPerUnit: parseFloat(auditForm.costPerUnit) || 0,
+        requiresAudit: auditForm.requiresAudit,
         active: true
       };
       await auditApi.saveAuditItem(payload);
@@ -327,45 +341,45 @@ export default function InventoryPage() {
     <div className="page inventory-page">
       <ObserverBanner />
 
-      {/* ── Low-stock alert banner ── */}
-      {!productsLoading && lowStockProducts.length > 0 && (
-        <div
-          style={{
-            background: 'linear-gradient(90deg, rgba(245,158,11,0.15) 0%, rgba(239,68,68,0.12) 100%)',
-            border: '1px solid rgba(245,158,11,0.5)',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '12px',
-          }}
-        >
-          <AlertTriangle size={20} style={{ color: '#f59e0b', flexShrink: 0, marginTop: '2px' }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 'bold', color: '#f59e0b', marginBottom: '6px', fontSize: '0.95rem' }}>
-              تحذير: {lowStockProducts.length} صنف بمخزون منخفض أو منعدم
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {lowStockProducts.map(p => (
-                <span
-                  key={p.id}
-                  style={{
-                    background: (p.stockQuantity || 0) <= 0 ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)',
-                    border: `1px solid ${(p.stockQuantity || 0) <= 0 ? 'rgba(239,68,68,0.5)' : 'rgba(245,158,11,0.4)'}`,
-                    borderRadius: '20px',
-                    padding: '2px 10px',
-                    fontSize: '0.8rem',
-                    color: (p.stockQuantity || 0) <= 0 ? '#ef4444' : '#f59e0b',
-                    fontWeight: '600',
-                  }}
+      {/* ── What needs attention, products and raw materials alike ── */}
+      {!productsLoading && !auditItemsLoading && (lowStockProducts.length > 0 || lowStockMaterials.length > 0) && (
+        <div className="inv-alert" role="status">
+          <AlertTriangle size={18} className="inv-alert__icon" />
+          <div className="inv-alert__body">
+            <strong>
+              {[
+                lowStockProducts.length > 0 && `${lowStockProducts.length} صنف`,
+                lowStockMaterials.length > 0 && `${lowStockMaterials.length} خامة`,
+              ].filter(Boolean).join(' و')} تحت حد التنبيه
+            </strong>
+            <div className="inv-alert__chips">
+              {lowStockMaterials.slice(0, 6).map(m => (
+                <button
+                  type="button"
+                  key={`m-${m.id}`}
+                  className={`inv-chip ${(m.stockQuantity ?? 0) <= 0 ? 'is-out' : ''}`}
+                  onClick={() => setActiveTab('audit-items')}
+                >
+                  {m.name}
+                  <span>{(m.stockQuantity ?? 0) <= 0 ? 'نفدت' : `${m.stockQuantity} ${m.unit}`}</span>
+                </button>
+              ))}
+              {lowStockProducts.slice(0, 6).map(p => (
+                <button
+                  type="button"
+                  key={`p-${p.id}`}
+                  className={`inv-chip ${(p.stockQuantity || 0) <= 0 ? 'is-out' : ''}`}
+                  onClick={() => { setActiveTab('products'); setSearchTerm(p.name || ''); }}
                 >
                   {p.name}
-                  <span style={{ opacity: 0.75, marginRight: '4px' }}>
-                    ({(p.stockQuantity || 0) <= 0 ? 'نفد المخزون' : `${p.stockQuantity} متبقي`})
-                  </span>
-                </span>
+                  <span>{(p.stockQuantity || 0) <= 0 ? 'نفد' : `${p.stockQuantity} متبقي`}</span>
+                </button>
               ))}
+              {(lowStockProducts.length + lowStockMaterials.length) > 12 && (
+                <span className="inv-chip inv-chip--more">
+                  +{lowStockProducts.length + lowStockMaterials.length - 12}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -373,148 +387,99 @@ export default function InventoryPage() {
 
       <div className="page__header">
         <div>
-          <h1 className="page__title">الجرد، الوصفات والمخزون</h1>
-          <p className="page__subtitle">إدارة مقادير ووصفات الأصناف (Recipes)، خامات الجرد (القهوة، اللبن)، ومخزون المنتجات</p>
+          <h1 className="page__title">المخزون والوصفات</h1>
+          <p className="page__subtitle">
+            اربط كل صنف بمقاديره، تابع رصيد الخامات، وسوِّ جرد المنتجات الجاهزة.
+          </p>
         </div>
         {isSupervisor && (
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="inv-header-actions">
             {activeTab === 'recipes' && (
               <Button variant="primary" icon={<Plus size={16} />} onClick={() => handleOpenRecipeModal()}>
-                + تعيين مقادير صنف جديد (Recipe)
+                وصفة جديدة
               </Button>
             )}
             {activeTab === 'audit-items' && (
               <Button variant="primary" icon={<Plus size={16} />} onClick={() => handleOpenAuditModal()}>
-                إضافة خامة جديدة للجرد
+                خامة جديدة
               </Button>
             )}
           </div>
         )}
       </div>
 
-      <div className="inventory-tabs" style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px', flexWrap: 'wrap' }}>
-        <button
-          className={'btn-tab ' + (activeTab === 'recipes' ? 'active' : '')}
-          onClick={() => setActiveTab('recipes')}
-          style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: 'none',
-            background: activeTab === 'recipes' ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: activeTab === 'recipes' ? '#fff' : 'var(--text-secondary)',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <FlaskConical size={18} />
-          🧪 وصفات ومقادير الأصناف (Recipes)
-          <span style={{ background: 'rgba(255,255,255,0.25)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem' }}>
-            {recipesByProduct.length}
-          </span>
-        </button>
-
-        <button
-          className={'btn-tab ' + (activeTab === 'audit-items' ? 'active' : '')}
-          onClick={() => setActiveTab('audit-items')}
-          style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: 'none',
-            background: activeTab === 'audit-items' ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: activeTab === 'audit-items' ? '#fff' : 'var(--text-secondary)',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Coffee size={18} />
-          خامات جرد الشيفت المعيارية (القهوة، اللبن، السكر)
-          <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem' }}>
-            {auditItems.length}
-          </span>
-        </button>
-
-        <button
-          className={'btn-tab ' + (activeTab === 'products' ? 'active' : '')}
-          onClick={() => setActiveTab('products')}
-          style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: 'none',
-            background: activeTab === 'products' ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: activeTab === 'products' ? '#fff' : 'var(--text-secondary)',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Package size={18} />
-          تعديل جرد المنتجات الجاهزة (المشروبات والساندوتشات)
-        </button>
-      </div>
+      {/*
+        * Tabs name what you manage, not the mechanism. The old labels carried the English term, an
+        * emoji and a count each — "🧪 وصفات ومقادير الأصناف (Recipes)" — which reads as three
+        * competing labels rather than one.
+        */}
+      <nav className="inv-tabs" role="tablist">
+        {[
+          { id: 'recipes', label: 'الوصفات', icon: FlaskConical, count: recipesByProduct.length },
+          { id: 'audit-items', label: 'الخامات', icon: Layers, count: auditItems.length, alert: lowStockMaterials.length },
+          { id: 'products', label: 'جرد المنتجات', icon: Package, count: products.length, alert: lowStockProducts.length },
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`inv-tab ${isActive ? 'is-active' : ''}`}
+              onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+            >
+              <Icon size={17} />
+              <span>{tab.label}</span>
+              <b>{tab.count}</b>
+              {tab.alert > 0 && <i className="inv-tab__alert" title={`${tab.alert} تحت حد التنبيه`} />}
+            </button>
+          );
+        })}
+      </nav>
 
       {activeTab === 'recipes' && (
         <div className="recipes-tab-content">
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '12px',
-            marginBottom: '20px'
-          }}>
-            <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>الأصناف المربوطة بمقادير</div>
-              <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--accent)', marginTop: '4px' }}>
-                {recipesByProduct.length} <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-secondary)' }}>صنف</span>
-              </div>
+          <div className="inv-stats">
+            <div className="inv-stat">
+              <span>أصناف لها وصفة</span>
+              <strong>{recipesByProduct.length}</strong>
             </div>
-            <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>إجمالي الخامات المسجلة</div>
-              <div style={{ fontSize: '24px', fontWeight: '800', color: '#10b981', marginTop: '4px' }}>
-                {auditItems.length} <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-secondary)' }}>خامة مستودع</span>
-              </div>
+            <div className="inv-stat">
+              <span>خامات مسجلة</span>
+              <strong className="is-mint">{auditItems.length}</strong>
             </div>
-            <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>آلية الخصم التلقائي</div>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#38bdf8', marginTop: '6px' }}>
-                ⚡ يخصم المقادير آلياً من رصيد الخامات في تقرير جرد الشيفت عند البيع
-              </div>
+            <div className="inv-stat inv-stat--note">
+              <span>الخصم التلقائي</span>
+              <p>كل بيع يخصم مقادير الصنف من رصيد الخامات، ويظهر الفرق في جرد الشيفت.</p>
             </div>
           </div>
 
-          <div className="filter-bar" style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div className="search-box" style={{ flex: 1, maxWidth: '400px', position: 'relative' }}>
-              <Search size={18} className="search-box__icon" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                className="input input--search"
-                placeholder="ابحث باسم المنتج أو الخامة..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: '100%', paddingRight: '40px' }}
-              />
-            </div>
-          </div>
+          <label className="inv-search">
+            <Search size={17} />
+            <input
+              type="search"
+              placeholder="ابحث باسم الصنف أو الخامة…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </label>
 
           <div className="data-table-wrap">
             {recipesLoading ? (
               <div className="data-table-empty"><Spinner /></div>
             ) : filteredRecipes.length === 0 ? (
-              <div className="data-table-empty" style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <FlaskConical size={48} style={{ opacity: 0.3, marginBottom: '12px', margin: '0 auto' }} />
-                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>لا توجد وصفات أو مقادير مضافة حالياً</div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '16px' }}>
-                  اضغط على الزر أدناه لتحديد مقادير أي مشروب أو وجبة (مثال: آيس كوفي = 30ml لبن + 15g بن + 10g سكر)
+              <div className="inv-empty">
+                <FlaskConical size={34} />
+                <strong>لا توجد وصفات بعد</strong>
+                <p>
+                  الوصفة تربط الصنف بمقاديره، فيُخصم المخزون تلقائياً مع كل بيع.
+                  <br />مثال: آيس كوفي = 30 مل لبن + 15 جم بن + 10 جم سكر.
                 </p>
                 {isSupervisor && (
-                  <Button variant="primary" onClick={() => handleOpenRecipeModal()}>
-                    + تعيين أول وصفة لمنتج
+                  <Button variant="primary" icon={<Plus size={15} />} onClick={() => handleOpenRecipeModal()}>
+                    أضف أول وصفة
                   </Button>
                 )}
               </div>
@@ -606,16 +571,27 @@ export default function InventoryPage() {
             {auditItemsLoading ? (
               <div className="data-table-empty"><Spinner /></div>
             ) : auditItems.length === 0 ? (
-              <div className="data-table-empty">مفيش خامات جرد مسجلة حالياً. اضغط "إضافة خامة جديدة للجرد" للبدء.</div>
+              <div className="inv-empty">
+                <Layers size={34} />
+                <strong>لا توجد خامات مسجلة</strong>
+                <p>الخامات هي ما تعدّه فعلياً كل شيفت — بن، لبن، سكر. أضفها لتفعيل تقرير الهدر.</p>
+                {isSupervisor && (
+                  <Button variant="primary" icon={<Plus size={15} />} onClick={() => handleOpenAuditModal()}>
+                    أضف أول خامة
+                  </Button>
+                )}
+              </div>
             ) : (
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>اسم الخامة</th>
-                    <th>الوحدة المعيارية</th>
-                    <th>الرصيد الحالي بالمستودع</th>
-                    <th>حد التنبيه الحرج</th>
-                    <th style={{ textAlign: 'left' }}>الإجراءات</th>
+                    <th>الخامة</th>
+                    <th>الوحدة</th>
+                    <th>الرصيد الحالي</th>
+                    <th>حد التنبيه</th>
+                    <th>التكلفة</th>
+                    <th>الجرد</th>
+                    <th className="inv-col-actions">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -626,10 +602,19 @@ export default function InventoryPage() {
                         <Badge variant="neutral">{item.unit}</Badge>
                       </td>
                       <td>
-                        <span style={{ fontSize: '15px', fontWeight: 'bold' }}>{item.currentStock || 0}</span> {item.unit}
+                        <span className={`inv-stock ${isMaterialLow(item) ? 'is-low' : ''}`}>
+                          {item.stockQuantity ?? 0}
+                        </span>
+                        <small className="inv-unit"> {item.unit}</small>
+                      </td>
+                      <td className="inv-muted">{item.minThreshold ?? 0} {item.unit}</td>
+                      <td className="inv-muted">
+                        {item.costPerUnit ? `${item.costPerUnit} ج.م / ${item.unit}` : '—'}
                       </td>
                       <td>
-                        <span style={{ color: 'var(--text-muted)' }}>{item.alertThreshold || 0} {item.unit}</span>
+                        {item.requiresAudit
+                          ? <Badge variant="success">يُجرد كل شيفت</Badge>
+                          : <Badge variant="neutral">خارج الجرد</Badge>}
                       </td>
                       <td>
                         <div className="data-table__actions" style={{ justifyContent: 'flex-end' }}>
@@ -665,24 +650,25 @@ export default function InventoryPage() {
 
       {activeTab === 'products' && (
         <div className="products-tab-content">
-          <div className="filter-bar" style={{ marginBottom: '16px' }}>
-            <div className="search-box">
-              <Search size={18} className="search-box__icon" />
-              <input
-                type="text"
-                className="input input--search"
-                placeholder="ابحث باسم المنتج..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
+          <label className="inv-search">
+            <Search size={17} />
+            <input
+              type="search"
+              placeholder="ابحث باسم المنتج…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </label>
 
           <div className="data-table-wrap">
             {productsLoading ? (
               <div className="data-table-empty"><Spinner /></div>
             ) : filteredProducts.length === 0 ? (
-              <div className="data-table-empty">مفيش منتجات متطابقة مع البحث</div>
+              <div className="inv-empty">
+                <Package size={34} />
+                <strong>لا توجد منتجات مطابقة</strong>
+                <p>جرّب اسماً آخر، أو امسح البحث لعرض كل المنتجات المتتبَّعة.</p>
+              </div>
             ) : (
               <table className="data-table">
                 <thead>
@@ -702,7 +688,7 @@ export default function InventoryPage() {
                       <td>
                         <span style={{
                           fontWeight: 'bold',
-                          color: (p.stockQuantity || 0) <= 0 ? 'var(--danger)' : (p.stockQuantity || 0) <= (p.minStockThreshold || 5) ? '#f59e0b' : 'var(--text-primary)'
+                          color: (p.stockQuantity || 0) <= 0 ? 'var(--danger)' : (p.stockQuantity || 0) <= (p.minStockThreshold || 5) ? '#a99cff' : 'var(--text-primary)'
                         }}>
                           {p.stockQuantity ?? 0}
                         </span>
@@ -918,6 +904,17 @@ export default function InventoryPage() {
             required
             min="0"
             step="0.01"
+          />
+
+          {/* Cost turns a variance from "‎−240 جرام‎" into a number that belongs in a P&L. */}
+          <Input
+            label="تكلفة الوحدة (لتقييم الهدر بالجنيه)"
+            type="number"
+            value={auditForm.costPerUnit}
+            onChange={(e) => setAuditForm({ ...auditForm, costPerUnit: e.target.value })}
+            min="0"
+            step="0.01"
+            placeholder="0"
           />
 
           <div style={{ gridColumn: '1 / -1', margin: '10px 0' }}>

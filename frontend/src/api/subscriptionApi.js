@@ -57,6 +57,12 @@ export const platformSubscriptionApi = {
 /** Invoices, payments and revenue. */
 export const billingApi = {
   stats: () => client.get('/admin/billing/stats').then((r) => r.data),
+  /* Every invoice on the platform, paged. The per-tenant list below cannot answer
+     "who owes me money right now", which is the only question this screen exists for. */
+  allInvoices: ({ status = null, page = 0, size = 25 } = {}) =>
+    client.get('/admin/billing/invoices', {
+      params: { ...(status ? { status } : {}), page, size },
+    }).then((r) => r.data),
   invoices: (tenantId) => client.get(`/admin/billing/tenants/${tenantId}/invoices`).then((r) => r.data),
   payments: (tenantId) => client.get(`/admin/billing/tenants/${tenantId}/payments`).then((r) => r.data),
   recordPayment: (invoiceId, payload) =>

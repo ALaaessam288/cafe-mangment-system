@@ -4,58 +4,32 @@ import { useToast } from '../../context/ToastContext';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import ProvisionTenantModal from './components/ProvisionTenantModal';
 import ProvisionSuccessModal from './components/ProvisionSuccessModal';
+import UpgradeInbox from './components/UpgradeInbox';
+import PlanEditor from './components/PlanEditor';
+import InvoiceLedger from './components/InvoiceLedger';
 import './SuperAdminPage.css';
 import { plansApi, UNLIMITED, formatLimit } from '../../api/plansApi';
+import { upgradeAdminApi, upgradeApi } from '../../api/subscriptionApi';
 
-const PLAN_PRICES = { TRIAL: 0, STARTER: 499, PRO: 899, ENTERPRISE: 1499, CUSTOM: 0 };
-const AUDIT_ACTIONS = {
-  CREATED: 'تأسيس منشأة',
-  PLAN_UPGRADED: 'تغيير الباقة',
-  PLAN_CUSTOMIZED: 'تخصيص الباقة',
-  SUSPENDED: 'إيقاف منشأة',
-  TRIAL_EXTENDED: 'تمديد التجربة',
-  SUBSCRIPTION_EXTENDED: 'تمديد الاشتراك',
-  LICENSE_ACTIVATED: 'تفعيل ترخيص',
-  LOGO_UPDATED: 'تحديث الشعار',
-  UPDATED: 'تحديث بيانات',
-};
-
-const tenantExpiry = (tenant) => tenant?.status === 'TRIAL' || tenant?.subscriptionPlan === 'TRIAL'
-  ? tenant?.trialEndsAt
-  : tenant?.subscriptionEndsAt;
-
-const toDateInputValue = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const toEndOfLocalDayInstant = (value) => {
-  if (!value) return null;
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(year, month - 1, day, 23, 59, 59, 999);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-};
-
-const daysUntil = (date) => date
-  ? Math.ceil((new Date(date).getTime() - Date.now()) / 86400000)
-  : null;
-
-const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-
-function SectionIntro({ eyebrow, title, description, icon, children }) {
-  return (
-    <div className="sa-section-intro">
-      <div className="sa-section-intro__icon"><i className={`bi ${icon}`} /></div>
-      <div className="sa-section-intro__copy"><span>{eyebrow}</span><h2>{title}</h2><p>{description}</p></div>
-      {children && <div className="sa-section-intro__actions">{children}</div>}
-    </div>
-  );
-}
+/*
+ * Every action SubscriptionService and friends can write to the audit log. Anything missing here
+ * renders as a raw English code and cannot be picked from the filter — which is what happened to
+ * the whole upgrade-request and grace/expiry vocabulary after the billing redesign.
+ */
+import {
+  AUDIT_ACTIONS,
+  SUBSCRIPTION_STATUS,
+  STATUS_BADGE,
+  daysUntil,
+  downloadCsv,
+  formatDate,
+  limitText,
+  statusMeta,
+  tenantExpiry,
+  toDateInputValue,
+  toEndOfLocalDayInstant,
+} from './superAdminShared';
+import SectionIntro from './components/SectionIntro';
 
 export default function SuperAdminPage() {
   const toast = useToast();
@@ -129,9 +103,23 @@ export default function SuperAdminPage() {
    */
   const [plans, setPlans] = useState([]);
 
+  /* Support phone and bank details are the operator's own, and belong in configuration. */
+  const [platformSettings, setPlatformSettings] = useState(null);
+
+  /* Drives the "المدفوعات" badge so an unreviewed transfer is visible from any section. */
+  const [pendingPayments, setPendingPayments] = useState(0);
+
+  const refreshPendingPayments = useCallback(() => {
+    upgradeAdminApi.list(true)
+      .then((rows) => setPendingPayments(rows.length))
+      .catch(() => setPendingPayments(0));
+  }, []);
+
   useEffect(() => {
     plansApi.listAll().then(setPlans).catch(() => setPlans([]));
-  }, []);
+    upgradeApi.bankDetails().then(setPlatformSettings).catch(() => setPlatformSettings(null));
+    refreshPendingPayments();
+  }, [refreshPendingPayments]);
 
   // ── DATA FETCHING ──────────────────────────────────────────────────────────
   const loadData = useCallback(async (isRefresh = false) => {
@@ -340,9 +328,35 @@ export default function SuperAdminPage() {
     }
   }
 
+  /*
+   * Handover message for a newly provisioned tenant.
+   *
+   * The password is deliberately NOT in it. This message used to carry the owner's plaintext
+   * password into a wa.me URL, which puts it in the operator's browser history, in WhatsApp Web,
+   * and in the customer's chat log permanently — three copies nobody can revoke. The operator
+   * reads it aloud, or copies it from the handover card, over a channel of their choosing.
+   */
   function formatWhatsappMessage(data) {
     const loginUrl = `${window.location.origin}/${data.slug}/login`;
-    return `مرحباً بك في منصة كافيو لإدارة الكافيهات والمطاعم ☕🚀\n\nتم تأسيس وتفعيل حساب منشأتكم بنجاح:\n🏪 اسم المنشأة: ${data.name}\n🌐 المعرف المختصر (Slug): ${data.slug}\n⭐ باقة الاشتراك: ${data.subscriptionPlan}\n\n🔐 بيانات الدخول لحساب الإدارة:\n👤 اسم المستخدم: ${data.ownerUsername}\n🔑 كلمة المرور: ${data.ownerPassword}\n\n🌐 رابط تسجيل الدخول المباشر لمنشأتكم:\n${loginUrl}\n\n📞 للتواصل مع إدارة المنصة والدعم الفني:\n01061967618\n\nنتمنى لكم تجربة مميزة وتشغيل ناجح! ✨`;
+    const support = platformSettings?.supportPhone;
+    return [
+      'مرحباً بك في منصة كافيو لإدارة الكافيهات والمطاعم ☕🚀',
+      '',
+      'تم تأسيس وتفعيل حساب منشأتكم بنجاح:',
+      `🏪 اسم المنشأة: ${data.name}`,
+      `🌐 المعرف المختصر: ${data.slug}`,
+      `⭐ باقة الاشتراك: ${data.planDisplayName || data.planCode || ''}`,
+      '',
+      '🔐 بيانات الدخول:',
+      `👤 اسم المستخدم: ${data.ownerUsername}`,
+      '🔑 كلمة المرور: سنرسلها لك في رسالة منفصلة.',
+      '',
+      '🌐 رابط تسجيل الدخول:',
+      loginUrl,
+      '',
+      ...(support ? ['📞 للدعم الفني:', support, ''] : []),
+      'نتمنى لكم تجربة مميزة وتشغيل ناجح! ✨',
+    ].join('\n');
   }
 
   function sendWhatsappCredentials(data) {
@@ -360,7 +374,7 @@ export default function SuperAdminPage() {
 
     const message = formatWhatsappMessage(data);
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
-    toast.success('تم فتح تطبيق واتساب لإرسال بيانات الحساب 📲');
+    toast.success('تم فتح واتساب برسالة الترحيب — أرسل كلمة المرور بشكل منفصل 🔐');
   }
 
   async function handleCreateTenant(formData) {
@@ -448,26 +462,23 @@ export default function SuperAdminPage() {
 
   // ── EXPORT DATA ────────────────────────────────────────────────────────────
   function exportTenantsToCSV() {
-    const headers = ['ID', 'Name', 'Slug', 'Plan', 'Status', 'Max Tables', 'Max Users', 'Trial End Date'];
-    const rows = filteredTenants.map((t) => [
-      t.id,
-      `"${t.name}"`,
-      t.slug,
-      t.subscriptionPlan || 'TRIAL',
-      t.status,
-      t.maxTables,
-      t.maxUsers,
-      t.trialEndsAt || '',
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,﻿' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `caffio_tenants_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const rows = [
+      ['ID', 'المنشأة', 'الرابط', 'الباقة', 'حالة الاشتراك', 'الطاولات', 'المستخدمون', 'الأصناف',
+       'نهاية الفترة', 'أيام متبقية'],
+      ...filteredTenants.map((t) => [
+        t.id,
+        t.name,
+        t.slug,
+        t.planDisplayName || t.subscriptionPlan || '—',
+        statusMeta(t).label,
+        limitText(t.maxTables),
+        limitText(t.maxUsers),
+        limitText(t.maxProducts),
+        t.perpetual ? 'مفتوح' : formatDate(tenantExpiry(t)),
+        t.perpetual ? '∞' : (daysUntil(tenantExpiry(t)) ?? ''),
+      ]),
+    ];
+    downloadCsv(`caffio_tenants_${new Date().toISOString().slice(0, 10)}.csv`, rows);
     toast.success('تم تصدير ملف المشتركين (CSV) بنجاح');
   }
 
@@ -477,47 +488,86 @@ export default function SuperAdminPage() {
       [],
       ['المؤشر', 'القيمة'],
       ['إجمالي المنشآت', totalTenants],
-      ['المنشآت النشطة', activeTenants],
-      ['التجارب', trialTenants],
-      ['الموقوفة', suspendedTenants],
-      ['المنتهية', expiredTenants.length],
+      ['منشآت تدفع', payingTenants],
+      ['نشطة', activeTenants],
+      ['في مهلة السماح', graceTenants],
+      ['تجارب', trialTenants],
+      ['موقوفة', suspendedTenants],
+      ['منتهية', expiredCount],
       ['تنتهي خلال 7 أيام', expiringTenants.length],
-      ['MRR تقديري', estimatedMRR],
+      [`MRR (${revenue.currency})`, revenue.mrr],
+      [`ARR (${revenue.currency})`, revenue.arr],
+      [`محصَّل آخر 30 يوماً (${revenue.currency})`, revenue.collected30],
+      [`مستحق غير محصَّل (${revenue.currency})`, revenue.outstanding],
       [],
-      ['المنشأة', 'الرابط', 'الحالة', 'الباقة', 'تاريخ الانتهاء', 'أيام متبقية', 'قيمة شهرية تقديرية'],
+      ['المنشأة', 'الرابط', 'حالة الاشتراك', 'الباقة', 'نهاية الفترة', 'أيام متبقية'],
       ...tenants.map((tenant) => [
         tenant.name,
         tenant.slug,
-        tenant.status,
-        tenant.subscriptionPlan,
-        tenantExpiry(tenant) || '',
-        daysUntil(tenantExpiry(tenant)) ?? '',
-        tenant.status === 'ACTIVE' ? PLAN_PRICES[tenant.subscriptionPlan] || 0 : 0,
+        statusMeta(tenant).label,
+        tenant.planDisplayName || tenant.subscriptionPlan || '—',
+        tenant.perpetual ? 'مفتوح' : formatDate(tenantExpiry(tenant)),
+        tenant.perpetual ? '∞' : (daysUntil(tenantExpiry(tenant)) ?? ''),
       ]),
     ];
-    const csv = '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `caffio_platform_report_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success('تم تجهيز تقرير المنصة الحقيقي للتنزيل');
+    downloadCsv(`caffio_platform_report_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    toast.success('تم تجهيز تقرير المنصة للتنزيل');
   }
 
   // ── COMPUTED KPI METRICS ───────────────────────────────────────────────────
-  const totalTenants = tenants.length;
-  const activeTenants = tenants.filter((t) => t.status === 'ACTIVE').length;
-  const trialTenants = tenants.filter((t) => t.status === 'TRIAL' || t.subscriptionPlan === 'TRIAL').length;
-  const suspendedTenants = tenants.filter((t) => t.status === 'SUSPENDED').length;
+  /*
+   * Counters key off subscriptionStatus, the lifecycle the server actually maintains. The platform
+   * also returns these figures pre-computed in /admin/tenants/stats; those are authoritative and
+   * used where available, with the local tally as a fallback so the dashboard still renders when
+   * the stats call is the one that failed.
+   */
+  const statusCounts = useMemo(() => {
+    const counts = { TRIALING: 0, ACTIVE: 0, GRACE: 0, EXPIRED: 0, SUSPENDED: 0, CANCELLED: 0 };
+    tenants.forEach((t) => {
+      const key = t.subscriptionStatus ?? t.status;
+      if (key in counts) counts[key] += 1;
+    });
+    return counts;
+  }, [tenants]);
 
-  const totalUsersEstimated = tenants.reduce((acc, t) => acc + (t.maxUsers || 2), 0);
-  const activeSubscriptions = tenants.filter((t) => t.status === 'ACTIVE' && ['PRO', 'STARTER', 'ENTERPRISE'].includes(t.subscriptionPlan)).length;
+  const totalTenants = platformStats?.totalTenants ?? tenants.length;
+  const activeTenants = platformStats?.activeTenants ?? statusCounts.ACTIVE;
+  const trialTenants = platformStats?.trialTenants ?? statusCounts.TRIALING;
+  const suspendedTenants = platformStats?.suspendedTenants ?? statusCounts.SUSPENDED;
+  const graceTenants = platformStats?.graceTenants ?? statusCounts.GRACE;
+  const expiredCount = platformStats?.expiredTenants ?? statusCounts.EXPIRED;
+  /* A tenant inside its grace window is still inside a period it paid for. */
+  const payingTenants = platformStats?.payingTenants ?? (statusCounts.ACTIVE + statusCounts.GRACE);
 
-  const estimatedMRR = tenants.reduce((acc, t) => {
-    if (t.status !== 'ACTIVE') return acc;
-    return acc + (PLAN_PRICES[t.subscriptionPlan] || 0);
-  }, 0);
+  /*
+   * Licensed seats, not people. -1 is the unlimited sentinel and must not be summed: doing so made
+   * every ENTERPRISE tenant subtract a user from the platform total.
+   */
+  const seatCapacity = useMemo(() => tenants.reduce((total, t) => {
+    if (t.maxUsers === UNLIMITED) return total;
+    return total + (t.maxUsers ?? 0);
+  }, 0), [tenants]);
+  const hasUnlimitedSeats = tenants.some((t) => t.maxUsers === UNLIMITED);
+
+  const activeSubscriptions = payingTenants;
+
+  /*
+   * Real revenue, from issued invoices — not a price list kept in this file.
+   *
+   * This page used to compute MRR by multiplying a hardcoded PLAN_PRICES map by a headcount, so it
+   * ignored negotiated prices, ignored tenants in grace, and reported stale numbers the moment a
+   * price changed in the database. The server already computes all of this from what was actually
+   * billed; there is nothing left here to get wrong.
+   */
+  const revenue = useMemo(() => ({
+    mrr: Number(platformStats?.mrr ?? 0),
+    arr: Number(platformStats?.arr ?? 0),
+    collected30: Number(platformStats?.collectedLast30Days ?? 0),
+    outstanding: Number(platformStats?.outstanding ?? 0),
+    currency: platformStats?.currency ?? 'EGP',
+    available: platformStats != null,
+  }), [platformStats]);
+  const estimatedMRR = revenue.mrr;
 
   // Expiring soon (< 7 days)
   const expiringTenants = useMemo(() => {
@@ -578,36 +628,59 @@ export default function SuperAdminPage() {
     const now = Date.now();
     return licenseKeys.reduce((metrics, key) => {
       if (key.revoked) metrics.revoked += 1;
-      else if (key.expiresAt && new Date(key.expiresAt).getTime() < now) metrics.expired += 1;
+      // redeemableUntil, not expiresAt: the field was renamed when the key's redemption deadline
+      // was split from the subscription duration it grants. Reading the old name meant this bucket
+      // was permanently zero and every key rendered as "no deadline".
+      else if (key.redeemableUntil && new Date(key.redeemableUntil).getTime() < now) metrics.expired += 1;
       else if ((key.activationsCount || 0) >= (key.maxActivations || 1)) metrics.used += 1;
       else metrics.available += 1;
       return metrics;
     }, { available: 0, used: 0, expired: 0, revoked: 0 });
   }, [licenseKeys]);
 
-  // Plan Distribution Count
+  /*
+   * Tenants per plan, keyed by whatever the catalogue currently sells rather than four plan codes
+   * written into this file — a newly created plan used to be invisible here.
+   */
   const planCounts = useMemo(() => {
-    return {
-      TRIAL: tenants.filter((t) => !t.subscriptionPlan || t.subscriptionPlan === 'TRIAL').length,
-      STARTER: tenants.filter((t) => t.subscriptionPlan === 'STARTER').length,
-      PRO: tenants.filter((t) => t.subscriptionPlan === 'PRO').length,
-      ENTERPRISE: tenants.filter((t) => t.subscriptionPlan === 'ENTERPRISE').length,
-    };
-  }, [tenants]);
-
-  const activeRate = totalTenants ? Math.round((activeTenants / totalTenants) * 100) : 0;
-  const renewalRiskCount = expiringTenants.length + expiredTenants.length;
-  const activePlanCounts = tenants.reduce((counts, tenant) => {
-    if (tenant.status === 'ACTIVE' && Object.prototype.hasOwnProperty.call(counts, tenant.subscriptionPlan)) {
-      counts[tenant.subscriptionPlan] += 1;
-    }
+    const counts = {};
+    plans.forEach((plan) => { counts[plan.code] = 0; });
+    tenants.forEach((t) => {
+      const code = t.subscriptionPlan || 'TRIAL';
+      counts[code] = (counts[code] ?? 0) + 1;
+    });
     return counts;
-  }, { STARTER: 0, PRO: 0, ENTERPRISE: 0 });
-  const planRevenue = {
-    STARTER: activePlanCounts.STARTER * PLAN_PRICES.STARTER,
-    PRO: activePlanCounts.PRO * PLAN_PRICES.PRO,
-    ENTERPRISE: activePlanCounts.ENTERPRISE * PLAN_PRICES.ENTERPRISE,
-  };
+  }, [tenants, plans]);
+
+  const activeRate = totalTenants ? Math.round((payingTenants / totalTenants) * 100) : 0;
+  const renewalRiskCount = expiringTenants.length + expiredTenants.length;
+
+  /*
+   * Revenue per plan, from what each tenant is actually being billed. The subscription price is
+   * frozen on the tenant at purchase, so a negotiated deal contributes its real figure and a later
+   * price change does not rewrite it — neither of which was true when this multiplied a headcount
+   * by a hardcoded list price.
+   */
+  const planRevenue = useMemo(() => {
+    const rows = new Map();
+    plans.filter((p) => !p.customPlan).forEach((plan) => {
+      rows.set(plan.code, { code: plan.code, label: plan.displayName, count: 0, revenue: 0 });
+    });
+    tenants.forEach((tenant) => {
+      if (!statusMeta(tenant).paying) return;
+      const code = tenant.subscriptionPlan;
+      if (!code) return;
+      const plan = plans.find((p) => p.code === code);
+      const row = rows.get(code) ?? { code, label: code, count: 0, revenue: 0 };
+      const period = Math.max(1, plan?.billingPeriodDays ?? 30);
+      const monthly = ((tenant.priceAtPurchase ?? plan?.price ?? 0) * 30) / period;
+      row.count += 1;
+      row.revenue += monthly;
+      rows.set(code, row);
+    });
+    return [...rows.values()].filter((row) => row.count > 0 || row.revenue > 0);
+  }, [tenants, plans]);
+
   const latestPlatformActivity = platformActivityLogs.slice(0, 4);
 
   // Filtered & Sorted Tenants
@@ -617,7 +690,8 @@ export default function SuperAdminPage() {
         const matchesSearch =
           String(t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           String(t.slug || '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+        const matchesStatus = statusFilter === 'ALL'
+          || (t.subscriptionStatus ?? t.status) === statusFilter;
         const matchesPlan = planFilter === 'ALL' || (t.subscriptionPlan || 'TRIAL') === planFilter;
         return matchesSearch && matchesStatus && matchesPlan;
       })
@@ -634,6 +708,15 @@ export default function SuperAdminPage() {
 
   // Pagination Slice
   const totalPages = Math.ceil(filteredTenants.length / pageSize) || 1;
+
+  /*
+   * Clamp the page whenever the result set shrinks. Filtering down to fewer pages while sitting on
+   * a high page number left the table showing nothing, with working pagination controls and no
+   * indication why.
+   */
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
   const paginatedTenants = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTenants.slice(start, start + pageSize);
@@ -649,6 +732,8 @@ export default function SuperAdminPage() {
       totalTenants={totalTenants}
       activeTenants={activeTenants}
       expiringCount={expiringTenants.length + expiredTenants.length}
+      pendingPayments={pendingPayments}
+      planCount={plans.length}
     >
       {/* ══════════════════════════════════════════════════════════════════════
           1. DASHBOARD OVERVIEW SECTION
@@ -712,7 +797,7 @@ export default function SuperAdminPage() {
                 ))}
               </div>
               <footer>
-                {['STARTER', 'PRO', 'ENTERPRISE'].map((plan) => <span key={plan}><i className={`is-${plan.toLowerCase()}`} />{plan} <b>{activePlanCounts[plan]}</b></span>)}
+                {['STARTER', 'PRO', 'ENTERPRISE'].map((plan) => <span key={plan}><i className={`is-${plan.toLowerCase()}`} />{plan} <b>{planCounts[plan] ?? 0}</b></span>)}
               </footer>
             </article>
 
@@ -742,7 +827,7 @@ export default function SuperAdminPage() {
 
             <article className="sa-bento-tile sa-bento-tile--capacity">
               <header><span>NETWORK CAPACITY</span><i className="bi bi-diagram-3" /></header>
-              <strong>{totalUsersEstimated.toLocaleString()}</strong>
+              <strong>{seatCapacity.toLocaleString()}{hasUnlimitedSeats ? '+' : ''}</strong>
               <p>سعة مستخدمين متاحة عبر العملاء</p>
               <div className="sa-capacity-tags"><span>{trialTenants} تجريبي</span><span>{suspendedTenants} موقوف</span></div>
             </article>
@@ -788,355 +873,174 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {activeSection === 'dashboard-legacy' && (
-        <div className="sa-section">
-          <section className="sa-command-hero">
-            <div className="sa-command-hero__copy">
-              <span className="sa-command-hero__live"><i /> بث مباشر للمنصة</span>
-              <h1>مساء الخير، جاهز تدير نمو كافيو؟</h1>
-              <p>ابدأ بما يحتاج تدخلك، ثم تابع الاشتراكات والنمو من نفس مساحة التحكم.</p>
-              <div className="sa-command-hero__actions">
-                <button type="button" className="sa-command-primary" onClick={() => setCreateModal(true)}>
-                  <i className="bi bi-building-add" />
-                  <span><strong>تأسيس منشأة</strong><small>حساب، باقة ومالك في خطوة واحدة</small></span>
-                  <i className="bi bi-arrow-left" />
-                </button>
-                <button type="button" className="sa-command-secondary" onClick={() => setActiveSection('tenants')}>
-                  إدارة العملاء <i className="bi bi-people" />
-                </button>
-              </div>
-            </div>
-
-            <div className="sa-command-hero__pulse" aria-label="ملخص صحة المنصة">
-              <div className="sa-pulse-orbit"><span>{totalTenants > 0 ? Math.round((activeTenants / totalTenants) * 100) : 0}%</span><small>نشاط المنصة</small></div>
-              <div className="sa-pulse-stats">
-                <span><b>{activeTenants}</b> منشأة تعمل</span>
-                <span className={expiringTenants.length ? 'is-warning' : ''}><b>{expiringTenants.length}</b> تحتاج متابعة</span>
-                <span><b>{estimatedMRR.toLocaleString()}</b> ج.م MRR</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="sa-workflow-rail" aria-label="دورة إدارة العميل">
-            <div className="sa-workflow-rail__intro"><span>مسار العميل</span><strong>من Lead إلى عميل نشط</strong></div>
-            {[
-              { n: '01', title: 'تأسيس', hint: 'بيانات المنشأة والمالك', icon: 'bi-building-add', action: () => setCreateModal(true) },
-              { n: '02', title: 'اختيار الباقة', hint: 'حدود وسعر مناسب', icon: 'bi-stars', action: () => setActiveSection('plans') },
-              { n: '03', title: 'تفعيل', hint: 'ترخيص ودخول آمن', icon: 'bi-key', action: () => setActiveSection('subscriptions') },
-              { n: '04', title: 'متابعة', hint: 'استخدام وتجديد ودعم', icon: 'bi-activity', action: () => setActiveSection('tenants') },
-            ].map((step, index) => (
-              <button type="button" key={step.n} className="sa-workflow-step" onClick={step.action}>
-                <span className="sa-workflow-step__number">{step.n}</span>
-                <i className={`bi ${step.icon}`} />
-                <span><strong>{step.title}</strong><small>{step.hint}</small></span>
-                {index < 3 && <i className="bi bi-chevron-left sa-workflow-step__arrow" />}
-              </button>
-            ))}
-          </section>
-
-          {/* Attention Banner */}
-          {expiringTenants.length + expiredTenants.length > 0 && (
-            <div className="alert alert-warning border-0 sa-alert-attention d-flex align-items-center justify-content-between mb-4 shadow-sm">
-              <div className="d-flex align-items-center gap-3">
-                <div className="sa-alert-icon">
-                  <i className="bi bi-exclamation-triangle-fill" />
-                </div>
-                <div>
-                  <h6 className="mb-0 fw-bold text-white">قائمة متابعة التجديد ({expiringTenants.length + expiredTenants.length} منشأة)</h6>
-                  <p className="small mb-0 text-white opacity-75">
-                    {expiredTenants.length} منتهية بالفعل، و{expiringTenants.length} تنتهي خلال 7 أيام. رتّب التواصل قبل توقف الخدمة.
-                  </p>
-                </div>
-              </div>
+      {activeSection === 'tenants' && (
+        <div className="sa-section sa-tenants-section">
+          {/* Header Intro Banner with Quick Actions */}
+          <SectionIntro
+            eyebrow="CUSTOMER OPERATIONS"
+            title="المنشآت والعملاء"
+            description="إدارة دورة حياة كل عميل، متابعة الحصص التشغيلية، التجديدات، وتفعيل أو إيقاف المنشآت."
+            icon="bi-buildings"
+          >
+            <div className="d-flex align-items-center gap-2 flex-wrap">
               <button
                 type="button"
-                className="btn btn-sm btn-dark fw-bold px-3 py-2"
-                onClick={() => setActiveSection('reports')}
+                className="sa-btn-primary"
+                onClick={() => setCreateModal(true)}
               >
-                فتح تقرير التجديد <i className="bi bi-arrow-left ms-1" />
+                <i className="bi bi-plus-lg me-1" />
+                <span>منشأة جديدة</span>
+              </button>
+
+              <button
+                type="button"
+                className="sa-btn-ghost"
+                onClick={exportTenantsToCSV}
+                title="تصدير جدول المشتركين (CSV)"
+              >
+                <i className="bi bi-cloud-arrow-down me-1" />
+                <span>تصدير CSV</span>
+              </button>
+
+              <button
+                type="button"
+                className="sa-btn-icon"
+                onClick={() => loadData(true)}
+                disabled={refreshing}
+                title="تحديث البيانات"
+              >
+                <i className={`bi bi-arrow-clockwise ${refreshing ? 'sa-spin' : ''}`} />
               </button>
             </div>
-          )}
-
-          {/* KPI Cards Grid (8 Cards) */}
-          <div className="row g-3 mb-4">
-            {/* Card 1: Total Tenants */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">إجمالي المشتركين</span>
-                    <h3 className="sa-kpi-val mb-0">{totalTenants}</h3>
-                    <span className="sa-kpi-sub text-white opacity-75">كافة المنشآت المسجلة</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-primary-subtle">
-                    <i className="bi bi-buildings" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: Active Tenants */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">المنشآت النشطة</span>
-                    <h3 className="sa-kpi-val mb-0 text-success">{activeTenants}</h3>
-                    <span className="sa-kpi-sub text-success">
-                      <i className="bi bi-arrow-up-right me-1" />
-                      {totalTenants > 0 ? Math.round((activeTenants / totalTenants) * 100) : 0}% معدل النشاط
-                    </span>
-                  </div>
-                  <div className="sa-kpi-icon bg-success-subtle">
-                    <i className="bi bi-patch-check-fill" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3: Trial Tenants */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">الفترات التجريبية</span>
-                    <h3 className="sa-kpi-val mb-0 text-amber">{trialTenants}</h3>
-                    <span className="sa-kpi-sub text-amber">تجربة مجانية 14 يوم</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-warning-subtle">
-                    <i className="bi bi-clock-history" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4: Suspended Tenants */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">المنشآت الموقوفة</span>
-                    <h3 className="sa-kpi-val mb-0 text-danger">{suspendedTenants}</h3>
-                    <span className="sa-kpi-sub text-danger opacity-75">حسابات متوقفة</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-danger-subtle">
-                    <i className="bi bi-slash-circle-fill" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 5: Estimated MRR */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">الإيراد الشهري المتوقع (MRR)</span>
-                    <h3 className="sa-kpi-val mb-0 text-amber">{estimatedMRR.toLocaleString()} <small className="fs-6 text-white opacity-75">ج.م</small></h3>
-                    <span className="sa-kpi-sub text-white opacity-75">بحسب أسعار الباقات النشطة</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-amber-subtle">
-                    <i className="bi bi-cash-coin" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 6: Active Subscriptions */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">الاشتراكات المدفوعة</span>
-                    <h3 className="sa-kpi-val mb-0 text-info">{activeSubscriptions}</h3>
-                    <span className="sa-kpi-sub text-white opacity-75">باقات مدفوعة نشطة</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-info-subtle">
-                    <i className="bi bi-credit-card-2-front-fill" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 7: Total Users Capacity */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">سعة المستخدمين الكلية</span>
-                    <h3 className="sa-kpi-val mb-0">{totalUsersEstimated}</h3>
-                    <span className="sa-kpi-sub text-white opacity-75">حسابات كاشير ومديرين</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-purple-subtle">
-                    <i className="bi bi-people-fill" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 8: Active License Keys */}
-            <div className="col-12 col-sm-6 col-xl-3">
-              <div className="card sa-kpi-card shadow-sm h-100">
-                <div className="card-body d-flex align-items-center justify-content-between p-3">
-                  <div>
-                    <span className="sa-kpi-label">مفاتيح التراخيص الصادرة</span>
-                    <h3 className="sa-kpi-val mb-0">{licenseKeys.length}</h3>
-                    <span className="sa-kpi-sub text-white opacity-75">أكواد تفعيل ذاتي</span>
-                  </div>
-                  <div className="sa-kpi-icon bg-teal-subtle">
-                    <i className="bi bi-key-fill" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Analytics & Insights Row */}
-          <div className="row g-4 mb-4">
-            {/* Real subscription distribution — no fabricated historical data. */}
-            <div className="col-12 col-lg-8">
-              <div className="card sa-card shadow-sm h-100">
-                <div className="card-header sa-card-header p-3 d-flex align-items-center justify-content-between">
-                  <div className="d-flex align-items-center gap-2">
-                    <i className="bi bi-pie-chart-fill text-amber" />
-                    <h5 className="mb-0 fw-bold text-white">توزيع الاشتراكات الحالي</h5>
-                  </div>
-                  <span className="badge bg-dark border text-light px-3 py-2">بيانات فعلية الآن</span>
-                </div>
-                <div className="card-body p-4">
-                  <div className="sa-plan-distribution">
-                    {[
-                      { id: 'TRIAL', label: 'تجريبي', color: '#94a3b8' },
-                      { id: 'STARTER', label: 'Starter', color: '#38bdf8' },
-                      { id: 'PRO', label: 'Pro', color: '#f59e0b' },
-                      { id: 'ENTERPRISE', label: 'Enterprise', color: '#10b981' },
-                    ].map((plan) => (
-                      <div className="sa-plan-distribution__row" key={plan.id}>
-                        <span>{plan.label}</span>
-                        <div><i style={{ width: `${totalTenants ? (planCounts[plan.id] / totalTenants) * 100 : 0}%`, background: plan.color }} /></div>
-                        <strong>{planCounts[plan.id]}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="sa-report-facts">
-                    <span>متوسط الإيراد لكل اشتراك مدفوع <strong>{activeSubscriptions ? Math.round(estimatedMRR / activeSubscriptions).toLocaleString() : 0} ج.م</strong></span>
-                    <span>معدل النشاط <strong>{totalTenants ? Math.round((activeTenants / totalTenants) * 100) : 0}%</strong></span>
-                    <button type="button" onClick={() => setActiveSection('reports')}>فتح التقارير <i className="bi bi-arrow-left" /></button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="col-12 col-lg-4">
-              <div className="card sa-card shadow-sm h-100">
-                <div className="card-header sa-card-header p-3">
-                  <div className="d-flex align-items-center gap-2">
-                    <i className="bi bi-lightning-charge-fill text-amber" />
-                    <h5 className="mb-0 fw-bold text-white">إجراءات سريعة للمنصة</h5>
-                  </div>
-                </div>
-                <div className="card-body p-3 d-flex flex-column gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-light sa-quick-btn d-flex align-items-center gap-3 p-3 text-end"
-                    onClick={() => setCreateModal(true)}
-                  >
-                    <div className="sa-quick-btn-icon bg-primary-subtle">
-                      <i className="bi bi-plus-circle-fill" />
-                    </div>
-                    <div>
-                      <div className="fw-bold text-white fs-6">تأسيس منشأة جديدة</div>
-                      <small className="text-white opacity-75">إنشاء حساب كافيه واختيار الباقة فوراً</small>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-outline-light sa-quick-btn d-flex align-items-center gap-3 p-3 text-end"
-                    onClick={() => setActiveSection('subscriptions')}
-                  >
-                    <div className="sa-quick-btn-icon bg-amber-subtle">
-                      <i className="bi bi-key-fill" />
-                    </div>
-                    <div>
-                      <div className="fw-bold text-white fs-6">توليد مفتاح ترخيص</div>
-                      <small className="text-white opacity-75">إصدار كود تفعيل لتطبيق العميل</small>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-outline-light sa-quick-btn d-flex align-items-center gap-3 p-3 text-end"
-                    onClick={() => setActiveSection('plans')}
-                  >
-                    <div className="sa-quick-btn-icon bg-success-subtle">
-                      <i className="bi bi-tags-fill" />
-                    </div>
-                    <div>
-                      <div className="fw-bold text-white fs-6">مصفوفة الباقات والأسعار</div>
-                      <small className="text-white opacity-75">متابعة الخطط والحدود القصوى</small>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          2. TENANTS MANAGEMENT SECTION
-         ══════════════════════════════════════════════════════════════════════ */}
-      {activeSection === 'tenants' && (
-        <div className="sa-section">
-          <SectionIntro eyebrow="CUSTOMER OPERATIONS" title="المنشآت والعملاء" description="إدارة دورة حياة كل عميل من التجربة حتى التجديد أو الإيقاف." icon="bi-buildings">
-            <button type="button" onClick={() => setCreateModal(true)}><i className="bi bi-plus-lg" /> منشأة جديدة</button>
           </SectionIntro>
-          <div className="card sa-card shadow-sm">
-            {/* Toolbar Header */}
-            <div className="card-header sa-card-header p-3">
-              <div className="row g-2 align-items-center">
-                {/* Search Bar */}
-                <div className="col-12 col-md-4">
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <i className="bi bi-search" />
-                    </span>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="بحث باسم المنشأة أو الرابط (Slug)..."
-                      value={searchQuery}
-                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                    />
-                  </div>
-                </div>
 
-                {/* Status Filter Buttons */}
-                <div className="col-12 col-md-4 d-flex gap-1 flex-wrap">
-                  {[
-                    { id: 'ALL', label: 'الكل' },
-                    { id: 'ACTIVE', label: 'النشطة' },
-                    { id: 'TRIAL', label: 'التجريبية' },
-                    { id: 'SUSPENDED', label: 'الموقوفة' },
-                  ].map((st) => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      className={`btn btn-sm ${statusFilter === st.id ? 'btn-primary fw-bold px-3' : 'btn-outline-secondary'}`}
-                      onClick={() => { setStatusFilter(st.id); setCurrentPage(1); }}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
+          {/* Quick Metrics KPI Strip */}
+          <div className="sa-tenant-kpis-grid">
+            <div className="sa-kpi-card-v2">
+              <div className="sa-kpi-card-v2__header">
+                <span className="sa-kpi-card-v2__title">إجمالي المنشآت</span>
+                <div className="sa-kpi-card-v2__icon sa-kpi-card-v2__icon--purple">
+                  <i className="bi bi-buildings" />
                 </div>
+              </div>
+              <div className="sa-kpi-card-v2__value">{totalTenants}</div>
+              <div className="sa-kpi-card-v2__footer">
+                <span className="text-muted small">كافة الحسابات المسجلة بالمنصة</span>
+              </div>
+            </div>
 
-                {/* Plan Dropdown & Export */}
-                <div className="col-12 col-md-4 d-flex justify-content-md-end gap-2">
+            <div className="sa-kpi-card-v2">
+              <div className="sa-kpi-card-v2__header">
+                <span className="sa-kpi-card-v2__title">المنشآت النشطة</span>
+                <div className="sa-kpi-card-v2__icon sa-kpi-card-v2__icon--green">
+                  <i className="bi bi-check-circle-fill" />
+                </div>
+              </div>
+              <div className="sa-kpi-card-v2__value text-success">{activeTenants}</div>
+              <div className="sa-kpi-card-v2__footer">
+                <span className="sa-kpi-badge-pill sa-kpi-badge-pill--green">
+                  <span className="sa-pulse-dot" /> {activeRate}% نسبة النشاط
+                </span>
+                <span className="text-muted small ms-auto">تدفع أو قيد التشغيل</span>
+              </div>
+            </div>
+
+            <div className="sa-kpi-card-v2">
+              <div className="sa-kpi-card-v2__header">
+                <span className="sa-kpi-card-v2__title">الفترة التجريبية</span>
+                <div className="sa-kpi-card-v2__icon sa-kpi-card-v2__icon--cyan">
+                  <i className="bi bi-lightning-charge-fill" />
+                </div>
+              </div>
+              <div className="sa-kpi-card-v2__value text-info">{trialTenants}</div>
+              <div className="sa-kpi-card-v2__footer">
+                <span className="sa-kpi-badge-pill sa-kpi-badge-pill--blue">{trialTenants} تجربة جارية</span>
+                <span className="text-muted small ms-auto">14 يوم مجاناً</span>
+              </div>
+            </div>
+
+            <div className="sa-kpi-card-v2">
+              <div className="sa-kpi-card-v2__header">
+                <span className="sa-kpi-card-v2__title">متابعة وتجديدات</span>
+                <div className="sa-kpi-card-v2__icon sa-kpi-card-v2__icon--amber">
+                  <i className="bi bi-clock-history" />
+                </div>
+              </div>
+              <div className="sa-kpi-card-v2__value text-warning">
+                {expiringTenants.length + graceTenants + expiredCount + suspendedTenants}
+              </div>
+              <div className="sa-kpi-card-v2__footer">
+                {graceTenants > 0 && (
+                  <span className="sa-kpi-badge-pill sa-kpi-badge-pill--amber">{graceTenants} مهلة</span>
+                )}
+                {suspendedTenants > 0 && (
+                  <span className="sa-kpi-badge-pill sa-kpi-badge-pill--red">{suspendedTenants} موقوفة</span>
+                )}
+                {graceTenants === 0 && suspendedTenants === 0 && (
+                  <span className="text-muted small">كافة الاشتراكات مستقرة</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Main Card */}
+          <div className="card sa-card sa-tenants-card shadow-sm">
+            {/* Status Tabs Bar */}
+            <div className="sa-filter-tabs-bar">
+              <div className="sa-filter-tabs">
+                {[
+                  { id: 'ALL', label: 'الكل', count: tenants.length, icon: 'bi-grid-fill' },
+                  { id: 'ACTIVE', label: 'النشطة', count: statusCounts.ACTIVE, icon: 'bi-check-circle-fill', tone: 'success' },
+                  { id: 'TRIALING', label: 'التجريبية', count: statusCounts.TRIALING, icon: 'bi-lightning-fill', tone: 'info' },
+                  { id: 'GRACE', label: 'مهلة سماح', count: statusCounts.GRACE, icon: 'bi-hourglass-split', tone: 'warning' },
+                  { id: 'EXPIRED', label: 'المنتهية', count: statusCounts.EXPIRED, icon: 'bi-clock-history', tone: 'danger' },
+                  { id: 'SUSPENDED', label: 'الموقوفة', count: statusCounts.SUSPENDED, icon: 'bi-pause-circle-fill', tone: 'danger' },
+                  { id: 'CANCELLED', label: 'الملغاة', count: statusCounts.CANCELLED, icon: 'bi-x-circle-fill', tone: 'muted' },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    className={`sa-tab-btn ${statusFilter === st.id ? 'is-active' : ''} ${st.tone ? `sa-tab-btn--${st.tone}` : ''}`}
+                    onClick={() => { setStatusFilter(st.id); setCurrentPage(1); }}
+                  >
+                    <i className={`bi ${st.icon} me-1`} />
+                    <span>{st.label}</span>
+                    <span className="sa-tab-count">{st.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Toolbar Controls */}
+            <div className="sa-toolbar-v2">
+              <div className="sa-search-wrap">
+                <i className="bi bi-search sa-search-icon" />
+                <input
+                  type="text"
+                  className="form-control sa-search-input"
+                  placeholder="ابحث باسم المنشأة، المعرف المختصر (Slug)..."
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="sa-search-clear"
+                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                    title="مسح البحث"
+                  >
+                    <i className="bi bi-x-circle-fill" />
+                  </button>
+                )}
+              </div>
+
+              <div className="sa-toolbar-actions">
+                <div className="sa-select-group">
+                  <label className="sa-select-label">
+                    <i className="bi bi-box-seam me-1 text-secondary" /> الباقة:
+                  </label>
                   <select
-                    className="form-select form-select-sm w-auto"
+                    className="form-select form-select-sm sa-control-select"
                     value={planFilter}
                     onChange={(e) => { setPlanFilter(e.target.value); setCurrentPage(1); }}
                   >
@@ -1146,65 +1050,101 @@ export default function SuperAdminPage() {
                     <option value="PRO">PRO (899 ج.م)</option>
                     <option value="ENTERPRISE">ENTERPRISE (1499 ج.م)</option>
                   </select>
+                </div>
 
+                <div className="sa-select-group">
+                  <label className="sa-select-label">
+                    <i className="bi bi-sort-down me-1 text-secondary" /> الترتيب:
+                  </label>
+                  <select
+                    className="form-select form-select-sm sa-control-select"
+                    value={`${sortBy}-${sortOrder}`}
+                    onChange={(e) => {
+                      const [sb, so] = e.target.value.split('-');
+                      setSortBy(sb);
+                      setSortOrder(so);
+                    }}
+                  >
+                    <option value="name-asc">الاسم (أ - ي)</option>
+                    <option value="name-desc">الاسم (ي - أ)</option>
+                    <option value="createdAt-desc">الأحدث إضافة</option>
+                    <option value="maxTables-desc">الأعلى طاولات</option>
+                  </select>
+                </div>
+
+                {(searchQuery || statusFilter !== 'ALL' || planFilter !== 'ALL') && (
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline-secondary fw-bold"
-                    onClick={exportTenantsToCSV}
-                    title="تصدير جدول المشتركين (CSV)"
+                    className="btn btn-sm sa-reset-btn"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusFilter('ALL');
+                      setPlanFilter('ALL');
+                      setCurrentPage(1);
+                    }}
+                    title="إلغاء جميع الفلاتر"
                   >
-                    <i className="bi bi-download me-1" />
-                    تصدير CSV
+                    <i className="bi bi-arrow-counterclockwise me-1" />
+                    <span>إعادة ضبط</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Bulk Actions Banner */}
+            {selectedIds.length > 0 && (
+              <div className="sa-bulk-bar d-flex align-items-center justify-content-between p-2 px-3">
+                <div className="d-flex align-items-center gap-2">
+                  <i className="bi bi-check2-circle text-primary fs-5" />
+                  <span className="fw-bold text-white small">
+                    تم تحديد <strong>{selectedIds.length}</strong> منشأة
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm text-secondary p-0 ms-2 text-decoration-none"
+                    onClick={() => setSelectedIds([])}
+                  >
+                    إلغاء التحديد
+                  </button>
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success fw-bold px-3"
+                    onClick={() => handleBulkAction('ACTIVE')}
+                    disabled={updating}
+                  >
+                    <i className="bi bi-play-circle me-1" /> تفعيل الكل
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger fw-bold px-3"
+                    onClick={() => handleBulkAction('SUSPENDED')}
+                    disabled={updating}
+                  >
+                    <i className="bi bi-pause-circle me-1" /> إيقاف الكل
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-dark border border-secondary px-3"
+                    onClick={() => handleBulkAction('TRIAL_EXTEND')}
+                    disabled={updating}
+                  >
+                    <i className="bi bi-plus-lg me-1" /> تمديد +7 أيام
                   </button>
                 </div>
               </div>
+            )}
 
-              {/* Bulk Actions Bar */}
-              {selectedIds.length > 0 && (
-                <div className="alert alert-primary border-0 d-flex align-items-center justify-content-between p-2 mt-3 mb-0">
-                  <span className="small fw-bold text-white">
-                    <i className="bi bi-check2-circle me-1" />
-                    تم تحديد {selectedIds.length} منشأة
-                  </span>
-                  <div className="d-flex gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-success fw-bold"
-                      onClick={() => handleBulkAction('ACTIVE')}
-                      disabled={updating}
-                    >
-                      <i className="bi bi-play-circle me-1" /> تفعيل الكل
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-danger fw-bold"
-                      onClick={() => handleBulkAction('SUSPENDED')}
-                      disabled={updating}
-                    >
-                      <i className="bi bi-pause-circle me-1" /> إيقاف الكل
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-dark"
-                      onClick={() => handleBulkAction('TRIAL_EXTEND')}
-                      disabled={updating}
-                    >
-                      <i className="bi bi-plus-lg me-1" /> تمديد +7 أيام
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Table Body */}
+            {/* Table */}
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0 sa-table">
+              <table className="table table-hover align-middle mb-0 sa-table sa-tenants-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '40px' }}>
+                    <th style={{ width: '44px' }} className="text-center">
                       <input
                         type="checkbox"
-                        className="form-check-input"
+                        className="form-check-input sa-checkbox"
                         checked={selectedIds.length === paginatedTenants.length && paginatedTenants.length > 0}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedIds(paginatedTenants.map((t) => t.id));
@@ -1213,45 +1153,59 @@ export default function SuperAdminPage() {
                       />
                     </th>
                     <th>المنشأة والكافيه</th>
-                    <th>الرابط والمعرف</th>
+                    <th>المعرف والرابط (Slug)</th>
                     <th>الباقة الحالية</th>
                     <th>حالة الحساب</th>
-                    <th>الحصص (طاولات / كاشيرات)</th>
-                    <th>تاريخ التجديد / الصلاحية</th>
-                    <th className="text-end">العمليات</th>
+                    <th>الحصص والموارد</th>
+                    <th>تاريخ الصلاحية</th>
+                    <th className="text-end" style={{ width: '130px' }}>الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
                       <td colSpan="8" className="text-center py-5">
-                        <div className="spinner-border text-primary" role="status">
-                          <span className="visually-hidden">جاري التحميل...</span>
-                        </div>
+                        <div className="spinner-border text-primary mb-2" role="status" />
+                        <div className="text-muted small">جاري تحميل بيانات المشتركين...</div>
                       </td>
                     </tr>
                   ) : paginatedTenants.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="text-center py-5 text-white opacity-75">
-                        <i className="bi bi-inbox fs-1 d-block mb-2 text-muted" />
-                        لا توجد منشآت مطابقة لشروط البحث الحالية
+                      <td colSpan="8" className="text-center py-5">
+                        <div className="sa-empty-state">
+                          <i className="bi bi-inbox fs-1 d-block mb-3 text-secondary opacity-50" />
+                          <h6 className="text-white fw-bold">لا توجد منشآت مطابقة لشروط البحث</h6>
+                          <p className="text-muted small mb-3">جرّب تغيير كلمات البحث أو إعادة ضبط الفلاتر لتظهر كافة النتائج</p>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => {
+                              setSearchQuery('');
+                              setStatusFilter('ALL');
+                              setPlanFilter('ALL');
+                              setCurrentPage(1);
+                            }}
+                          >
+                            <i className="bi bi-arrow-counterclockwise me-1" /> عرض جميع المنشآت
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     paginatedTenants.map((t) => {
                       const isSelected = selectedIds.includes(t.id);
-                      const isEnterprise = t.subscriptionPlan === 'ENTERPRISE';
-                      const isPro = t.subscriptionPlan === 'PRO';
-                      const isStarter = t.subscriptionPlan === 'STARTER';
-                      const isActive = t.status === 'ACTIVE';
-                      const isSuspended = t.status === 'SUSPENDED';
+                      const planCode = (t.subscriptionPlan || 'TRIAL').toUpperCase();
+                      const meta = statusMeta(t);
+                      const isSuspended = (t.subscriptionStatus ?? t.status) === 'SUSPENDED';
+                      const expDate = tenantExpiry(t);
+                      const daysLeft = daysUntil(expDate);
 
                       return (
-                        <tr key={t.id} className={isSelected ? 'table-active' : ''}>
-                          <td>
+                        <tr key={t.id} className={isSelected ? 'sa-row--selected' : ''}>
+                          <td className="text-center">
                             <input
                               type="checkbox"
-                              className="form-check-input"
+                              className="form-check-input sa-checkbox"
                               checked={isSelected}
                               onChange={(e) => {
                                 if (e.target.checked) setSelectedIds([...selectedIds, t.id]);
@@ -1259,110 +1213,161 @@ export default function SuperAdminPage() {
                               }}
                             />
                           </td>
+
+                          {/* Cafe Info */}
                           <td>
-                            <div className="d-flex align-items-center gap-2">
-                              <div className="sa-tenant-avatar">
-                                <i className="bi bi-building" />
+                            <div className="d-flex align-items-center gap-3">
+                              <div className={`sa-cafe-avatar sa-cafe-avatar--${(t.businessType || 'CAFE').toLowerCase()}`}>
+                                <i className={`bi ${t.businessType === 'RESTAURANT' ? 'bi-egg-fried' : t.businessType === 'CAFE_AND_RESTAURANT' ? 'bi-shop-window' : 'bi-cup-hot-fill'}`} />
                               </div>
                               <div>
-                                <div className="fw-bold text-white fs-6">{t.name}</div>
-                                <div className="small text-white opacity-75">{t.businessType || 'CAFE'}</div>
+                                <div className="sa-tenant-name fw-bold">{t.name}</div>
+                                <div className="sa-tenant-sub d-flex align-items-center gap-2 mt-1">
+                                  <span className="sa-badge-type">
+                                    {t.businessType === 'RESTAURANT' ? 'مطعم' : t.businessType === 'CAFE_AND_RESTAURANT' ? 'كافيه ومطعم' : 'كافيه'}
+                                  </span>
+                                  <span className="sa-tenant-id">#{t.id}</span>
+                                </div>
                               </div>
                             </div>
                           </td>
+
+                          {/* Slug with Copy Pill */}
                           <td>
-                            <code className="text-amber fw-bold bg-dark px-2 py-1 rounded border border-secondary">{t.slug}</code>
-                          </td>
-                          <td>
-                            <span
-                              className={`badge ${
-                                isEnterprise
-                                  ? 'text-bg-success'
-                                  : isPro
-                                  ? 'text-bg-warning text-dark'
-                                  : isStarter
-                                  ? 'text-bg-info text-dark'
-                                  : 'text-bg-secondary'
-                              } fw-bold px-2 py-1`}
+                            <div
+                              className="sa-slug-pill"
+                              onClick={() => copyToClipboard(t.slug, 'المعرف المختصر')}
+                              title="اضغط للنسخ"
                             >
+                              <code className="sa-slug-code">{t.slug}</code>
+                              <i className="bi bi-copy sa-slug-copy-icon" />
+                            </div>
+                          </td>
+
+                          {/* Plan Badge */}
+                          <td>
+                            <span className={`sa-plan-pill sa-plan-pill--${planCode.toLowerCase()}`}>
+                              <i className="bi bi-stars me-1" />
                               {t.planDisplayName || t.subscriptionPlan || 'TRIAL'}
                             </span>
                           </td>
+
+                          {/* Status Badge */}
                           <td>
-                            <span
-                              className={`badge ${
-                                isActive
-                                  ? 'bg-success-subtle text-success'
-                                  : isSuspended
-                                  ? 'bg-danger-subtle text-danger'
-                                  : 'bg-warning-subtle text-warning'
-                              } border px-2 py-1`}
-                            >
-                              {t.status === 'ACTIVE' ? 'نشط ✓' : t.status === 'SUSPENDED' ? 'موقوف ✕' : 'تجريبي ⏳'}
-                            </span>
+                            <div className={`sa-status-indicator sa-status-indicator--${meta.tone}`}>
+                              <span className="sa-status-dot" />
+                              <span className="sa-status-text">{meta.short}</span>
+                            </div>
                           </td>
+
+                          {/* Quotas */}
                           <td>
-                            <span className="small text-white fw-bold">
-                              {t.maxTables >= 9999 ? 'طاولات غير محدودة' : `${t.maxTables || 5} طاولات`}
-                              {' • '}
-                              {t.maxUsers >= 9999 ? 'كاشير غير محدود' : `${t.maxUsers || 2} كاشيرات`}
-                            </span>
+                            <div className="sa-quotas-stack">
+                              {/* The 9999 sentinel was retired with the billing redesign - UNLIMITED
+                                  is -1 - so an unlimited tenant rendered as "-1 طاولات" here. The
+                                  `|| 5` / `|| 2` fallbacks were worse: a tenant whose limits had not
+                                  loaded was shown invented numbers indistinguishable from real ones. */}
+                              <span className="sa-quota-item">
+                                <i className="bi bi-grid-3x3-gap-fill text-muted me-1" />
+                                {t.maxTables == null ? '—' : formatLimit(t.maxTables, 'طاولة')}
+                              </span>
+                              <span className="sa-quota-separator">•</span>
+                              <span className="sa-quota-item">
+                                <i className="bi bi-person-badge text-muted me-1" />
+                                {t.maxUsers == null ? '—' : formatLimit(t.maxUsers, 'مستخدم')}
+                              </span>
+                            </div>
                           </td>
+
+                          {/* Expiry Date */}
                           <td>
-                            <span className="small text-white opacity-85">
-                              {tenantExpiry(t) ? new Date(tenantExpiry(t)).toLocaleDateString('ar-EG') : 'غير محدد'}
-                            </span>
+                            <div className="sa-expiry-cell">
+                              <div className="sa-expiry-date">
+                                {t.perpetual ? (
+                                  <span className="text-info fw-bold">اشتراك مفتوح ∞</span>
+                                ) : expDate ? (
+                                  new Date(expDate).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })
+                                ) : (
+                                  /* An active subscription with no end date is not "unspecified",
+                                     it is a tenant nobody can bill. Say so instead of rendering it
+                                     as ordinary missing data the eye skips over. */
+                                  <span
+                                    className="sa-expiry-missing"
+                                    title="اشتراك نشط بدون تاريخ تجديد — راجع بيانات الاشتراك"
+                                  >
+                                    <i className="bi bi-exclamation-triangle-fill me-1" />
+                                    بدون تاريخ
+                                  </span>
+                                )}
+                              </div>
+                              {!t.perpetual && expDate && (
+                                <div className={`sa-expiry-badge ${daysLeft <= 3 ? 'is-danger' : daysLeft <= 7 ? 'is-warning' : 'is-safe'}`}>
+                                  {daysLeft < 0 ? 'منتهي' : `باقي ${daysLeft} يوم`}
+                                </div>
+                              )}
+                            </div>
                           </td>
+
+                          {/* Actions */}
                           <td className="text-end">
-                            <div className="dropdown">
+                            <div className="d-flex align-items-center justify-content-end gap-1">
                               <button
-                                className="btn btn-sm btn-outline-secondary dropdown-toggle sa-action-dropdown-btn"
                                 type="button"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false"
+                                className="btn btn-sm sa-quick-edit-btn"
+                                onClick={() => handleOpenEditModal(t)}
+                                title="إشراف وتعديل الخطة والحدود"
                               >
-                                <i className="bi bi-three-dots-vertical" />
+                                <i className="bi bi-sliders me-1" />
+                                <span>إدارة</span>
                               </button>
-                              <ul className="dropdown-menu dropdown-menu-end sa-dropdown-menu">
-                                <li>
-                                  <button
-                                    className="dropdown-item"
-                                    type="button"
-                                    onClick={() => handleOpenEditModal(t)}
-                                  >
-                                    <i className="bi bi-sliders me-2 text-warning" /> إشراف وتعديل الخطة
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    className="dropdown-item"
-                                    type="button"
-                                    onClick={() => handleUpdateSubscription(t.id, null, null, 7)}
-                                  >
-                                    <i className="bi bi-clock-history me-2 text-info" /> تمديد التجربة +7 أيام
-                                  </button>
-                                </li>
-                                <li><hr className="dropdown-divider" /></li>
-                                <li>
-                                  {t.status === 'SUSPENDED' ? (
-                                    <button
-                                      className="dropdown-item text-success"
-                                      type="button"
-                                      onClick={() => handleUpdateSubscription(t.id, null, 'ACTIVE', null)}
-                                    >
-                                      <i className="bi bi-play-circle me-2" /> إعادة التفعيل
+
+                              <div className="dropdown">
+                                <button
+                                  className="btn btn-sm sa-more-btn"
+                                  type="button"
+                                  data-bs-toggle="dropdown"
+                                  aria-expanded="false"
+                                  title="خيارات إضافية"
+                                >
+                                  <i className="bi bi-three-dots-vertical" />
+                                </button>
+                                <ul className="dropdown-menu dropdown-menu-end sa-dropdown-menu">
+                                  <li>
+                                    <button className="dropdown-item" type="button" onClick={() => handleOpenEditModal(t)}>
+                                      <i className="bi bi-sliders me-2 text-warning" /> تفاصيل وحدود الاشتراك
                                     </button>
-                                  ) : (
-                                    <button
-                                      className="dropdown-item text-danger"
-                                      type="button"
-                                      onClick={() => handleUpdateSubscription(t.id, null, 'SUSPENDED', null)}
-                                    >
-                                      <i className="bi bi-pause-circle me-2" /> إيقاف الحساب
+                                  </li>
+                                  <li>
+                                    <button className="dropdown-item" type="button" onClick={() => handleUpdateSubscription(t.id, null, null, 7)}>
+                                      <i className="bi bi-clock-history me-2 text-info" /> تمديد الاشتراك (+7 أيام)
                                     </button>
+                                  </li>
+                                  {t.ownerWhatsapp && (
+                                    <li>
+                                      <button className="dropdown-item" type="button" onClick={() => sendWhatsappCredentials(t)}>
+                                        <i className="bi bi-whatsapp me-2 text-success" /> إرسال رسالة ترحيب (واتساب)
+                                      </button>
+                                    </li>
                                   )}
-                                </li>
-                              </ul>
+                                  <li>
+                                    <button className="dropdown-item" type="button" onClick={() => copyToClipboard(`${window.location.origin}/${t.slug}/login`, 'رابط الدخول')}>
+                                      <i className="bi bi-link-45deg me-2 text-primary" /> نسخ رابط الدخول
+                                    </button>
+                                  </li>
+                                  <li><hr className="dropdown-divider" /></li>
+                                  <li>
+                                    {isSuspended ? (
+                                      <button className="dropdown-item text-success" type="button" onClick={() => handleUpdateSubscription(t.id, null, 'ACTIVE', null)}>
+                                        <i className="bi bi-play-circle me-2" /> إعادة تفعيل المنشأة
+                                      </button>
+                                    ) : (
+                                      <button className="dropdown-item text-danger" type="button" onClick={() => handleUpdateSubscription(t.id, null, 'SUSPENDED', null)}>
+                                        <i className="bi bi-pause-circle me-2" /> إيقاف المنشأة مؤقتاً
+                                      </button>
+                                    )}
+                                  </li>
+                                </ul>
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -1374,34 +1379,68 @@ export default function SuperAdminPage() {
             </div>
 
             {/* Pagination Footer */}
-            <div className="card-footer sa-card-footer d-flex align-items-center justify-content-between p-3 flex-wrap gap-2">
-              <div className="small text-white opacity-75">
-                عرض {paginatedTenants.length} من إجمالي {filteredTenants.length} منشأة
+            <div className="sa-table-footer">
+              <div className="sa-table-footer__info">
+                <span>
+                  عرض <strong>{paginatedTenants.length}</strong> من إجمالي <strong>{filteredTenants.length}</strong> منشأة
+                </span>
+                {/* Choosing a page size is only a choice once there is more than one page of rows. */}
+                {filteredTenants.length > 10 && (
+                <div className="sa-page-size-selector">
+                  <span className="text-muted small">عرض:</span>
+                  {[10, 25, 50].map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      className={`sa-size-btn ${pageSize === size ? 'is-active' : ''}`}
+                      onClick={() => { setPageSize(size); setCurrentPage(1); }}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+                )}
               </div>
 
-              <div className="d-flex align-items-center gap-2">
+              {/* Previous / next / "page 1 of 1" around a single row is furniture, not a control. */}
+              {totalPages > 1 && (
+              <div className="sa-pagination">
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-secondary"
+                  className="sa-pagination-btn"
                   disabled={currentPage <= 1}
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 >
                   <i className="bi bi-chevron-right me-1" /> السابق
                 </button>
 
-                <span className="small text-white px-2 fw-bold">
-                  صفحة {currentPage} من {totalPages}
-                </span>
+                <div className="sa-pagination-pages">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .map((p, idx, arr) => (
+                      <div key={p} className="d-flex align-items-center">
+                        {idx > 0 && arr[idx - 1] !== p - 1 && <span className="sa-pagination-ellipsis">...</span>}
+                        <button
+                          type="button"
+                          className={`sa-pagination-num ${currentPage === p ? 'is-active' : ''}`}
+                          onClick={() => setCurrentPage(p)}
+                        >
+                          {p}
+                        </button>
+                      </div>
+                    ))}
+                </div>
 
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-secondary"
+                  className="sa-pagination-btn"
                   disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 >
                   التالي <i className="bi bi-chevron-left ms-1" />
                 </button>
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -1410,139 +1449,52 @@ export default function SuperAdminPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           3. PLANS MATRIX SECTION
          ══════════════════════════════════════════════════════════════════════ */}
-      {activeSection === 'plans' && (
+      {/* ══════════════════════════════════════════════════════════════════════
+          PAYMENTS — bank-transfer upgrade review
+         ══════════════════════════════════════════════════════════════════════ */}
+      {activeSection === 'payments' && (
         <div className="sa-section">
-          <SectionIntro eyebrow="PRODUCT & PRICING" title="الباقات وحدود الاستخدام" description="الحدود المعروضة هنا مطابقة لقواعد الاشتراك الفعلية في النظام." icon="bi-stars" />
-          <div className="row g-4">
-            {/* Plan 1: TRIAL */}
-            <div className="col-12 col-md-6 col-xl-3">
-              <div className="card sa-card sa-plan-card h-100 shadow-sm border-secondary">
-                <div className="card-header bg-dark text-center py-3 border-secondary">
-                  <span className="badge text-bg-secondary mb-2 px-3 py-1 fw-bold">خطة البداية</span>
-                  <h4 className="fw-bold text-white mb-1">TRIAL</h4>
-                  <div className="fs-3 fw-bold text-white">مجاناً <small className="fs-6 text-white opacity-75">/ 14 يوم</small></div>
-                </div>
-                <div className="card-body p-4 d-flex flex-column">
-                  <div className="text-center text-white opacity-75 small mb-3 fw-bold">
-                    {planCounts.TRIAL} منشأة مشتركة حالياً
-                  </div>
-                  <ul className="list-unstyled d-flex flex-column gap-2 mb-4">
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 5 طاولات كافيه</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 2 مستخدمين (كاشير/مشرف)</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 30 صنف بالمنيو</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> نظام الكاشير ونقاط البيع</li>
-                    <li className="text-muted"><i className="bi bi-x text-danger me-2" /> شاشة المطبخ (KDS)</li>
-                    <li className="text-muted"><i className="bi bi-x text-danger me-2" /> تسجيل المصاريف والمديونيات</li>
-                  </ul>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary mt-auto w-100 fw-bold py-2"
-                    onClick={() => { setActiveSection('tenants'); setPlanFilter('TRIAL'); }}
-                  >
-                    عرض المشتركين
-                  </button>
-                </div>
-              </div>
-            </div>
+          <SectionIntro
+            eyebrow="PAYMENTS"
+            title="مراجعة التحويلات والترقيات"
+            description="طلبات العملاء للترقية بالتحويل البنكي. الاعتماد يفعّل الاشتراك ويصدر الفاتورة في خطوة واحدة."
+            icon="bi-cash-coin"
+          />
+          <UpgradeInbox
+            tenants={tenants}
+            onReviewed={() => { refreshPendingPayments(); loadData(true); }}
+          />
 
-            {/* Plan 2: STARTER */}
-            <div className="col-12 col-md-6 col-xl-3">
-              <div className="card sa-card sa-plan-card h-100 shadow-sm border-info">
-                <div className="card-header bg-dark text-center py-3 border-info">
-                  <span className="badge text-bg-info mb-2 text-dark px-3 py-1 fw-bold">كافيه أساسي</span>
-                  <h4 className="fw-bold text-white mb-1">STARTER</h4>
-                  <div className="fs-3 fw-bold text-info">499 <small className="fs-6 text-white opacity-75">ج.م / شهرياً</small></div>
-                </div>
-                <div className="card-body p-4 d-flex flex-column">
-                  <div className="text-center text-white opacity-75 small mb-3 fw-bold">
-                    {planCounts.STARTER} منشأة مشتركة حالياً
-                  </div>
-                  <ul className="list-unstyled d-flex flex-column gap-2 mb-4">
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 20 طاولة</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 5 مستخدمين وكاشيرات</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 100 صنف بالمنيو</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> طباعة فواتير حرارية</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> تسجيل المصاريف ونثريات الشيفت</li>
-                    <li className="text-muted"><i className="bi bi-x text-danger me-2" /> شاشة تحضير المطبخ KDS</li>
-                  </ul>
-                  <button
-                    type="button"
-                    className="btn btn-outline-info mt-auto w-100 fw-bold py-2"
-                    onClick={() => { setActiveSection('tenants'); setPlanFilter('STARTER'); }}
-                  >
-                    عرض المشتركين
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Plan 3: PRO (Featured) */}
-            <div className="col-12 col-md-6 col-xl-3">
-              <div className="card sa-card sa-plan-card sa-plan-card--featured h-100 shadow border-warning">
-                <div className="card-header bg-dark text-center py-3 border-warning position-relative">
-                  <span className="badge text-bg-warning mb-2 text-dark fw-bold px-3 py-1">الأكثر طلباً ⭐</span>
-                  <h4 className="fw-bold text-amber mb-1">PRO</h4>
-                  <div className="fs-3 fw-bold text-amber">899 <small className="fs-6 text-white opacity-75">ج.م / شهرياً</small></div>
-                </div>
-                <div className="card-body p-4 d-flex flex-column">
-                  <div className="text-center text-white opacity-75 small mb-3 fw-bold">
-                    {planCounts.PRO} منشأة مشتركة حالياً
-                  </div>
-                  <ul className="list-unstyled d-flex flex-column gap-2 mb-4">
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 50 طاولة كافيه</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 15 كاشير ومشرف</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> حتى 500 صنف بالمنيو</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> شاشة تحضير المطبخ والبار (KDS)</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> سجل الديون والآجل ومسحوبات الموظفين</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> تقارير وإحصائيات متقدمة</li>
-                  </ul>
-                  <button
-                    type="button"
-                    className="btn btn-warning mt-auto w-100 fw-bold text-dark py-2"
-                    onClick={() => { setActiveSection('tenants'); setPlanFilter('PRO'); }}
-                  >
-                    عرض المشتركين
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Plan 4: ENTERPRISE */}
-            <div className="col-12 col-md-6 col-xl-3">
-              <div className="card sa-card sa-plan-card h-100 shadow-sm border-success">
-                <div className="card-header bg-dark text-center py-3 border-success">
-                  <span className="badge text-bg-success mb-2 px-3 py-1 fw-bold">شامل غير محدود 🚀</span>
-                  <h4 className="fw-bold text-success mb-1">ENTERPRISE</h4>
-                  <div className="fs-3 fw-bold text-success">1,499 <small className="fs-6 text-white opacity-75">ج.م / شهرياً</small></div>
-                </div>
-                <div className="card-body p-4 d-flex flex-column">
-                  <div className="text-center text-white opacity-75 small mb-3 fw-bold">
-                    {planCounts.ENTERPRISE} منشأة مشتركة حالياً
-                  </div>
-                  <ul className="list-unstyled d-flex flex-column gap-2 mb-4">
-                    <li><i className="bi bi-check2 text-success me-2" /> طاولات غير محدودة ♾</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> كاشيرات وموظفين بلا حدود</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> منتجات ومخزون بلا حدود</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> لوحة إدارة متكاملة + دعم فني VIP</li>
-                    <li><i className="bi bi-check2 text-success me-2" /> شعار وهوية مخصصة للعلامة التجارية</li>
-                  </ul>
-                  <button
-                    type="button"
-                    className="btn btn-outline-success mt-auto w-100 fw-bold py-2"
-                    onClick={() => { setActiveSection('tenants'); setPlanFilter('ENTERPRISE'); }}
-                  >
-                    عرض المشتركين
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* The ledger below is where money that has already been invoiced is tracked. The inbox
+              above only covers requests waiting on a human; once approved they leave it, and until
+              now they left the console entirely. */}
+          <SectionIntro
+            eyebrow="LEDGER"
+            title="سجل الفواتير"
+            description="كل فاتورة صدرت على المنصة — المستحق، المحصّل والمتأخر. تسجيل دفعة هنا يقيّد المبلغ اللي وصل فعلاً."
+            icon="bi-receipt"
+          />
+          <InvoiceLedger onChanged={() => loadData(true)} />
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          4. SUBSCRIPTIONS & LICENSES SECTION
-         ══════════════════════════════════════════════════════════════════════ */}
+      {activeSection === 'plans' && (
+        <div className="sa-section">
+          <SectionIntro
+            eyebrow="PRODUCT & PRICING"
+            title="الباقات وحدود الاستخدام"
+            description="هذه هي الباقات الفعلية التي يبيعها النظام. تعديل السعر أو الحدود هنا يسري فوراً على الاشتراكات الجديدة."
+            icon="bi-stars"
+          />
+          <PlanEditor
+            plans={plans}
+            planCounts={planCounts}
+            onChanged={() => { plansApi.listAll().then(setPlans).catch(() => {}); loadData(true); }}
+          />
+        </div>
+      )}
+
+
       {activeSection === 'subscriptions' && (
         <div className="sa-section">
           <SectionIntro eyebrow="LICENSE DESK" title="التراخيص والتفعيل" description="إصدار مفاتيح أحادية الاستخدام ومتابعة حالتها وصلاحيتها." icon="bi-key" />
@@ -1656,7 +1608,7 @@ export default function SuperAdminPage() {
                     </tr>
                   ) : (
                     licenseKeys.map((lk) => {
-                      const isExpired = lk.expiresAt && new Date(lk.expiresAt) < new Date();
+                      const isExpired = lk.redeemableUntil && new Date(lk.redeemableUntil) < new Date();
                       const isRevoked = lk.revoked;
                       const isUsed = lk.activationsCount >= (lk.maxActivations || 1);
 
@@ -1694,7 +1646,7 @@ export default function SuperAdminPage() {
                           <td className="text-white fw-bold">{lk.validDays ? `${lk.validDays} يوم` : 'مدى الحياة'}</td>
                           <td>
                             <span className="small text-white opacity-85">
-                              {lk.expiresAt ? new Date(lk.expiresAt).toLocaleDateString('ar-EG') : 'بلا حد ♾'}
+                              {lk.redeemableUntil ? new Date(lk.redeemableUntil).toLocaleDateString('ar-EG') : 'بلا حد ♾'}
                             </span>
                           </td>
                           <td>
@@ -1756,19 +1708,22 @@ export default function SuperAdminPage() {
             <section className="sa-report-panel">
               <header><div><span>Revenue mix</span><h3>توزيع الإيراد حسب الباقة</h3></div><i className="bi bi-pie-chart" /></header>
               <div className="sa-revenue-stack" aria-label="توزيع الإيراد الشهري المتوقع">
-                {['STARTER', 'PRO', 'ENTERPRISE'].map((plan) => {
-                  const count = tenants.filter((tenant) => tenant.status === 'ACTIVE' && tenant.subscriptionPlan === plan).length;
-                  const revenue = count * PLAN_PRICES[plan];
-                  return (
-                    <div key={plan} className={`sa-revenue-row sa-revenue-row--${plan.toLowerCase()}`}>
-                      <span><b>{plan}</b><small>{count} منشأة نشطة</small></span>
-                      <div><i style={{ width: `${estimatedMRR ? (revenue / estimatedMRR) * 100 : 0}%` }} /></div>
-                      <strong>{revenue.toLocaleString()} ج.م</strong>
-                    </div>
-                  );
-                })}
+                {planRevenue.length === 0 && (
+                  <p className="text-muted small mb-0">لا توجد اشتراكات مدفوعة نشطة بعد.</p>
+                )}
+                {planRevenue.map((row) => (
+                  <div key={row.code} className={`sa-revenue-row sa-revenue-row--${row.code.toLowerCase()}`}>
+                    <span><b>{row.label}</b><small>{row.count} منشأة تدفع</small></span>
+                    <div><i style={{ width: `${estimatedMRR ? Math.min(100, (row.revenue / estimatedMRR) * 100) : 0}%` }} /></div>
+                    <strong>{Math.round(row.revenue).toLocaleString()} {revenue.currency}</strong>
+                  </div>
+                ))}
               </div>
-              <footer>MRR قيمة تقديرية مبنية على السعر القياسي لكل باقة، وليست كشف تحصيل مالي.</footer>
+              <footer>
+                محسوبة من الأسعار المثبَّتة على الاشتراكات الفعلية. المحصَّل آخر 30 يوماً:{' '}
+                <b>{revenue.collected30.toLocaleString()} {revenue.currency}</b> · مستحق:{' '}
+                <b>{revenue.outstanding.toLocaleString()} {revenue.currency}</b>
+              </footer>
             </section>
 
             <section className="sa-report-panel">
@@ -1924,6 +1879,7 @@ export default function SuperAdminPage() {
 
       {createModal && (
         <ProvisionTenantModal
+          plans={plans}
           tenants={tenants}
           updating={updating}
           onClose={() => setCreateModal(false)}

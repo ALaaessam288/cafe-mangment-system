@@ -36,10 +36,11 @@ public class EmployeeController {
         return employeeService.update(id, request);
     }
 
+    /** Returns whether the record was removed outright or only deactivated, so the UI can say which. */
     @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
-    public void delete(@PathVariable Long id) {
-        employeeService.delete(id);
+    public java.util.Map<String, Boolean> delete(@PathVariable Long id) {
+        boolean removed = employeeService.delete(id);
+        return java.util.Map.of("removed", removed, "deactivated", !removed);
     }
 }

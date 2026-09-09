@@ -7,6 +7,10 @@ export const usersApi = {
   create:         (payload) => client.post('/users', payload).then((r) => r.data),
   update:         (id, payload) => client.put(`/users/${id}`, payload).then((r) => r.data),
   changePassword: (id, payload) => client.put(`/users/${id}/password`, payload).then((r) => r.data),
+  /* Self-service: the account is taken from the token, and the current password has to be right.
+     The admin reset above is for a manager resetting someone else's credentials. */
+  changeOwnPassword: (payload) => client.put('/users/me/password', payload).then((r) => r.data),
+  changeOwnPin:      (payload) => client.put('/users/me/pin', payload).then((r) => r.data),
   deactivate:     (id)      => client.delete(`/users/${id}`).then((r) => r.data),
   activate:       (id)      => client.put(`/users/${id}/activate`).then((r) => r.data),
 };

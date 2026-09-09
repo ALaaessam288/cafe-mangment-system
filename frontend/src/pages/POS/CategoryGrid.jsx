@@ -47,7 +47,7 @@ export default function CategoryGrid({
           const visual = cat.visual || {};
           const catName = cat.displayName || cat.nameAr || cat.name || cat.nameEn || 'قسم';
           const count = cat.productCount || 0;
-          const themeColor = visual.color || '#f59e0b';
+          const themeColor = visual.color || '#a99cff';
 
           return (
             <button

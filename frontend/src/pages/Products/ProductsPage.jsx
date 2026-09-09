@@ -4,6 +4,7 @@ import {
   LayoutGrid, Table as TableIcon, Package, CheckCircle2, XCircle
 } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
+import { quotaReached, quotaText, hasStatedLimit } from '../../api/plansApi';
 import { stationsApi } from '../../api/stationsApi';
 import { auditApi } from '../../api/auditApi';
 import { useToast } from '../../context/ToastContext';
@@ -264,10 +265,10 @@ export default function ProductsPage() {
         setRecipesLoading(false);
       }
     } else {
-      if (currentUser?.maxProducts && products.length >= currentUser.maxProducts) {
+      if (quotaReached(products.length, currentUser?.maxProducts)) {
         setQuotaModal({
           open: true,
-          message: `لقد بلغت الحد الأقصى للأصناف والمنتجات المسموحة في باقتك (${products.length} من أصل ${currentUser.maxProducts} صنف). يرجى ترقية الباقة لإضافة منيو وأصناف جديدة.`
+          message: `لقد بلغت الحد الأقصى للأصناف والمنتجات المسموحة في باقتك (${quotaText(products.length, currentUser?.maxProducts)} صنف). يرجى ترقية الباقة لإضافة منيو وأصناف جديدة.`
         });
         return;
       }
@@ -422,10 +423,10 @@ export default function ProductsPage() {
             </button>
           </div>
 
-          {currentUser?.maxProducts && (
+          {hasStatedLimit(currentUser?.maxProducts) && (
             <div className="tables-quota-pill">
               <span>السعة:</span>
-              <strong className="font-mono">{products.length} / {currentUser.maxProducts}</strong>
+              <strong className="font-mono">{quotaText(products.length, currentUser?.maxProducts)}</strong>
             </div>
           )}
 
@@ -717,7 +718,7 @@ export default function ProductsPage() {
         onClose={() => setQuotaModal({ open: false, message: '' })}
         resourceName="الأصناف والمنتجات"
         currentCount={products.length}
-        maxLimit={currentUser?.maxProducts || products.length}
+        maxLimit={currentUser?.maxProducts}
         customMessage={quotaModal.message}
       />
 

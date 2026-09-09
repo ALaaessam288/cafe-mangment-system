@@ -158,9 +158,11 @@ export default function AppLayout({ children }) {
           <button
             type="button"
             className="app-topbar__menu-btn"
-            onClick={() => { sounds.playTap(); setIsSidebarOpen(true); }}
+            onClick={() => { setIsSidebarOpen(true); sounds.playTap(); }}
             title="فتح القائمة الرئيسية (☰)"
             aria-label="فتح القائمة الرئيسية"
+            aria-controls="app-sidebar"
+            aria-expanded={isSidebarOpen}
           >
             <Menu size={15} />
             <span className="app-topbar__menu-label">القائمة</span>
@@ -170,7 +172,7 @@ export default function AppLayout({ children }) {
             <img
               src={user?.logoUrl || '/caffio-logo-mark.png'}
               alt="Logo"
-              style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: 6, filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4))' }}
+              style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: 6, filter: 'drop-shadow(0 2px 4px rgba(169, 156, 255, 0.4))' }}
             />
             <span className="app-topbar__brand-name">{user?.tenantName || 'كافيو POS'}</span>
           </div>
@@ -265,13 +267,17 @@ export default function AppLayout({ children }) {
       )}
 
       {/* ── Slide-out Drawer Sidebar ── */}
-      <aside className={`sidebar ${isSidebarOpen ? 'sidebar--open' : ''}`}>
+      <aside
+        id="app-sidebar"
+        className={`sidebar ${isSidebarOpen ? 'sidebar--open' : ''}`}
+        aria-hidden={!isSidebarOpen}
+      >
         {/* Logo & Close Button */}
         <div className="sidebar__logo">
           <img
             src={user?.logoUrl || '/caffio-logo-mark.png'}
             alt="Logo"
-            style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 8, filter: 'drop-shadow(0 3px 8px rgba(245, 158, 11, 0.45))' }}
+            style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 8, filter: 'drop-shadow(0 3px 8px rgba(169, 156, 255, 0.45))' }}
           />
           <span className="sidebar__logo-text" title={user?.tenantName || 'كافيو POS'}>
             {user?.tenantName || 'كافيو POS'}
@@ -390,7 +396,7 @@ export default function AppLayout({ children }) {
         onClose={() => setIsNotifOpen(false)}
       />
 
-      <OnboardingTour />
+      <OnboardingTour enabled={location.pathname === ROUTES.POS} />
     </div>
   );
 }

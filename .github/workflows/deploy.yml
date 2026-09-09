@@ -1,10 +1,16 @@
 name: Caffio SaaS CI/CD Pipeline
 
+# Tests run on EVERY branch, deployment still only from main/master.
+#
+# The suite stopped compiling at the billing redesign and stayed broken for months. It was not that
+# tests were skipped — `mvnw clean package` runs them — but that this workflow only fired on
+# main/master, and the work happens on feature branches and worktrees. The breakage was invisible
+# until it merged, which is the one place it is most expensive to find.
 on:
   push:
-    branches: [ main, master ]
+    branches: [ '**' ]
   pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   test-frontend:
@@ -36,8 +42,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'maven'
-      - name: Test & Package JAR
-        run: ./mvnw clean package
+      # `package` runs the surefire tests; naming the phase explicitly first means a red suite
+      # reports as "tests failed" rather than as a packaging error.
+      - name: Run test suite
+        run: ./mvnw --batch-mode clean test
+
+      - name: Package JAR
+        run: ./mvnw --batch-mode package -DskipTests
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
 
   docker-build:
     name: Build Production Docker Image

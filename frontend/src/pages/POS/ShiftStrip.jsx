@@ -3,7 +3,7 @@ import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Prin
 import { shiftsApi } from '../../api/shiftsApi';
 import { expensesApi } from '../../api/expensesApi';
 import { menuApi } from '../../api/menuApi';
-import { auditApi } from '../../api/auditApi';
+import { auditApi, rawMaterialApi } from '../../api/auditApi';
 import { formatCurrency } from '../../utils/formatters';
 import { printExpenseVoucher } from '../../utils/printUtils';
 import { useToast } from '../../context/ToastContext';
@@ -63,6 +63,9 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   const [stockItems, setStockItems] = useState([]); // combined raw materials & products
   const [loadingStock, setLoadingStock] = useState(false);
   const [adjustAmountMap, setAdjustAmountMap] = useState({}); // { itemId: amount }
+  // Cost and supplier reference per material, so a delivery is recorded with its money attached.
+  const [costMap, setCostMap] = useState({});   // { itemId: unit cost }
+  const [refMap, setRefMap] = useState({});     // { itemId: invoice / delivery note number }
   const [refillType, setRefillType] = useState('ALL'); // ALL | MATERIALS | PRODUCTS
 
   const load = useCallback(async () => {
@@ -128,6 +131,8 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
     if (showStockModal) {
       loadInventoryItems();
       setAdjustAmountMap({});
+      setCostMap({});
+      setRefMap({});
     }
   }, [showStockModal, loadInventoryItems]);
 
@@ -140,16 +145,23 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
 
     try {
       if (item.type === 'MATERIAL') {
-        const updated = await auditApi.saveAuditItem({
-          id: item.dbId,
-          name: item.name,
-          unit: item.unit,
-          stockQuantity: (item.stockQuantity || 0) + amount,
-          minThreshold: item.minThreshold,
-          requiresAudit: true,
-          active: true
+        /* This used to POST the whole audit item back with a new stockQuantity, which overwrote the
+           balance and recorded nothing: a delivery, a spillage and a typo all looked the same
+           afterwards, and what the delivery cost was never captured at all. It goes through the
+           ledger now, so the row carries the cost, the reason and who did it. */
+        const unitCost = parseFloat(costMap[item.id]);
+        await rawMaterialApi.recordMovement({
+          auditItemId: item.dbId,
+          type: 'RESTOCK',
+          quantity: amount,
+          unitCost: Number.isFinite(unitCost) && unitCost > 0 ? unitCost : null,
+          reference: (refMap[item.id] || '').trim() || null,
+          reason: 'توريد من شاشة الكاشير',
+          shiftId: shift?.id ?? null,
         });
         toast.success(`تمت إضافة ${amount} ${item.unit} لخامة «${item.name}» بنجاح 🎉`);
+        setCostMap(prev => ({ ...prev, [item.id]: '' }));
+        setRefMap(prev => ({ ...prev, [item.id]: '' }));
       } else {
         await menuApi.addStock(item.dbId, Math.round(amount));
         toast.success(`تمت إضافة ${Math.round(amount)} قطعة لمنتج «${item.name}» بنجاح 🎉`);
@@ -337,7 +349,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
         <button
           type="button"
           className="shift-tool shift-tool--drawer pos-quick-drawer-btn"
-          style={{ background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#fbbf24' }}
+          style={{ background: 'rgba(169, 156, 255, 0.12)', borderColor: 'rgba(169, 156, 255, 0.3)', color: '#c9c1ff' }}
           onClick={() => setShowCashDrawerModal(true)}
           title="الرقابة على الخزينة: إيداعات وسحوبات وترحيل للخزنة الرئيسية (Safe Drop)"
         >
@@ -529,7 +541,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
                 </div>
                 <div className="settle-calc-item settle-calc-item--highlight">
                   <span>المبلغ المرتجع لدرج الخزينة:</span>
-                  <strong style={{ color: calculatedReturned >= 0 ? '#16a34a' : '#dc2626' }}>
+                  <strong style={{ color: calculatedReturned >= 0 ? '#64d7bd' : '#d44f61' }}>
                     +{formatCurrency(calculatedReturned)}
                   </strong>
                 </div>
@@ -537,7 +549,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
 
               <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
                 <Button variant="secondary" onClick={() => setSelectedAdvance(null)} type="button">رجوع</Button>
-                <Button type="submit" loading={isSubmittingSettle} style={{ backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
+                <Button type="submit" loading={isSubmittingSettle} style={{ backgroundColor: '#64d7bd', borderColor: '#64d7bd' }}>
                   تأكيد التسوية وإعادة الباقي للدرج 🧾
                 </Button>
               </div>
@@ -545,16 +557,16 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {pendingAdvances.map(adv => (
-                <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(30,41,59,0.5)', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(32, 33, 45,0.5)', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '13px' }}>
-                      EXP-{String(adv.id).padStart(5, '0')} — <span style={{ color: '#f59e0b' }}>{formatCurrency(adv.amount)}</span>
+                      EXP-{String(adv.id).padStart(5, '0')} — <span style={{ color: '#a99cff' }}>{formatCurrency(adv.amount)}</span>
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       {adv.notes || 'عُهدة تحت التسوية'}
                     </div>
                   </div>
-                  <Button size="sm" onClick={() => handleOpenSettle(adv)} style={{ backgroundColor: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' }}>
+                  <Button size="sm" onClick={() => handleOpenSettle(adv)} style={{ backgroundColor: '#eeeaff', color: '#92400e', borderColor: '#a99cff' }}>
                     <CheckCircle size={13} style={{ marginInlineEnd: '4px' }} /> تسوية الآن
                   </Button>
                 </div>
@@ -633,22 +645,44 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
                           padding: '12px',
                           background: 'var(--bg-card)',
                           borderRadius: '8px',
-                          border: isLow ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-color)',
+                          border: isLow ? '1px solid rgba(229, 98, 115, 0.35)' : '1px solid var(--border-color)',
                           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                           <span style={{ fontWeight: 600, fontSize: '13px' }}>
                             {item.name}
-                            {isLow && <span style={{ color: '#ef4444', marginInlineStart: '6px', fontSize: '10px', fontWeight: 'bold' }}>⚠️ منخفض!</span>}
+                            {isLow && <span style={{ color: '#e56273', marginInlineStart: '6px', fontSize: '10px', fontWeight: 'bold' }}>⚠️ منخفض!</span>}
                           </span>
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            المخزون الحالي: <strong style={{ color: isLow ? '#ef4444' : '#10b981' }}>{item.stockQuantity} {item.unit}</strong> (الحد الأدنى: {item.minThreshold})
+                            المخزون الحالي: <strong style={{ color: isLow ? '#e56273' : '#64d7bd' }}>{item.stockQuantity} {item.unit}</strong> (الحد الأدنى: {item.minThreshold})
                           </span>
                         </div>
 
                         {/* Quick Refill Input */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {item.type === 'MATERIAL' && (
+                            <>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder={`سعر الـ${item.unit}`}
+                                title="سعر الوحدة على هذا التوريد — بيحدّث متوسط تكلفة الخامة"
+                                value={costMap[item.id] || ''}
+                                onChange={(e) => setCostMap(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                className="stock-refill__input"
+                              />
+                              <input
+                                type="text"
+                                placeholder="رقم الفاتورة"
+                                title="رقم فاتورة المورد أو إذن التوريد"
+                                value={refMap[item.id] || ''}
+                                onChange={(e) => setRefMap(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                className="stock-refill__input stock-refill__input--ref"
+                              />
+                            </>
+                          )}
                           <input
                             type="number"
                             placeholder="الكمية المضافة"
@@ -667,7 +701,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
                           />
                           <Button
                             size="sm"
-                            style={{ height: '32px', padding: '0 10px', backgroundColor: '#10b981', borderColor: '#10b981' }}
+                            style={{ height: '32px', padding: '0 10px', backgroundColor: '#64d7bd', borderColor: '#64d7bd' }}
                             onClick={() => handleAdjustStock(item, adjustAmountMap[item.id])}
                           >
                             + إضافة

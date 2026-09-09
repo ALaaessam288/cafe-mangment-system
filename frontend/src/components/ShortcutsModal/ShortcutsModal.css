@@ -15,10 +15,10 @@
 .shortcuts-modal {
   width: 520px;
   max-width: 95vw;
-  background: linear-gradient(180deg, #181c28 0%, #10131d 100%);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: linear-gradient(180deg, #171923 0%, #0d0e14 100%);
+  border: 1px solid rgba(169, 156, 255, 0.3);
   border-radius: var(--radius-xl);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(169, 156, 255, 0.15);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -64,7 +64,7 @@
 .shortcuts-close-btn:hover {
   color: var(--danger);
   background: var(--danger-dim);
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(229, 98, 115, 0.3);
 }
 
 .shortcuts-body {

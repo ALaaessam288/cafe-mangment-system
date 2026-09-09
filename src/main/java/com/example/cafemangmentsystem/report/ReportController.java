@@ -35,16 +35,18 @@ public class ReportController {
     public List<BestSellerDto> getBestSellers(
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
-            @RequestParam(defaultValue = "15") int limit) {
-        return reportService.getBestSellers(startDate, endDate, Math.min(limit, 50));
+            @RequestParam(name = "shiftId", required = false) Long shiftId,
+            @RequestParam(name = "limit", defaultValue = "15") int limit) {
+        return reportService.getBestSellers(startDate, endDate, shiftId, Math.min(limit, 50));
     }
 
     @GetMapping("/hourly")
     @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR')")
     public List<HourlySlotDto> getHourlySales(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        return reportService.getHourlySales(startDate, endDate);
+            @RequestParam(name = "startDate", required = false) String startDate,
+            @RequestParam(name = "endDate", required = false) String endDate,
+            @RequestParam(name = "shiftId", required = false) Long shiftId) {
+        return reportService.getHourlySales(startDate, endDate, shiftId);
     }
 
     @GetMapping("/recipe-profitability")

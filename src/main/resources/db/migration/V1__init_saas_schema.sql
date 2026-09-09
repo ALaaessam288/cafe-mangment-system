@@ -2,7 +2,9 @@
 --
 -- Rewritten from scratch to exactly match the current JPA entity model (com.example.cafemangmentsystem.**.entity.*).
 -- Every entity extends one of:
---   BaseEntity           -> id BIGSERIAL PK, created_at/updated_at TIMESTAMPTZ NOT NULL, created_by/updated_by BIGINT, version BIGINT NOT NULL DEFAULT 0
+--   BaseEntity           -> id ${pk_id} (BIGSERIAL on Postgres, INTEGER PRIMARY KEY on SQLite - see
+--                            FlywayConfig), created_at/updated_at TIMESTAMPTZ NOT NULL,
+--                            created_by/updated_by BIGINT, version BIGINT NOT NULL DEFAULT 0
 --   TenantScopedEntity    -> BaseEntity + tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
 --   SoftDeletableEntity   -> TenantScopedEntity + active BOOLEAN NOT NULL DEFAULT TRUE, deleted_at TIMESTAMPTZ, deleted_by BIGINT
 -- Tables are created in FK-dependency order. created_by/updated_by/deleted_by are plain BIGINT
@@ -10,7 +12,7 @@
 
 -- Entity: com.example.cafemangmentsystem.tenant.entity.Tenant (extends BaseEntity - the tenant root, not itself tenant-scoped)
 CREATE TABLE IF NOT EXISTS tenants (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -35,7 +37,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Entity: com.example.cafemangmentsystem.user.entity.User (extends SoftDeletableEntity)
 CREATE TABLE IF NOT EXISTS users (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -56,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.menu.entity.Category (extends SoftDeletableEntity)
 CREATE TABLE IF NOT EXISTS categories (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -74,7 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_categories_tenant ON categories(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.printing.entity.Printer (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS printers (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -93,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_printers_tenant ON printers(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.station.entity.Station (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS stations (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -109,7 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_stations_tenant ON stations(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.menu.entity.Product (extends SoftDeletableEntity)
 CREATE TABLE IF NOT EXISTS products (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -140,7 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_products_station ON products(station_id);
 
 -- Entity: com.example.cafemangmentsystem.menu.entity.ProductOption (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS product_options (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -157,7 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_product_options_product ON product_options(produc
 
 -- Entity: com.example.cafemangmentsystem.cafetable.entity.CafeTable (extends SoftDeletableEntity)
 CREATE TABLE IF NOT EXISTS cafe_tables (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -176,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_cafe_tables_tenant ON cafe_tables(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.register.entity.Register (extends SoftDeletableEntity)
 CREATE TABLE IF NOT EXISTS registers (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -192,7 +194,7 @@ CREATE INDEX IF NOT EXISTS idx_registers_tenant ON registers(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.shift.entity.Shift (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS shifts (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -215,7 +217,7 @@ CREATE INDEX IF NOT EXISTS idx_shifts_register ON shifts(register_id);
 
 -- Entity: com.example.cafemangmentsystem.order.entity.Order (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS orders (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -251,7 +253,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_table ON orders(table_id);
 
 -- Entity: com.example.cafemangmentsystem.order.entity.OrderItem (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS order_items (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -279,7 +281,7 @@ CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id);
 
 -- Entity: com.example.cafemangmentsystem.payment.entity.Payment (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS payments (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -300,7 +302,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 
 -- Entity: com.example.cafemangmentsystem.discount.entity.Discount (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS discounts (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -327,7 +329,7 @@ CREATE INDEX IF NOT EXISTS idx_discounts_order_item ON discounts(order_item_id);
 -- full_name/name, position/job_title, base_salary/daily_wage are intentionally duplicated columns
 -- (the entity mirrors each pair via getter/setter overrides for backward/forward compatibility).
 CREATE TABLE IF NOT EXISTS employees (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -349,7 +351,7 @@ CREATE INDEX IF NOT EXISTS idx_employees_tenant ON employees(tenant_id);
 
 -- Entity: com.example.cafemangmentsystem.employee.entity.EmployeeTransaction (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS employee_transactions (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -369,7 +371,7 @@ CREATE INDEX IF NOT EXISTS idx_employee_transactions_employee ON employee_transa
 
 -- Entity: com.example.cafemangmentsystem.expense.entity.Expense (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS expenses (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -399,7 +401,7 @@ CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
 
 -- Entity: com.example.cafemangmentsystem.debt.entity.Debt (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS debts (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -423,7 +425,7 @@ CREATE INDEX IF NOT EXISTS idx_debts_tenant ON debts(tenant_id);
 -- Manual stock changes only (restock/waste/correction) - sale/cancel deductions happen inline on
 -- Product via OrderService and aren't logged here (Order/OrderItem already audit those).
 CREATE TABLE IF NOT EXISTS stock_adjustments (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -443,7 +445,7 @@ CREATE INDEX IF NOT EXISTS idx_stock_adjustments_product ON stock_adjustments(pr
 
 -- Entity: com.example.cafemangmentsystem.printing.entity.PrintJob (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS print_jobs (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -466,7 +468,7 @@ CREATE INDEX IF NOT EXISTS idx_print_jobs_order ON print_jobs(order_id);
 
 -- Entity: com.example.cafemangmentsystem.security.refresh.entity.RefreshToken (extends BaseEntity - not tenant-scoped)
 CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -484,7 +486,7 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 -- Deliberately never seeded with defaults - raw materials are business-specific; every tenant
 -- builds its own list via the Inventory page.
 CREATE TABLE IF NOT EXISTS shift_audit_items (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -502,7 +504,7 @@ CREATE INDEX IF NOT EXISTS idx_shift_audit_items_tenant ON shift_audit_items(ten
 
 -- Entity: com.example.cafemangmentsystem.inventory.entity.ProductRecipe (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS product_recipes (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -518,7 +520,7 @@ CREATE INDEX IF NOT EXISTS idx_product_recipes_product ON product_recipes(produc
 
 -- Entity: com.example.cafemangmentsystem.inventory.entity.ShiftAuditRecord (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS shift_audit_records (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -542,7 +544,7 @@ CREATE INDEX IF NOT EXISTS idx_shift_audit_records_shift ON shift_audit_records(
 -- tenant_id is a plain column here, not @TenantId, so it isn't Hibernate-filtered like the
 -- tenant-scoped tables above; the FK below is for data integrity only).
 CREATE TABLE IF NOT EXISTS tenant_activity_logs (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -4,6 +4,7 @@ import {
   Users, Shield, UserCheck, CheckCircle2, XCircle, AlertCircle 
 } from 'lucide-react';
 import { usersApi } from '../../api/usersApi';
+import { quotaReached, quotaText, hasStatedLimit } from '../../api/plansApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/Button/Button';
@@ -67,10 +68,10 @@ export default function UsersPage() {
       setForm({ fullName: user.fullName, username: user.username, role: user.role, password: '', pin: '' });
       setIsEditModalOpen(true);
     } else {
-      if (currentUser?.maxUsers && users.length >= currentUser.maxUsers) {
+      if (quotaReached(users.length, currentUser?.maxUsers)) {
         setQuotaModal({
           open: true,
-          message: `لقد بلغت الحد الأقصى للمستخدمين المسموح بهم في باقتك (${users.length} من أصل ${currentUser.maxUsers} مستخدم). يرجى ترقية الباقة لإضافة كاشيرات وموظفين جدد.`
+          message: `لقد بلغت الحد الأقصى للمستخدمين المسموح بهم في باقتك (${quotaText(users.length, currentUser?.maxUsers)} مستخدم). يرجى ترقية الباقة لإضافة كاشيرات وموظفين جدد.`
         });
         return;
       }
@@ -250,10 +251,10 @@ export default function UsersPage() {
             </button>
           </div>
 
-          {currentUser?.maxUsers && (
+          {hasStatedLimit(currentUser?.maxUsers) && (
             <div className="tables-quota-pill">
               <span>السعة:</span>
-              <strong className="font-mono">{users.length} / {currentUser.maxUsers}</strong>
+              <strong className="font-mono">{quotaText(users.length, currentUser?.maxUsers)}</strong>
             </div>
           )}
 
@@ -270,7 +271,7 @@ export default function UsersPage() {
         onClose={() => setQuotaModal({ open: false, message: '' })}
         resourceName="المستخدمين"
         currentCount={users.length}
-        maxLimit={currentUser?.maxUsers || users.length}
+        maxLimit={currentUser?.maxUsers}
         customMessage={quotaModal.message}
       />
 
@@ -355,7 +356,7 @@ export default function UsersPage() {
               {users.map((u) => (
                 <tr key={u.id}>
                   <td style={{ fontWeight: 700, color: '#fff' }}>{u.fullName}</td>
-                  <td><code className="font-mono" style={{ color: '#94a3b8' }}>@{u.username}</code></td>
+                  <td><code className="font-mono" style={{ color: '#9995a8' }}>@{u.username}</code></td>
                   <td>
                     <span className="table-zone-chip font-bold">
                       {getRoleTitle(u.role)}
@@ -414,8 +415,8 @@ export default function UsersPage() {
           <form onSubmit={handleSaveUser} className="modal-form">
             {editError && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(229, 98, 115, 0.12)',
+                border: '1px solid rgba(229, 98, 115, 0.35)',
                 color: '#fca5a5',
                 padding: '10px 14px',
                 borderRadius: '8px',
@@ -426,7 +427,7 @@ export default function UsersPage() {
                 marginBottom: '14px',
                 lineHeight: 1.5
               }}>
-                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#e56273' }} />
                 <span>{editError}</span>
               </div>
             )}
@@ -526,8 +527,8 @@ export default function UsersPage() {
           <form onSubmit={handleChangePassword} className="modal-form">
             {passwordError && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(229, 98, 115, 0.12)',
+                border: '1px solid rgba(229, 98, 115, 0.35)',
                 color: '#fca5a5',
                 padding: '10px 14px',
                 borderRadius: '8px',
@@ -538,7 +539,7 @@ export default function UsersPage() {
                 marginBottom: '14px',
                 lineHeight: 1.5
               }}>
-                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#e56273' }} />
                 <span>{passwordError}</span>
               </div>
             )}
@@ -576,8 +577,8 @@ export default function UsersPage() {
           <form onSubmit={handleChangePin} className="modal-form">
             {pinError && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(229, 98, 115, 0.12)',
+                border: '1px solid rgba(229, 98, 115, 0.35)',
                 color: '#fca5a5',
                 padding: '10px 14px',
                 borderRadius: '8px',
@@ -588,7 +589,7 @@ export default function UsersPage() {
                 marginBottom: '14px',
                 lineHeight: 1.5
               }}>
-                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#e56273' }} />
                 <span>{pinError}</span>
               </div>
             )}

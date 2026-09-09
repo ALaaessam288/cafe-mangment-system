@@ -51,6 +51,8 @@ public class ReportService {
     private final DebtRepository debtRepository;
     private final com.example.cafemangmentsystem.inventory.repository.ProductRecipeRepository productRecipeRepository;
     private final com.example.cafemangmentsystem.inventory.repository.ShiftAuditItemRepository shiftAuditItemRepository;
+    private final com.example.cafemangmentsystem.inventory.repository.ShiftAuditRecordRepository shiftAuditRecordRepository;
+    private final com.example.cafemangmentsystem.inventory.repository.RawMaterialMovementRepository rawMaterialMovementRepository;
 
     private static class SalesAccumulator {
         final String name;
@@ -258,6 +260,34 @@ public class ReportService {
             }
         }
 
+        /*
+         * Raw-material costing, from the stock ledger.
+         *
+         * Deliberately NOT folded into netProfit below. A material purchase is normally also
+         * entered on the expenses screen as ExpenseType.MATERIALS, which already reduces profit;
+         * subtracting the ledger's purchases too would book the same money twice. The two are
+         * reported side by side instead, so a café can finally see when its stock records and its
+         * expense records disagree.
+         */
+        Instant costFrom = finalStart != null ? finalStart : Instant.EPOCH;
+        Instant costTo = finalEnd != null ? finalEnd : Instant.now();
+
+        BigDecimal rawMaterialPurchases = orZero(
+                rawMaterialMovementRepository.sumPurchasesBetween(costFrom, costTo));
+        BigDecimal rawMaterialWasteValue = orZero(
+                rawMaterialMovementRepository.sumWasteBetween(costFrom, costTo)).abs();
+
+        Double consumed = shiftAuditRecordRepository.sumConsumedCost(costFrom, costTo);
+        BigDecimal costOfGoodsSold = consumed == null
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(consumed).setScale(2, java.math.RoundingMode.HALF_UP);
+
+        BigDecimal materialsExpensesLogged = filteredExpenses.stream()
+                .filter(e -> e.getType() == ExpenseType.MATERIALS)
+                .map(Expense::getAmount)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         BigDecimal netProfit = totalCafeRevenue.add(totalRestaurantRevenue).add(totalSnacksNet)
                 .subtract(totalCafeExpenses)
                 .subtract(totalRestaurantExpenses)
@@ -305,13 +335,22 @@ public class ReportService {
                 paymentMethods,
                 totalOutstandingDebts,
                 unsettledDebts.size(),
-                totalSnacksNet
+                totalSnacksNet,
+                rawMaterialPurchases,
+                rawMaterialWasteValue,
+                costOfGoodsSold,
+                materialsExpensesLogged
         );
     }
 
     @Transactional(readOnly = true)
     public List<BestSellerDto> getBestSellers(String startDate, String endDate, int limit) {
-        Instant[] range = resolveDateRange(startDate, endDate);
+        return getBestSellers(startDate, endDate, null, limit);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BestSellerDto> getBestSellers(String startDate, String endDate, Long shiftId, int limit) {
+        Instant[] range = resolveRange(startDate, endDate, shiftId);
         List<Object[]> rows = orderItemRepository.findTopProductsByQuantity(
                 range[0], range[1], PageRequest.of(0, limit));
         return rows.stream()
@@ -324,7 +363,12 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public List<HourlySlotDto> getHourlySales(String startDate, String endDate) {
-        Instant[] range = resolveDateRange(startDate, endDate);
+        return getHourlySales(startDate, endDate, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HourlySlotDto> getHourlySales(String startDate, String endDate, Long shiftId) {
+        Instant[] range = resolveRange(startDate, endDate, shiftId);
         // Hourly data is in UTC; frontend shifts by +2 for Egypt display
         List<Object[]> rows = orderRepository.findHourlySales(range[0], range[1]);
         return rows.stream()
@@ -333,6 +377,31 @@ public class ReportService {
                         ((Number) r[1]).longValue(),
                         (BigDecimal) r[2]))
                 .toList();
+    }
+
+    /**
+     * Resolves the window every report on the screen should agree on.
+     *
+     * <p>The financial report and recipe profitability already honoured {@code shiftId}; best
+     * sellers and hourly sales did not accept it at all, so selecting a shift left those two
+     * panels showing the whole history next to shift-scoped totals. Two answers to "what sold
+     * in this shift" on one screen, and no way for the reader to tell which one was lying.
+     */
+    private static BigDecimal orZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private Instant[] resolveRange(String startDate, String endDate, Long shiftId) {
+        if (shiftId != null) {
+            Shift shift = shiftRepository.findById(shiftId).orElse(null);
+            if (shift != null) {
+                return new Instant[]{
+                        shift.getOpenedAt(),
+                        shift.getClosedAt() != null ? shift.getClosedAt() : Instant.now()
+                };
+            }
+        }
+        return resolveDateRange(startDate, endDate);
     }
 
     private Instant[] resolveDateRange(String startDate, String endDate) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   ShoppingCart, Table2, TrendingUp, Coffee,
   RefreshCw, Clock, AlertTriangle, ChevronRight, Zap, FileText,
@@ -16,7 +16,19 @@ import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatDateTime, orderStatusLabel } from '../../utils/formatters';
 import { ORDER_STATUS, ROUTES, ROLES } from '../../utils/constants';
 import { sounds } from '../../utils/soundEffects';
+import { buildOperationsIntelligence } from '../../utils/businessIntelligence';
 import './DashboardPage.css';
+
+const INSIGHT_ICONS = {
+  'critical-kitchen-delay': Clock,
+  'kitchen-delay': Clock,
+  'out-of-stock': Package,
+  'low-stock': Package,
+  'no-open-shift': ShieldAlert,
+  'high-void-rate': ShieldAlert,
+  'high-occupancy': Table2,
+  'partial-data': RefreshCw,
+};
 
 export default function DashboardPage() {
   const toast = useToast();
@@ -31,6 +43,13 @@ export default function DashboardPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [dataCoverage, setDataCoverage] = useState({
+    orders: true,
+    tables: true,
+    shift: true,
+    products: true,
+  });
 
   const load = useCallback(async (isManual = false) => {
     if (isManual) {
@@ -52,6 +71,14 @@ export default function DashboardPage() {
       if (currentShift.status === 'fulfilled') setShift(currentShift.value);
       else setShift(null);
       if (allProducts.status === 'fulfilled') setProducts(allProducts.value || []);
+
+      setDataCoverage({
+        orders: allOrders.status === 'fulfilled',
+        tables: allTables.status === 'fulfilled',
+        shift: currentShift.status === 'fulfilled',
+        products: allProducts.status === 'fulfilled',
+      });
+      setLastUpdatedAt(new Date());
 
       if (isManual) {
         toast.success('تم تحديث بيانات لوحة القيادة بنجاح');
@@ -89,42 +116,30 @@ export default function DashboardPage() {
     return openedAt && Date.now() - new Date(openedAt).getTime() > 15 * 60 * 1000;
   });
   const averageTicket = closedOrders.length > 0 ? todayRevenue / closedOrders.length : 0;
-  const operationalStatus = delayedOrders.length > 0 ? 'يحتاج تدخل' : openOrders.length > 0 ? 'نشط وطبيعي' : 'هادئ';
+  const intelligence = useMemo(() => buildOperationsIntelligence({
+    orders,
+    tables,
+    products,
+    shift,
+    role,
+    now: lastUpdatedAt?.getTime() || Date.now(),
+    dataCoverage,
+  }), [orders, tables, products, shift, role, lastUpdatedAt, dataCoverage]);
 
-  const attentionItems = [
-    delayedOrders.length > 0 && {
-      tone: 'danger',
-      icon: Clock,
-      title: `${delayedOrders.length} أوردر متأخر أكثر من 15 دقيقة`,
-      detail: 'راجع شاشة التحضير وحدد سبب التأخير قبل أن يتأثر العميل.',
-      action: 'فتح شاشة التحضير',
-      route: ROUTES.KDS,
-    },
-    lowStockProducts.length > 0 && {
-      tone: 'warning',
-      icon: Package,
-      title: `${lowStockProducts.length} صنف وصل إلى حد إعادة الطلب`,
-      detail: lowStockProducts.slice(0, 3).map((product) => product.name).join('، '),
-      action: 'مراجعة المخزون',
-      route: ROUTES.INVENTORY,
-    },
-    !shift && {
-      tone: 'neutral',
-      icon: ShieldAlert,
-      title: 'لا يوجد شيفت مفتوح حالياً',
-      detail: isSupervisor ? 'افتح الكاشير وابدأ شيفت التشغيل.' : 'لا توجد حركة تحصيل مباشرة في هذه اللحظة.',
-      action: isSupervisor ? 'فتح الكاشير' : 'عرض التقارير',
-      route: isSupervisor ? ROUTES.POS : ROUTES.REPORTS,
-    },
-    voidOrders.length > 0 && isAdmin && {
-      tone: 'warning',
-      icon: ShieldAlert,
-      title: `${voidOrders.length} أوردر ملغي يحتاج مراجعة`,
-      detail: 'راجع الإلغاءات للتأكد من أسبابها وسلامة دورة التحصيل.',
-      action: 'مراجعة الفواتير',
-      route: ROUTES.INVOICES,
-    },
-  ].filter(Boolean).slice(0, 4);
+  const attentionItems = loading ? [] : intelligence.insights
+    .filter((insight) => insight.severity !== 'success')
+    .slice(0, 4)
+    .map((insight) => ({
+      ...insight,
+      icon: INSIGHT_ICONS[insight.id] || Sparkles,
+    }));
+
+  const primaryInsight = loading ? null : intelligence.nextBestAction;
+  const operationalStatus = loading ? 'جاري التحليل' : intelligence.status.label;
+  const updatedTime = lastUpdatedAt?.toLocaleTimeString('ar-EG', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   return (
     <div className="page dashboard-creative">
@@ -203,6 +218,39 @@ export default function DashboardPage() {
           <div><span>الصالة</span><strong>{occupancyRate}% إشغال</strong></div>
           <div><span>المطبخ</span><strong className={delayedOrders.length ? 'is-danger' : 'is-success'}>{operationalStatus}</strong></div>
           <div><span>التنبيهات</span><strong className={attentionItems.length ? 'is-warning' : 'is-success'}>{attentionItems.length || 'لا يوجد'}</strong></div>
+        </div>
+      </section>
+
+      {/* ── Explainable next-best action generated from live operating facts ── */}
+      <section className={`dash-smart-brief is-${primaryInsight?.tone || 'loading'}`} aria-label="ملخص كافيو الذكي">
+        <div className="dash-smart-brief__mark">
+          <Sparkles size={21} />
+          <span>SMART</span>
+        </div>
+        <div className="dash-smart-brief__decision">
+          <span className="dash-eyebrow">CAFFIO DECISION ENGINE</span>
+          <h2>{primaryInsight?.title || 'بنقرأ حالة التشغيل…'}</h2>
+          <p>{primaryInsight?.detail || 'بنراجع الطلبات، المخزون، الشيفت والصالة علشان نحدد أهم خطوة.'}</p>
+          {primaryInsight?.evidence && (
+            <small><Eye size={12} /> سبب الاقتراح: {primaryInsight.evidence}</small>
+          )}
+        </div>
+        <div className="dash-smart-brief__action">
+          <div className="dash-smart-brief__score">
+            <span>صحة التشغيل</span>
+            <strong>{loading ? '—' : intelligence.healthScore}</strong>
+            <small>ثقة القراءة {loading ? '—' : `${intelligence.confidence}%`}</small>
+          </div>
+          {primaryInsight && (
+            <button
+              type="button"
+              onClick={() => primaryInsight.route ? navigate(primaryInsight.route) : load(true)}
+            >
+              {primaryInsight.action}
+              <ChevronRight size={14} />
+            </button>
+          )}
+          {updatedTime && <time>آخر تحليل {updatedTime}</time>}
         </div>
       </section>
 
@@ -345,12 +393,12 @@ export default function DashboardPage() {
               <Link to={ROUTES.REPORTS} className="dash-link">التحليل الكامل <ChevronRight size={14} /></Link>
             </div>
             <div className="dash-owner-score">
-              <div className="dash-owner-score__ring" style={{ '--score': `${Math.max(8, 100 - (attentionItems.length * 18)) * 3.6}deg` }}>
-                <span>{Math.max(8, 100 - (attentionItems.length * 18))}</span>
+              <div className="dash-owner-score__ring" style={{ '--score': `${Math.max(8, loading ? 0 : intelligence.healthScore) * 3.6}deg` }}>
+                <span>{loading ? '—' : intelligence.healthScore}</span>
               </div>
               <div>
-                <strong>{attentionItems.length === 0 ? 'التشغيل مستقر' : 'توجد نقاط تحتاج انتباهك'}</strong>
-                <p>المؤشر يجمع حالة الشيفت، تأخير الطلبات، المخزون والإلغاءات في قراءة واحدة.</p>
+                <strong>{loading ? 'بنحلل التشغيل…' : `${intelligence.status.label}: ${intelligence.nextBestAction.title}`}</strong>
+                <p>مؤشر مفسّر يجمع حالة الشيفت، تأخير الطلبات، المخزون، الإشغال والإلغاءات.</p>
               </div>
             </div>
             <div className="dash-owner-facts">
@@ -373,7 +421,7 @@ export default function DashboardPage() {
             {attentionItems.map((item) => {
               const ItemIcon = item.icon;
               return (
-                <button type="button" className={`dash-attention-item is-${item.tone}`} key={item.title} onClick={() => navigate(item.route)}>
+                <button type="button" className={`dash-attention-item is-${item.tone}`} key={item.id} onClick={() => item.route ? navigate(item.route) : load(true)}>
                   <span className="dash-attention-item__icon"><ItemIcon size={17} /></span>
                   <span className="dash-attention-item__copy"><strong>{item.title}</strong><small>{item.detail}</small></span>
                   <span className="dash-attention-item__action">{item.action} <ChevronRight size={13} /></span>

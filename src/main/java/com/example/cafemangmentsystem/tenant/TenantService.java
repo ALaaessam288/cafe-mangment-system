@@ -35,7 +35,15 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Predicate;
+
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -105,12 +113,68 @@ public class TenantService {
                 .toList();
     }
 
+    /**
+     * Every customer tenant with its current subscription.
+     *
+     * <p>Two queries, not one per tenant. This used to resolve the subscription inside the map,
+     * so a platform with 500 cafes issued 501 statements and lazily fetched a plan for each.
+     */
     @Transactional(readOnly = true)
     public List<TenantResponse> findAllTenants() {
-        return tenantRepository.findAll().stream()
+        List<Tenant> customers = tenantRepository.findAll().stream()
                 .filter(t -> !isPlatform(t))
-                .map(t -> TenantResponse.from(t, currentSubscription(t.getId())))
                 .toList();
+        if (customers.isEmpty()) return List.of();
+
+        Map<Long, TenantSubscription> byTenant = subscriptionsFor(customers);
+        return customers.stream()
+                .map(t -> TenantResponse.from(t, byTenant.get(t.getId())))
+                .toList();
+    }
+
+    /**
+     * Paged tenant search for the platform console.
+     *
+     * <p>Sorting is restricted to a whitelist because the value reaches JPA as a property name;
+     * accepting whatever the client sends would let it order by, or probe, arbitrary fields.
+     */
+    @Transactional(readOnly = true)
+    public Page<TenantResponse> searchTenants(String query, int page, int size, String sortBy, String direction) {
+        String sortProperty = SORTABLE.contains(sortBy) ? sortBy : "name";
+        Sort.Direction sortDirection = "desc".equalsIgnoreCase(direction) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 200),
+                Sort.by(sortDirection, sortProperty));
+
+        String needle = query == null || query.isBlank()
+                ? null : "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
+
+        Specification<Tenant> spec = (root, criteria, cb) -> {
+            // The platform tenant is infrastructure, not a customer, and never belongs in this list.
+            Predicate notPlatform = cb.notEqual(cb.lower(root.get("slug")), "platform");
+            if (needle == null) return notPlatform;
+            return cb.and(notPlatform, cb.or(
+                    cb.like(cb.lower(root.get("name")), needle),
+                    cb.like(cb.lower(root.get("slug")), needle)));
+        };
+
+        Page<Tenant> found = tenantRepository.findAll(spec, pageable);
+        if (found.isEmpty()) return found.map(t -> TenantResponse.from(t, null));
+
+        Map<Long, TenantSubscription> byTenant = subscriptionsFor(found.getContent());
+        return found.map(t -> TenantResponse.from(t, byTenant.get(t.getId())));
+    }
+
+    /** Columns the console may order by. Anything else falls back to name. */
+    private static final Set<String> SORTABLE = Set.of("name", "slug", "createdAt", "status");
+
+    /** Current subscription per tenant id, fetched in a single query with plans joined. */
+    private Map<Long, TenantSubscription> subscriptionsFor(List<Tenant> tenants) {
+        List<Long> ids = tenants.stream().map(Tenant::getId).toList();
+        Map<Long, TenantSubscription> byTenant = new java.util.HashMap<>();
+        for (TenantSubscription subscription : subscriptionRepository.findCurrentForTenants(ids)) {
+            byTenant.put(subscription.getTenantId(), subscription);
+        }
+        return byTenant;
     }
 
     public TenantResponse updateLogo(Long tenantId, String logoUrl) {
@@ -296,32 +360,46 @@ public class TenantService {
      * nothing ever moved off ACTIVE — so a tenant that stopped paying a year ago was counted as an
      * active customer forever.
      */
+    /**
+     * Platform headline numbers.
+     *
+     * <p>The tally is a single GROUP BY. It previously called the entitlement resolver once per
+     * tenant, which is two queries each on a cold cache and — worse — filled the per-tenant
+     * entitlement cache with every tenant on the platform, evicting the entries real requests were
+     * about to need.
+     *
+     * <p>The trade-off is that this reads the <em>stored</em> status rather than re-deriving it from
+     * the clock, so a subscription that lapsed since the scheduler last ran is still counted as
+     * live here. The hourly job closes that gap, and being an hour stale is the right price for not
+     * running 2N queries to render a dashboard.
+     */
     @Transactional(readOnly = true)
     public Map<String, Object> getPlatformStats() {
         List<Tenant> customers = tenantRepository.findAll().stream().filter(t -> !isPlatform(t)).toList();
 
-        long trialing = 0, active = 0, grace = 0, expired = 0, suspended = 0, cancelled = 0;
-        for (Tenant tenant : customers) {
-            SubscriptionStatus status = entitlementService.forTenant(tenant.getId()).status();
-            if (status == null) continue;
-            switch (status) {
-                case TRIALING -> trialing++;
-                case ACTIVE -> active++;
-                case GRACE -> grace++;
-                case EXPIRED -> expired++;
-                case SUSPENDED -> suspended++;
-                case CANCELLED -> cancelled++;
+        Map<SubscriptionStatus, Long> tally = new java.util.EnumMap<>(SubscriptionStatus.class);
+        for (SubscriptionStatus status : SubscriptionStatus.values()) {
+            tally.put(status, 0L);
+        }
+        if (!customers.isEmpty()) {
+            List<Long> ids = customers.stream().map(Tenant::getId).toList();
+            for (Object[] row : subscriptionRepository.countByStatusForTenants(ids)) {
+                tally.put((SubscriptionStatus) row[0], ((Number) row[1]).longValue());
             }
         }
 
+        long active = tally.get(SubscriptionStatus.ACTIVE);
+        long grace = tally.get(SubscriptionStatus.GRACE);
+
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("totalTenants", customers.size());
-        stats.put("trialTenants", trialing);
+        stats.put("trialTenants", tally.get(SubscriptionStatus.TRIALING));
         stats.put("activeTenants", active);
         stats.put("graceTenants", grace);
-        stats.put("expiredTenants", expired);
-        stats.put("suspendedTenants", suspended);
-        stats.put("cancelledTenants", cancelled);
+        stats.put("expiredTenants", tally.get(SubscriptionStatus.EXPIRED));
+        stats.put("suspendedTenants", tally.get(SubscriptionStatus.SUSPENDED));
+        stats.put("cancelledTenants", tally.get(SubscriptionStatus.CANCELLED));
+        // A tenant inside its grace window is still inside a period it paid for.
         stats.put("payingTenants", active + grace);
         stats.putAll(billingService.revenueStats());
         return stats;
@@ -335,6 +413,45 @@ public class TenantService {
     @Transactional(readOnly = true)
     public List<TenantActivityLog> getPlatformActivityLogs() {
         return tenantActivityLogRepository.findTop200ByOrderByCreatedAtDesc();
+    }
+
+    /**
+     * Filtered, paged audit search — replaces searching a truncated 200-row window in the browser.
+     *
+     * <p>Built as a specification so an absent filter contributes no predicate at all. The obvious
+     * JPQL spelling ({@code :action IS NULL OR l.action = :action}) binds a null whose type
+     * PostgreSQL cannot infer, and the query fails outright.
+     */
+    @Transactional(readOnly = true)
+    public Page<TenantActivityLog> searchActivityLogs(Long tenantId, String action, Instant from, Instant to,
+                                                      String query, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        String actionFilter = action == null || action.isBlank() || "ALL".equalsIgnoreCase(action) ? null : action;
+        String needle = query == null || query.isBlank()
+                ? null : "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
+
+        Specification<TenantActivityLog> spec = (root, criteria, cb) -> {
+            List<Predicate> predicates = new java.util.ArrayList<>();
+            if (tenantId != null) predicates.add(cb.equal(root.get("tenantId"), tenantId));
+            if (actionFilter != null) predicates.add(cb.equal(root.get("action"), actionFilter));
+            if (from != null) predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+            if (to != null) predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+            if (needle != null) {
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("details")), needle),
+                        cb.like(cb.lower(root.get("performedBy")), needle)));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return tenantActivityLogRepository.findAll(spec, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> knownActivityActions() {
+        return tenantActivityLogRepository.findDistinctActions();
     }
 
     // ── Deletion ────────────────────────────────────────────────────────────

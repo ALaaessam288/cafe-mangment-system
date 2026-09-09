@@ -6,6 +6,7 @@ import com.example.cafemangmentsystem.inventory.dto.ShiftAuditRecordDto;
 import com.example.cafemangmentsystem.inventory.dto.ShiftClosingAuditRequest;
 import com.example.cafemangmentsystem.inventory.dto.ShiftOpeningAuditRequest;
 import com.example.cafemangmentsystem.inventory.entity.ProductRecipe;
+import com.example.cafemangmentsystem.inventory.entity.RawMaterialMovementType;
 import com.example.cafemangmentsystem.inventory.entity.ShiftAuditItem;
 import com.example.cafemangmentsystem.inventory.entity.ShiftAuditRecord;
 import com.example.cafemangmentsystem.inventory.repository.ProductRecipeRepository;
@@ -43,6 +44,7 @@ public class ShiftAuditService {
     private final ShiftAuditRecordRepository shiftAuditRecordRepository;
     private final ProductRepository productRepository;
     private final ShiftRepository shiftRepository;
+    private final RawMaterialLedgerService rawMaterialLedgerService;
 
     public List<ShiftAuditItemDto> getAuditItems() {
         List<ShiftAuditItem> list = shiftAuditItemRepository.findAllByActiveTrue();
@@ -123,6 +125,7 @@ public class ShiftAuditService {
             item.setUnit(dto.unit());
             if (dto.stockQuantity() != null) item.setStockQuantity(dto.stockQuantity());
             if (dto.minThreshold() != null) item.setMinThreshold(dto.minThreshold());
+            if (dto.costPerUnit() != null) item.setCostPerUnit(dto.costPerUnit());
             item.setRequiresAudit(dto.requiresAudit());
             item.setActive(dto.active());
         } else {
@@ -131,6 +134,7 @@ public class ShiftAuditService {
             item.setUnit(dto.unit());
             item.setStockQuantity(dto.stockQuantity() != null ? dto.stockQuantity() : 0.0);
             item.setMinThreshold(dto.minThreshold() != null ? dto.minThreshold() : 0.0);
+            item.setCostPerUnit(dto.costPerUnit() != null ? dto.costPerUnit() : 0.0);
             item.setRequiresAudit(dto.requiresAudit());
             item.setActive(true);
         }
@@ -189,6 +193,17 @@ public class ShiftAuditService {
         Shift shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Shift not found: " + shiftId));
 
+        /*
+         * One opening audit per shift. Nothing stopped this being posted twice - a double-tap, a
+         * retried request - and each call appended a fresh set of records. Closing then iterated
+         * every record for the shift, so each duplicate wrote the stock again and the variance
+         * report showed each ingredient two or three times.
+         */
+        if (!shiftAuditRecordRepository.findAllByShiftId(shiftId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "جرد بداية الشيفت متسجل بالفعل لهذه الوردية");
+        }
+
         Map<Long, Double> openingCounts = request.openingCounts();
         List<ShiftAuditRecord> savedRecords = new ArrayList<>();
 
@@ -200,7 +215,10 @@ public class ShiftAuditService {
 
             validateAuditQuantity(openingVal, item);
 
-            // Update item stock to opening count
+            /* The count goes through the ledger, so an opening that disagrees with the books leaves
+               a row saying by how much instead of silently overwriting the balance. */
+            rawMaterialLedgerService.recordAuditCount(item, openingVal,
+                    RawMaterialMovementType.AUDIT_OPENING, shiftId, "جرد بداية الوردية");
             item.setStockQuantity(openingVal);
             shiftAuditItemRepository.save(item);
 
@@ -228,9 +246,17 @@ public class ShiftAuditService {
 
         for (ShiftAuditRecord record : existingRecords) {
             ShiftAuditItem item = record.getAuditItem();
-            Double actualClosing = closingCounts != null && closingCounts.containsKey(item.getId())
-                    ? closingCounts.get(item.getId())
-                    : 0.0;
+            /*
+             * An ingredient the client did not send is one nobody counted - not one that was
+             * counted as empty. Defaulting to 0.0 recorded the whole opening quantity as variance
+             * AND wrote the stock down to zero, so an item deactivated or hidden between the two
+             * audits had its real stock silently destroyed. Skip it instead and leave both the
+             * record and the stock alone; a missing count is a gap in the audit, not a loss.
+             */
+            if (closingCounts == null || !closingCounts.containsKey(item.getId())) {
+                continue;
+            }
+            Double actualClosing = closingCounts.get(item.getId());
 
             validateAuditQuantity(actualClosing, item);
 
@@ -244,7 +270,11 @@ public class ShiftAuditService {
             record.setWastePercentage(Math.max(0.0, wastePct));
             record.setAuditedAt(Instant.now());
 
-            // Update item remaining stock
+            /* Same for the closing count: the gap between expected and counted is the shift's
+               unexplained loss, and it now has a row and a money value rather than living only in
+               the variance column of one report. */
+            rawMaterialLedgerService.recordAuditCount(item, actualClosing,
+                    RawMaterialMovementType.AUDIT_CLOSING, shiftId, "جرد نهاية الوردية");
             item.setStockQuantity(actualClosing);
             shiftAuditItemRepository.save(item);
 
@@ -275,12 +305,34 @@ public class ShiftAuditService {
 
     private final com.example.cafemangmentsystem.order.repository.OrderItemRepository orderItemRepository;
 
+    /**
+     * How many more of this product the ingredients can still produce.
+     *
+     * <p>The hold for unsent tickets is subtracted <em>per ingredient</em>, not per product. The
+     * previous version subtracted only this product's own NEW quantity, so with one tin of beans
+     * behind both the espresso and the latte, ten pending espressos were invisible when the
+     * question was asked about lattes: 250 g at 20 g a cup reported twelve lattes still available
+     * when fifty grams remained, and the order was accepted. Ingredients are what run out.
+     */
     private RecipeAvailability calculateRecipeAvailability(Product product) {
         List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(product.getId());
         if (recipes.isEmpty()) return null;
+        return availabilityFrom(product, recipes, reservedByIngredient());
+    }
 
-        long alreadyReserved = java.util.Optional.ofNullable(
-                orderItemRepository.sumNewQuantityByProductId(product.getId())).orElse(0L);
+    /** Ingredient id to the quantity already committed by NEW tickets across every product. */
+    private Map<Long, Double> reservedByIngredient() {
+        Map<Long, Double> reserved = new HashMap<>();
+        for (Object[] row : productRecipeRepository.sumReservedByIngredient()) {
+            if (row == null || row.length < 2 || row[0] == null) continue;
+            reserved.put(((Number) row[0]).longValue(),
+                    row[1] == null ? 0.0 : ((Number) row[1]).doubleValue());
+        }
+        return reserved;
+    }
+
+    private RecipeAvailability availabilityFrom(Product product, List<ProductRecipe> recipes,
+                                                Map<Long, Double> reserved) {
         long producible = Long.MAX_VALUE;
         String limitingIngredient = null;
 
@@ -292,14 +344,17 @@ public class ShiftAuditService {
             }
             ShiftAuditItem ingredient = recipe.getAuditItem();
             double stock = ingredient.getStockQuantity() == null ? 0.0 : ingredient.getStockQuantity();
-            long ingredientCapacity = Math.max(0L, (long) Math.floor((stock + 0.000001) / perUnit));
+            double held = ingredient.getId() == null ? 0.0 : reserved.getOrDefault(ingredient.getId(), 0.0);
+            double free = Math.max(0.0, stock - held);
+
+            long ingredientCapacity = Math.max(0L, (long) Math.floor((free + 0.000001) / perUnit));
             if (ingredientCapacity < producible) {
                 producible = ingredientCapacity;
                 limitingIngredient = ingredient.getName();
             }
         }
 
-        return new RecipeAvailability(Math.max(0L, producible - alreadyReserved), limitingIngredient);
+        return new RecipeAvailability(Math.max(0L, producible), limitingIngredient);
     }
 
     @Transactional(readOnly = true)
@@ -353,6 +408,18 @@ public class ShiftAuditService {
         List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(product.getId());
         if (recipes.isEmpty()) return false;
 
+        /*
+         * A raw quantity ("I bought 250 g") only names one thing, so it can only be applied to a
+         * recipe with one ingredient. Applied to a latte it used to add 250 to the beans AND 250
+         * to the milk - inventing stock that was never bought. Restocking a shared ingredient
+         * belongs on the ingredient itself, not on one of the drinks that consume it.
+         */
+        if (rawQuantity != null && rawQuantity > 0 && recipes.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "\"" + product.getNameAr() + "\" مكوّن من أكثر من خامة. حدّد الكمية بعدد الوحدات، "
+                            + "أو زوّد رصيد الخامة نفسها من شاشة المخزون.");
+        }
+
         for (ProductRecipe recipe : recipes) {
             ShiftAuditItem ingredient = recipe.getAuditItem();
             if (ingredient == null) continue;
@@ -376,10 +443,16 @@ public class ShiftAuditService {
     @Transactional(readOnly = true)
     public Map<Long, Integer> getRecipeAvailableQuantities(List<Product> products) {
         Map<Long, Integer> result = new HashMap<>();
-        if (products == null) return result;
+        if (products == null || products.isEmpty()) return result;
+
+        // One reservation query for the whole menu, not one per product.
+        Map<Long, Double> reserved = reservedByIngredient();
         for (Product product : products) {
-            Integer available = getRecipeAvailableQuantity(product);
-            if (available != null) result.put(product.getId(), available);
+            if (product == null) continue;
+            List<ProductRecipe> recipes = productRecipeRepository.findAllByProductId(product.getId());
+            if (recipes.isEmpty()) continue;
+            RecipeAvailability availability = availabilityFrom(product, recipes, reserved);
+            result.put(product.getId(), (int) Math.min(Integer.MAX_VALUE, availability.availableToAdd()));
         }
         return result;
     }

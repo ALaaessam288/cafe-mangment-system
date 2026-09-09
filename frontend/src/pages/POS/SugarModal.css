@@ -4,8 +4,8 @@
   padding: 0 !important;
   border-radius: 20px !important;
   overflow: hidden !important;
-  background: linear-gradient(150deg, #1b1714 0%, #110e0c 100%) !important;
-  border: 1px solid rgba(239, 169, 86, 0.25) !important;
+  background: linear-gradient(150deg, #1b1714 0%, #0d0e14 100%) !important;
+  border: 1px solid rgba(169, 156, 255, 0.25) !important;
   box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
   direction: rtl;
   animation: sugarPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -35,7 +35,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--accent, #f59e0b);
+  color: var(--accent, #a99cff);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -52,7 +52,7 @@
 .sugar-modal__price {
   display: inline-block;
   margin-top: 2px;
-  color: #5fd2b7;
+  color: #64d7bd;
   font-size: 13px;
   font-weight: 800;
 }
@@ -71,9 +71,9 @@
 }
 
 .sugar-modal__close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(229, 98, 115, 0.15);
+  color: #e56273;
+  border-color: rgba(229, 98, 115, 0.3);
 }
 
 .sugar-modal__body {
@@ -90,7 +90,7 @@
 .sugar-modal__section-head span {
   font-size: 13px;
   font-weight: 800;
-  color: #e5d8cc;
+  color: #d2cfdd;
 }
 
 .sugar-modal__section-head small {
@@ -152,16 +152,16 @@
 
 .sugar-btn:hover {
   transform: translateY(-2px);
-  border-color: rgba(239, 169, 86, 0.4);
-  background: rgba(239, 169, 86, 0.1);
+  border-color: rgba(169, 156, 255, 0.4);
+  background: rgba(169, 156, 255, 0.1);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
-.sugar-btn--neutral:hover { border-color: #94a3b8; background: rgba(148, 163, 184, 0.12); }
-.sugar-btn--amber:hover { border-color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
-.sugar-btn--green:hover { border-color: #10b981; background: rgba(16, 185, 129, 0.15); }
-.sugar-btn--gold:hover { border-color: #eab308; background: rgba(234, 179, 8, 0.15); }
-.sugar-btn--orange:hover { border-color: #f97316; background: rgba(249, 115, 22, 0.15); }
+.sugar-btn--neutral:hover { border-color: #9995a8; background: rgba(218, 211, 255, 0.12); }
+.sugar-btn--amber:hover { border-color: #a99cff; background: rgba(169, 156, 255, 0.12); }
+.sugar-btn--green:hover { border-color: #64d7bd; background: rgba(100, 215, 189, 0.15); }
+.sugar-btn--gold:hover { border-color: #c9c1ff; background: rgba(234, 179, 8, 0.15); }
+.sugar-btn--orange:hover { border-color: #a99cff; background: rgba(249, 115, 22, 0.15); }
 
 .sugar-tags {
   display: flex;
@@ -177,7 +177,7 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
-  color: #b3a294;
+  color: #9995a8;
   font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
@@ -186,16 +186,16 @@
 
 .sugar-tag:hover {
   color: #fff;
-  border-color: rgba(239, 169, 86, 0.3);
-  background: rgba(239, 169, 86, 0.08);
+  border-color: rgba(169, 156, 255, 0.3);
+  background: rgba(169, 156, 255, 0.08);
 }
 
 .sugar-tag.is-active {
-  color: #12100e;
-  background: #5fd2b7;
-  border-color: #5fd2b7;
+  color: #0d0e14;
+  background: #64d7bd;
+  border-color: #64d7bd;
   font-weight: 850;
-  box-shadow: 0 0 14px rgba(95, 210, 183, 0.35);
+  box-shadow: 0 0 14px rgba(100, 215, 189, 0.35);
 }
 
 .sugar-modal__footer-row {
@@ -252,7 +252,7 @@
 }
 
 .sugar-modal__custom-input:focus {
-  border-color: var(--accent, #f59e0b);
+  border-color: var(--accent, #a99cff);
 }
 
 .sugar-modal__actions {

@@ -171,7 +171,7 @@ export default function DiscountServiceModal({
 
             {/* Quick Presets Grid */}
             <div className="discount-modal__section">
-              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#94a3b8' }}>
+              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#9995a8' }}>
                 اختيار سريع:
               </span>
               <div className="discount-modal__presets-grid">
@@ -196,7 +196,7 @@ export default function DiscountServiceModal({
 
             {/* Custom Input */}
             <div className="discount-modal__section">
-              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#94a3b8' }}>
+              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#9995a8' }}>
                 القيمة:
               </span>
               <div className="discount-modal__input-wrapper">
@@ -218,7 +218,7 @@ export default function DiscountServiceModal({
 
             {/* Discount Reason */}
             <div className="discount-modal__section">
-              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#94a3b8' }}>
+              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#9995a8' }}>
                 السبب:
               </span>
               <div className="discount-modal__reasons-flex">
@@ -265,7 +265,7 @@ export default function DiscountServiceModal({
 
             {/* Quick Presets Grid */}
             <div className="discount-modal__section">
-              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#94a3b8' }}>
+              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#9995a8' }}>
                 اختيار سريع:
               </span>
               <div className="discount-modal__presets-grid">
@@ -290,7 +290,7 @@ export default function DiscountServiceModal({
 
             {/* Custom Input */}
             <div className="discount-modal__section">
-              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#94a3b8' }}>
+              <span className="discount-modal__label" style={{ fontSize: '10px', color: '#9995a8' }}>
                 القيمة:
               </span>
               <div className="discount-modal__input-wrapper">
@@ -316,7 +316,7 @@ export default function DiscountServiceModal({
         <div className="discount-modal__summary-card">
           <div className="discount-modal__summary-title">
             <span>المعاينة الفورية</span>
-            <Info size={11} color="#64748b" />
+            <Info size={11} color="#777386" />
           </div>
 
           <div className="discount-modal__summary-row">

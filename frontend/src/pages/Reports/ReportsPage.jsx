@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { 
   Calendar, DollarSign, Clock, RefreshCw, Printer, Award, 
   CreditCard, ShoppingBag, Trash2, Download,
   TrendingUp, TrendingDown, Layers, Search,
-  FileText, BarChart2, Activity
+  FileText, BarChart2, Activity, AlertCircle
 } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { reportsApi } from '../../api/reportsApi';
@@ -128,6 +128,24 @@ export default function ReportsPage() {
     return `من ${startDate} إلى ${endDate}`;
   }, [filterMode, selectedFilterShiftId, shifts, datePreset, startDate, endDate]);
 
+  /* One place decides the window every panel on this screen reports on. It used to be copied
+     into three loaders, and one of them (analytics) quietly left the shift out. */
+  const buildParams = useCallback(() => {
+    const params = {};
+    if (filterMode === 'SHIFT') {
+      if (selectedFilterShiftId) params.shiftId = selectedFilterShiftId;
+    } else {
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+    }
+    return params;
+  }, [filterMode, selectedFilterShiftId, startDate, endDate]);
+
+  /* The simulator's default raw material is seeded once from whatever the report returns.
+     Keeping `simulatorRawId` in the loader's dependency list made the loader seed it, change its
+     own identity, and run the whole four-endpoint fetch a second time on every filter change. */
+  const simulatorSeeded = useRef(false);
+
   // Load Main Reports Data
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -137,26 +155,17 @@ export default function ReportsPage() {
       setShifts(sortedShifts);
       
       if (canViewReports) {
-        let params = {};
-        if (filterMode === 'SHIFT' && selectedFilterShiftId) {
-          params.shiftId = selectedFilterShiftId;
-        } else if (filterMode === 'DATES') {
-          if (startDate) params.startDate = startDate;
-          if (endDate) params.endDate = endDate;
-        }
+        const params = buildParams();
 
         const finData = await reportsApi.getFinancialReport(params);
         setFinancialData(finData);
-
-        // Load payroll data
-        const pData = await employeesApi.getPayrollSummary(payrollStartDate, payrollEndDate);
-        setPayrollData(pData);
 
         // Load recipe profitability data
         try {
           const recData = await reportsApi.getRecipeProfitability(params);
           setRecipeData(recData);
-          if (recData?.rawMaterials?.length > 0 && !simulatorRawId) {
+          if (recData?.rawMaterials?.length > 0 && !simulatorSeeded.current) {
+            simulatorSeeded.current = true;
             setSimulatorRawId(String(recData.rawMaterials[0].id));
             if (recData.rawMaterials[0].costPer1000Units > 0) {
               setSimulatorCostPerKg(String(recData.rawMaterials[0].costPer1000Units));
@@ -171,22 +180,29 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, canViewReports, filterMode, selectedFilterShiftId, startDate, endDate, payrollStartDate, payrollEndDate, simulatorRawId]);
+  }, [toast, canViewReports, buildParams]);
+
+  /* Payroll has its own date range and its own controls. It used to hang off the main loader,
+     so nudging the payroll dates re-fetched the shifts list, the financial report and the recipe
+     costing along with it - three requests to answer a question none of them were asked. */
+  const loadPayroll = useCallback(async () => {
+    if (!canViewReports) return;
+    try {
+      const pData = await employeesApi.getPayrollSummary(payrollStartDate, payrollEndDate);
+      setPayrollData(pData);
+    } catch (err) {
+      console.error('Failed to load payroll summary', err);
+    }
+  }, [canViewReports, payrollStartDate, payrollEndDate]);
 
   const loadRecipeData = useCallback(async () => {
     if (!canViewReports) return;
     setRecipeLoading(true);
     try {
-      let params = {};
-      if (filterMode === 'SHIFT' && selectedFilterShiftId) {
-        params.shiftId = selectedFilterShiftId;
-      } else if (filterMode === 'DATES') {
-        if (startDate) params.startDate = startDate;
-        if (endDate) params.endDate = endDate;
-      }
-      const data = await reportsApi.getRecipeProfitability(params);
+      const data = await reportsApi.getRecipeProfitability(buildParams());
       setRecipeData(data);
-      if (data?.rawMaterials?.length > 0 && !simulatorRawId) {
+      if (data?.rawMaterials?.length > 0 && !simulatorSeeded.current) {
+        simulatorSeeded.current = true;
         setSimulatorRawId(String(data.rawMaterials[0].id));
       }
     } catch (err) {
@@ -194,17 +210,14 @@ export default function ReportsPage() {
     } finally {
       setRecipeLoading(false);
     }
-  }, [canViewReports, filterMode, selectedFilterShiftId, startDate, endDate, simulatorRawId, toast]);
+  }, [canViewReports, buildParams, toast]);
 
   const loadAnalytics = useCallback(async () => {
     if (!canViewReports) return;
     setAnalyticsLoading(true);
     try {
-      let params = {};
-      if (filterMode === 'DATES') {
-        if (startDate) params.startDate = startDate;
-        if (endDate) params.endDate = endDate;
-      }
+      // Now shift-aware: filtering by shift no longer leaves these two panels on all-time data.
+      const params = buildParams();
       const [bs, hs] = await Promise.all([
         reportsApi.getBestSellers(params),
         reportsApi.getHourlySales(params)
@@ -216,11 +229,26 @@ export default function ReportsPage() {
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [canViewReports, filterMode, startDate, endDate, toast]);
+  }, [canViewReports, buildParams, toast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    loadPayroll();
+  }, [loadPayroll]);
+
+  /* The analytics and recipe tabs were loaded once, on the click that opened them. Change the
+     date range afterwards and they kept showing the old period's numbers under the new period's
+     label until someone happened to press تحديث. */
+  useEffect(() => {
+    if (activeTab === 'BESTSELLERS' || activeTab === 'HOURLY') loadAnalytics();
+  }, [activeTab, loadAnalytics]);
+
+  useEffect(() => {
+    if (activeTab === 'RECIPES') loadRecipeData();
+  }, [activeTab, loadRecipeData]);
 
   // Print Periodic Financial Report (80mm / A4)
   const handlePrintPeriodicReport = () => {
@@ -269,12 +297,12 @@ export default function ReportsPage() {
         <style>
           body { font-family: 'Segoe UI', Arial, Tahoma, sans-serif; direction: rtl; }
           table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-family: 'Segoe UI', Tahoma, sans-serif; }
-          th { background-color: #1e293b; color: #f59e0b; padding: 12px; border: 1px solid #334155; font-size: 13px; text-align: center; font-weight: bold; }
-          td { padding: 10px 14px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center; }
-          .header-banner { background-color: #0f172a; color: #f59e0b; font-size: 18px; font-weight: bold; padding: 16px; text-align: center; border: 2px solid #1e293b; }
+          th { background-color: #20212d; color: #a99cff; padding: 12px; border: 1px solid #45465a; font-size: 13px; text-align: center; font-weight: bold; }
+          td { padding: 10px 14px; border: 1px solid #d2cfdd; font-size: 12px; text-align: center; }
+          .header-banner { background-color: #11131a; color: #a99cff; font-size: 18px; font-weight: bold; padding: 16px; text-align: center; border: 2px solid #20212d; }
           .section-hdr { background-color: #0284c7; color: #ffffff; font-size: 14px; font-weight: bold; padding: 10px; text-align: right; }
-          .kpi-row { background-color: #f8fafc; font-weight: bold; }
-          .highlight-green { background-color: #10b981; color: #ffffff; font-weight: bold; font-size: 14px; }
+          .kpi-row { background-color: #f8f6ff; font-weight: bold; }
+          .highlight-green { background-color: #64d7bd; color: #ffffff; font-weight: bold; font-size: 14px; }
           .number-cell { font-family: 'Courier New', monospace; font-weight: bold; direction: ltr; }
         </style>
       </head>
@@ -298,8 +326,8 @@ export default function ReportsPage() {
             <tr><td style="text-align:right;">إيرادات المطعم (المأكولات)</td><td class="number-cell">${(financialData.totalRestaurantRevenue || 0).toFixed(2)}</td></tr>
             <tr><td style="text-align:right;">صافي مبيعات السناكس والحلويات</td><td class="number-cell">${(financialData.totalSnacksNet || 0).toFixed(2)}</td></tr>
             <tr class="kpi-row"><td style="text-align:right;"><b>إجمالي الإيرادات الكلية للمنشأة</b></td><td class="number-cell"><b>${totalRev.toFixed(2)}</b></td></tr>
-            <tr><td style="text-align:right;">إجمالي المصروفات والنثريات (-)</td><td class="number-cell" style="color:#ef4444;">-${((financialData.totalCafeExpenses || 0) + (financialData.totalRestaurantExpenses || 0) + (financialData.totalGeneralExpenses || 0)).toFixed(2)}</td></tr>
-            <tr><td style="text-align:right;">الرواتب والسلف المسحوبة (-)</td><td class="number-cell" style="color:#ef4444;">-${(financialData.totalWages || 0).toFixed(2)}</td></tr>
+            <tr><td style="text-align:right;">إجمالي المصروفات والنثريات (-)</td><td class="number-cell" style="color:#e56273;">-${((financialData.totalCafeExpenses || 0) + (financialData.totalRestaurantExpenses || 0) + (financialData.totalGeneralExpenses || 0)).toFixed(2)}</td></tr>
+            <tr><td style="text-align:right;">الرواتب والسلف المسحوبة (-)</td><td class="number-cell" style="color:#e56273;">-${(financialData.totalWages || 0).toFixed(2)}</td></tr>
             <tr class="highlight-green"><td style="text-align:right;"><b>💰 صافي الربح المحقق للفترة</b></td><td class="number-cell"><b>${(financialData.netProfit || 0).toFixed(2)} ج.م</b></td></tr>
           </tbody>
         </table>
@@ -437,8 +465,8 @@ export default function ReportsPage() {
   };
   const PAYMENT_COLORS = {
     CASH: 'var(--success)',
-    INSTAPAY: '#a78bfa',
-    WALLET: '#60a5fa'
+    INSTAPAY: '#a99cff',
+    WALLET: '#aaa1ff'
   };
 
   return (
@@ -500,21 +528,21 @@ export default function ReportsPage() {
           </button>
           <button
             className={`reports-tab-btn ${activeTab === 'BESTSELLERS' ? 'reports-tab-btn--active' : ''}`}
-            onClick={() => { sounds.playTap(); setActiveTab('BESTSELLERS'); loadAnalytics(); }}
+            onClick={() => { sounds.playTap(); setActiveTab('BESTSELLERS'); }}
           >
             <span className="reports-tab-btn__icon"><BarChart2 size={16} /></span>
             <span><strong>الأصناف</strong><small>الأكثر مبيعاً وتأثيراً</small></span>
           </button>
           <button
             className={`reports-tab-btn ${activeTab === 'HOURLY' ? 'reports-tab-btn--active' : ''}`}
-            onClick={() => { sounds.playTap(); setActiveTab('HOURLY'); loadAnalytics(); }}
+            onClick={() => { sounds.playTap(); setActiveTab('HOURLY'); }}
           >
             <span className="reports-tab-btn__icon"><Activity size={16} /></span>
             <span><strong>ساعات الذروة</strong><small>توزيع الحركة بالساعة</small></span>
           </button>
           <button
             className={`reports-tab-btn ${activeTab === 'RECIPES' ? 'reports-tab-btn--active' : ''}`}
-            onClick={() => { sounds.playTap(); setActiveTab('RECIPES'); loadRecipeData(); }}
+            onClick={() => { sounds.playTap(); setActiveTab('RECIPES'); }}
           >
             <span className="reports-tab-btn__icon"><Layers size={16} /></span>
             <span><strong>ربحية الوصفات</strong><small>التكلفة والهامش والخامات</small></span>
@@ -522,8 +550,12 @@ export default function ReportsPage() {
         </nav>
       )}
 
-      {/* Advanced Date Range & Filter Bar */}
-      {canViewReports && activeTab === 'FINANCIAL' && (
+      {/* Advanced Date Range & Filter Bar.
+          Every tab except الرواتب reports on this same window, but the panel used to render only
+          on الأداء المالي. On الأصناف / ساعات الذروة / ربحية الوصفات the reader saw numbers with
+          nothing on screen saying which period they covered, and no way to change it without
+          switching tabs and back. */}
+      {canViewReports && activeTab !== 'PAYROLL' && (
         <div className="reports-filter-panel animate-fade-in-up">
           
           {/* Top Filter Controls: Mode Switch & Presets */}
@@ -685,6 +717,69 @@ export default function ReportsPage() {
         </section>
       )}
 
+      {/* Raw-material costing, from the stock ledger.
+          Kept out of net profit on purpose: a purchase is usually ALSO entered on the expenses
+          screen as a MATERIALS expense, which already reduces profit. Showing both lets the two
+          records be reconciled instead of quietly disagreeing. */}
+      {canViewReports && financialData && activeTab === 'FINANCIAL' && (
+        <section className="reports-cogs" aria-label="تكلفة الخامات">
+          <header className="reports-cogs__head">
+            <h3><Layers size={18} /> تكلفة الخامات</h3>
+            <span className="reports-analytics__period">{periodLabel}</span>
+          </header>
+
+          <div className="reports-cogs__grid">
+            <div className="reports-cogs__metric is-primary">
+              <span>تكلفة الخامات المستهلكة</span>
+              <strong>{formatCurrency(financialData.costOfGoodsSold)}</strong>
+              <small>قيمة اللي اتصرف فعلاً على المبيعات — مش اللي اتشرى</small>
+            </div>
+            <div className="reports-cogs__metric">
+              <span>مشتريات الخامات</span>
+              <strong>{formatCurrency(financialData.rawMaterialPurchases)}</strong>
+              <small>توريدات مسجلة في سجل المخزون</small>
+            </div>
+            <div className="reports-cogs__metric is-loss">
+              <span>قيمة الهالك</span>
+              <strong>{formatCurrency(financialData.rawMaterialWasteValue)}</strong>
+              <small>مقيَّم بتكلفة كل خامة</small>
+            </div>
+            <div className="reports-cogs__metric">
+              <span>هامش المشروبات والأصناف</span>
+              <strong>
+                {totalGrossRevenue > 0
+                  ? `${Math.round(((totalGrossRevenue - Number(financialData.costOfGoodsSold || 0)) / totalGrossRevenue) * 100)}%`
+                  : '—'}
+              </strong>
+              <small>الإيراد ناقص تكلفة الخامات</small>
+            </div>
+          </div>
+
+          {/* The reconciliation. Two screens record the same purchase and nothing compared them
+              until now, so a gap here is worth acting on rather than averaging away. */}
+          {(() => {
+            const ledger = Number(financialData.rawMaterialPurchases || 0);
+            const logged = Number(financialData.materialsExpensesLogged || 0);
+            const gap = Math.abs(ledger - logged);
+            const material = gap > 1 && (ledger > 0 || logged > 0);
+            if (!material) return null;
+            return (
+              <div className="reports-cogs__reconcile">
+                <AlertCircle size={15} />
+                <span>
+                  سجل المخزون بيقول <strong>{formatCurrency(ledger)}</strong> مشتريات،
+                  وشاشة المصروفات مسجلة <strong>{formatCurrency(logged)}</strong> تحت بند الخامات
+                  — فرق <strong>{formatCurrency(gap)}</strong>.
+                  {ledger > logged
+                    ? ' في توريدات اتسجلت في المخزون ومااتقيدتش كمصروف.'
+                    : ' في مصروفات خامات مالهاش توريد مقابل في المخزون.'}
+                </span>
+              </div>
+            );
+          })()}
+        </section>
+      )}
+
       {/* Main Financial Report Content */}
       {canViewReports && financialData && activeTab === 'FINANCIAL' && (
         <>
@@ -720,14 +815,14 @@ export default function ReportsPage() {
               </div>
               <div className="report-card__content">
                 <div className="report-card__label" style={{ color: '#c084fc' }}>صافي السناكس والحلويات</div>
-                <div className="report-card__value" style={{ color: '#a855f7' }}>
+                <div className="report-card__value" style={{ color: '#8e82eb' }}>
                   {formatCurrency(financialData.totalSnacksNet || 0)}
                 </div>
               </div>
             </div>
 
             <div className="report-card">
-              <div className="report-card__icon" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)' }}>
+              <div className="report-card__icon" style={{ backgroundColor: 'rgba(229, 98, 115, 0.15)', color: 'var(--danger)' }}>
                 <DollarSign size={20} />
               </div>
               <div className="report-card__content">
@@ -738,8 +833,8 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="report-card" style={{ background: financialData.netProfit >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)', borderColor: financialData.netProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-              <div className="report-card__icon" style={{ backgroundColor: financialData.netProfit >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: financialData.netProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+            <div className="report-card" style={{ background: financialData.netProfit >= 0 ? 'rgba(100, 215, 189, 0.12)' : 'rgba(229, 98, 115, 0.12)', borderColor: financialData.netProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+              <div className="report-card__icon" style={{ backgroundColor: financialData.netProfit >= 0 ? 'rgba(100, 215, 189, 0.2)' : 'rgba(229, 98, 115, 0.2)', color: financialData.netProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                 {financialData.netProfit >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
               </div>
               <div className="report-card__content">
@@ -771,7 +866,7 @@ export default function ReportsPage() {
                 <span className="report-mini-card__label">الرواتب والأجور</span>
                 <strong className="report-mini-card__val" style={{ color: 'var(--danger)' }}>-{formatCurrency(financialData.totalWages)}</strong>
               </div>
-              <div className="report-mini-card" style={{ background: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+              <div className="report-mini-card" style={{ background: 'rgba(229, 98, 115, 0.05)', borderColor: 'rgba(229, 98, 115, 0.2)' }}>
                 <span className="report-mini-card__label">مديونيات مستحقة ({financialData.outstandingDebtsCount || 0})</span>
                 <strong className="report-mini-card__val" style={{ color: 'var(--danger)' }}>-{formatCurrency(financialData.totalOutstandingDebts)}</strong>
               </div>
@@ -799,7 +894,7 @@ export default function ReportsPage() {
             <div className="section-card" style={{ margin: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                 <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                  <Award size={18} style={{ color: 'var(--accent)' }} /> تفاصيل مبيعات المنتجات ({filteredProducts.length})
+                  <Award size={18} className="rp-accent" /> تفاصيل مبيعات المنتجات ({filteredProducts.length})
                 </h2>
                 <div className="table-search-box">
                   <Search size={14} className="table-search-icon" />
@@ -832,7 +927,7 @@ export default function ReportsPage() {
                           <td style={{ width: '40px', fontWeight: 'bold', color: idx < 3 ? 'var(--accent)' : 'var(--text-muted)' }}>
                             #{idx + 1}
                           </td>
-                          <td style={{ fontWeight: 600 }}>{prod.name}</td>
+                          <td className="rp-semi">{prod.name}</td>
                           <td>
                             <span className="badge badge--neutral">{prod.quantity} طلب</span>
                           </td>
@@ -853,7 +948,7 @@ export default function ReportsPage() {
               {/* Payment Methods */}
               <div className="section-card" style={{ margin: 0 }}>
                 <h2 className="section-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CreditCard size={18} style={{ color: 'var(--success)' }} /> تقسيم طرق التحصيل والدفع
+                  <CreditCard size={18} className="rp-pos" /> تقسيم طرق التحصيل والدفع
                 </h2>
                 <div className="payment-methods-list">
                   {financialData.paymentMethods?.map((pm) => (
@@ -930,7 +1025,7 @@ export default function ReportsPage() {
                       <td>{formatDateTime(shift.openedAt)}</td>
                       <td>{shift.closedAt ? formatDateTime(shift.closedAt) : '—'}</td>
                       <td>{shift.username || '—'}</td>
-                      <td style={{ color: (shift.snacksNet || 0) > 0 ? '#a855f7' : 'var(--text-muted)', fontWeight: 600 }}>
+                      <td style={{ color: (shift.snacksNet || 0) > 0 ? '#8e82eb' : 'var(--text-muted)', fontWeight: 600 }}>
                         {formatCurrency(shift.snacksNet || 0)}
                       </td>
                       <td>
@@ -1013,11 +1108,11 @@ export default function ReportsPage() {
                 <tbody>
                   {payrollData.map((emp) => (
                     <tr key={emp.employeeId}>
-                      <td style={{ fontWeight: 'bold' }}>{emp.employeeName}</td>
+                      <td className="rp-bold">{emp.employeeName}</td>
                       <td>{formatCurrency(emp.baseWeeklySalary)}</td>
-                      <td style={{ color: 'var(--success)', fontWeight: 600 }}>+{formatCurrency(emp.totalBonuses)}</td>
-                      <td style={{ color: 'var(--danger)', fontWeight: 600 }}>-{formatCurrency(emp.totalDeductions)}</td>
-                      <td style={{ color: 'var(--danger)', fontWeight: 600 }}>-{formatCurrency(emp.totalAdvances)}</td>
+                      <td className="rp-pos rp-semi">+{formatCurrency(emp.totalBonuses)}</td>
+                      <td className="rp-neg rp-semi">-{formatCurrency(emp.totalDeductions)}</td>
+                      <td className="rp-neg rp-semi">-{formatCurrency(emp.totalAdvances)}</td>
                       <td style={{ fontWeight: 'bold', color: emp.netPayable < 0 ? 'var(--danger)' : 'var(--success)' }}>
                         {formatCurrency(emp.netPayable)}
                       </td>
@@ -1031,9 +1126,9 @@ export default function ReportsPage() {
                   <tr style={{ background: 'var(--bg-tertiary)', fontWeight: 'bold' }}>
                     <td>الإجمالي العام</td>
                     <td>{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.baseWeeklySalary, 0))}</td>
-                    <td style={{ color: 'var(--success)' }}>+{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.totalBonuses, 0))}</td>
-                    <td style={{ color: 'var(--danger)' }}>-{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.totalDeductions, 0))}</td>
-                    <td style={{ color: 'var(--danger)' }}>-{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.totalAdvances, 0))}</td>
+                    <td className="rp-pos">+{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.totalBonuses, 0))}</td>
+                    <td className="rp-neg">-{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.totalDeductions, 0))}</td>
+                    <td className="rp-neg">-{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.totalAdvances, 0))}</td>
                     <td style={{ color: 'var(--success)', fontSize: '15px' }}>{formatCurrency(payrollData.reduce((acc, curr) => acc + curr.netPayable, 0))}</td>
                     <td></td>
                   </tr>
@@ -1058,7 +1153,7 @@ export default function ReportsPage() {
             {/* Modal Header */}
             <div className="shift-summary__header" style={{ paddingBottom: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>
               <div className="shift-summary__row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontWeight: 'bold' }}>رقم الشيفت:</span>
+                <span className="rp-bold">رقم الشيفت:</span>
                 <span className="data-table__mono" style={{ fontWeight: 'bold', color: 'var(--accent)' }}>#{String(selectedShift?.id).slice(-6)}</span>
               </div>
               <div className="shift-summary__row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -1086,7 +1181,7 @@ export default function ReportsPage() {
             {/* Financial Details */}
             <h4 style={{ margin: '1.25rem 0 0.75rem', color: 'var(--text-primary)', borderRight: '3px solid var(--accent)', paddingRight: '8px', fontSize: '14px' }}>مبيعات الشيفت وإيراداته</h4>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            <div className="rp-pair">
               <div style={{ background: 'var(--bg-tertiary)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>إجمالي الإيرادات (كل الطرق)</div>
                 <strong style={{ fontSize: '16px', color: 'var(--accent)' }}>{formatCurrency(shiftReport?.totalRevenue || 0)}</strong>
@@ -1098,18 +1193,18 @@ export default function ReportsPage() {
             </div>
 
             {/* Food vs Drinks Breakdown Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            <div className="rp-pair">
               <div style={{ background: 'rgba(249, 115, 22, 0.1)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(249, 115, 22, 0.25)' }}>
                 <div style={{ fontSize: '11px', color: '#fb923c', marginBottom: '4px', fontWeight: '600' }}>
                   🍔 مبيعات المأكولات (المطعم)
                 </div>
-                <strong style={{ fontSize: '16px', color: '#f97316' }}>{formatCurrency(shiftReport?.foodRevenue || 0)}</strong>
+                <strong style={{ fontSize: '16px', color: '#a99cff' }}>{formatCurrency(shiftReport?.foodRevenue || 0)}</strong>
               </div>
-              <div style={{ background: 'rgba(6, 182, 212, 0.1)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(6, 182, 212, 0.25)' }}>
-                <div style={{ fontSize: '11px', color: '#38bdf8', marginBottom: '4px', fontWeight: '600' }}>
+              <div style={{ background: 'rgba(100, 215, 189, 0.1)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(100, 215, 189, 0.25)' }}>
+                <div style={{ fontSize: '11px', color: '#8e82eb', marginBottom: '4px', fontWeight: '600' }}>
                   ☕ مبيعات المشروبات (الكافيه)
                 </div>
-                <strong style={{ fontSize: '16px', color: '#06b6d4' }}>{formatCurrency(shiftReport?.buffetRevenue || 0)}</strong>
+                <strong style={{ fontSize: '16px', color: '#64d7bd' }}>{formatCurrency(shiftReport?.buffetRevenue || 0)}</strong>
               </div>
             </div>
 
@@ -1119,7 +1214,7 @@ export default function ReportsPage() {
                 <div style={{ fontSize: '12px', color: '#c084fc', fontWeight: '700' }}>
                   🍿 صافي السناكس اليومي
                 </div>
-                <strong style={{ fontSize: '16px', color: '#a855f7' }}>
+                <strong style={{ fontSize: '16px', color: '#8e82eb' }}>
                   {formatCurrency(shiftReport?.snacksNet || selectedShift?.snacksNet || 0)}
                 </strong>
               </div>
@@ -1142,15 +1237,15 @@ export default function ReportsPage() {
 
             <h4 style={{ margin: '1rem 0 0.5rem', color: 'var(--text-primary)', fontSize: '12px' }}>تفاصيل مبيعات طرق الدفع</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--bg-tertiary)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div className="rp-row">
                 <span>💵 نقدي (كاش):</span>
                 <strong>{formatCurrency(shiftReport?.totalCash || 0)}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div className="rp-row">
                 <span>📱 انستاباي:</span>
                 <strong>{formatCurrency(shiftReport?.totalInstapay || 0)}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div className="rp-row">
                 <span>👛 محفظة إلكترونية:</span>
                 <strong>{formatCurrency(shiftReport?.totalWallet || 0)}</strong>
               </div>
@@ -1161,16 +1256,16 @@ export default function ReportsPage() {
               <>
                 <h4 style={{ margin: '1.25rem 0 0.5rem', color: 'var(--text-primary)', borderRight: '3px solid var(--accent)', paddingRight: '8px', fontSize: '13px' }}>جرد الدرج وتصفية النقدي</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>النقدي المتوقع بالدرج:</span>
+                  <div className="rp-row rp-row--plain">
+                    <span className="rp-dim">النقدي المتوقع بالدرج:</span>
                     <strong>{formatCurrency(shiftReport?.shift?.expectedCash || selectedShift?.expectedCash || 0)}</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>النقدي الفعلي المحصي:</span>
+                  <div className="rp-row rp-row--plain">
+                    <span className="rp-dim">النقدي الفعلي المحصي:</span>
                     <strong>{formatCurrency(shiftReport?.shift?.countedCash || selectedShift?.countedCash || 0)}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '6px', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 'bold' }}>الفارق (عجز / زيادة):</span>
+                    <span className="rp-bold">الفارق (عجز / زيادة):</span>
                     <Badge variant={(shiftReport?.shift?.variance || selectedShift?.variance || 0) < 0 ? 'danger' : (shiftReport?.shift?.variance || selectedShift?.variance || 0) > 0 ? 'success' : 'neutral'}>
                       {formatCurrency(shiftReport?.shift?.variance || selectedShift?.variance || 0)}
                     </Badge>
@@ -1207,10 +1302,11 @@ export default function ReportsPage() {
 
       {/* ── BEST SELLERS TAB ── */}
       {canViewReports && activeTab === 'BESTSELLERS' && (
-        <div className="animate-fade-in-up" style={{ padding: '0 1rem 1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="animate-fade-in-up reports-analytics">
+          <div className="reports-analytics__head">
+            <h3 className="reports-analytics__title">
               <BarChart2 size={20} /> الأصناف الأكثر مبيعاً
+              <span className="reports-analytics__period">{periodLabel}</span>
             </h3>
             <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={14} />} onClick={loadAnalytics} loading={analyticsLoading}>
               تحديث
@@ -1245,13 +1341,13 @@ export default function ReportsPage() {
                           <td style={{ color: idx < 3 ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: idx < 3 ? 'bold' : 'normal' }}>
                             {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                           </td>
-                          <td style={{ fontWeight: 'bold' }}>{row.productName}</td>
+                          <td className="rp-bold">{row.productName}</td>
                           <td className="data-table__number">{row.totalQuantity.toLocaleString()}</td>
                           <td className="data-table__number" style={{ color: 'var(--success)' }}>
                             {formatCurrency(row.totalRevenue)}
                           </td>
                           <td style={{ minWidth: '160px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="rp-inline">
                               <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
                                 <div style={{ width: `${barW}%`, height: '100%', background: 'var(--accent)', borderRadius: '4px', transition: 'width 0.4s ease' }} />
                               </div>
@@ -1271,11 +1367,11 @@ export default function ReportsPage() {
 
       {/* ── HOURLY HEATMAP TAB ── */}
       {canViewReports && activeTab === 'HOURLY' && (
-        <div className="animate-fade-in-up" style={{ padding: '0 1rem 1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="animate-fade-in-up reports-analytics">
+          <div className="reports-analytics__head">
+            <h3 className="reports-analytics__title">
               <Activity size={20} /> خريطة المبيعات بالساعة
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(توقيت القاهرة UTC+2)</span>
+              <span className="reports-analytics__period">{periodLabel} · توقيت القاهرة UTC+2</span>
             </h3>
             <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={14} />} onClick={loadAnalytics} loading={analyticsLoading}>
               تحديث
@@ -1315,7 +1411,7 @@ export default function ReportsPage() {
                             <div style={{
                               width: '100%',
                               height: `${heightPct}%`,
-                              background: heightPct > 70 ? 'var(--danger)' : heightPct > 40 ? 'var(--accent)' : heightPct > 10 ? '#3b82f6' : 'var(--bg-tertiary, #333)',
+                              background: heightPct > 70 ? 'var(--danger)' : heightPct > 40 ? 'var(--accent)' : heightPct > 10 ? '#8e82eb' : 'var(--bg-tertiary, #333)',
                               borderRadius: '4px 4px 0 0',
                               transition: 'height 0.4s ease'
                             }} />
@@ -1341,7 +1437,7 @@ export default function ReportsPage() {
                           const h12 = s.hour === 0 ? 12 : s.hour > 12 ? s.hour - 12 : s.hour;
                           return (
                             <tr key={s.hour}>
-                              <td style={{ fontWeight: 'bold' }}>{`${h12}:00 ${ampm}`}</td>
+                              <td className="rp-bold">{`${h12}:00 ${ampm}`}</td>
                               <td className="data-table__number">{s.orderCount}</td>
                               <td className="data-table__number" style={{ color: 'var(--success)' }}>{formatCurrency(s.revenue)}</td>
                             </tr>
@@ -1391,35 +1487,35 @@ export default function ReportsPage() {
               {/* Top 4 KPI Metrics */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '1.5rem' }}>
                 <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>💰 مبيعات الوصفات في الفترة</div>
+                  <div className="rp-label">💰 مبيعات الوصفات في الفترة</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--accent)' }}>
                     {formatCurrency(recipeData.totalRecipeRevenue || 0)}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>إجمالي الإيراد من الأصناف المعتمدة على خامات</div>
+                  <div className="rp-hint">إجمالي الإيراد من الأصناف المعتمدة على خامات</div>
                 </div>
 
                 <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>📦 تكلفة الخامات المستهلكة</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#ef4444' }}>
+                  <div className="rp-label">📦 تكلفة الخامات المستهلكة</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#e56273' }}>
                     {formatCurrency(recipeData.totalRecipeCost || 0)}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>تكلفة المواد الخام المنصرفة في المبيعات</div>
+                  <div className="rp-hint">تكلفة المواد الخام المنصرفة في المبيعات</div>
                 </div>
 
                 <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>🚀 صافي أرباح الوصفات المحققة</div>
+                  <div className="rp-label">🚀 صافي أرباح الوصفات المحققة</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--success)' }}>
                     {formatCurrency(recipeData.totalRecipeGrossProfit || 0)}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>الأرباح المتبقية بعد خصم تكلفة الخامات</div>
+                  <div className="rp-hint">الأرباح المتبقية بعد خصم تكلفة الخامات</div>
                 </div>
 
                 <div className="report-kpi-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>🎯 متوسط هامش الربح الإجمالي</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#38bdf8' }}>
+                  <div className="rp-label">🎯 متوسط هامش الربح الإجمالي</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#8e82eb' }}>
                     {(recipeData.averageProfitMarginPercent || 0).toFixed(1)}%
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>نسبة العائد الصافي من إجمالي سعر البيع</div>
+                  <div className="rp-hint">نسبة العائد الصافي من إجمالي سعر البيع</div>
                 </div>
               </div>
 
@@ -1435,8 +1531,8 @@ export default function ReportsPage() {
 
                 return (
                   <div style={{
-                    background: 'linear-gradient(145deg, rgba(245, 158, 11, 0.06), rgba(16, 185, 129, 0.04))',
-                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    background: 'linear-gradient(145deg, rgba(169, 156, 255, 0.06), rgba(100, 215, 189, 0.04))',
+                    border: '1px solid rgba(169, 156, 255, 0.25)',
                     borderRadius: '16px',
                     padding: '20px',
                     marginBottom: '2rem'
@@ -1468,7 +1564,7 @@ export default function ReportsPage() {
                     }}>
                       {/* Select Raw Material */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                        <label className="rp-field-label">
                           اختر المادة الخام:
                         </label>
                         <select
@@ -1493,7 +1589,7 @@ export default function ReportsPage() {
 
                       {/* Input Weight / Grams */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                        <label className="rp-field-label">
                           الوزن / الكمية ({currentRaw?.unit || 'جرام'}):
                         </label>
                         <input
@@ -1532,7 +1628,7 @@ export default function ReportsPage() {
 
                       {/* Input Cost per Kg */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                        <label className="rp-field-label">
                           سعر شراء الكيلو (ج.م / 1000 {currentRaw?.unit || 'جرام'}):
                         </label>
                         <input
@@ -1573,7 +1669,7 @@ export default function ReportsPage() {
 
                     {/* Simulation Cards for Each Recipe Product */}
                     <div style={{ marginBottom: '10px', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
-                      📊 العائد والأرباح المتوقعة لـ <span style={{ color: 'var(--accent)' }}>{grams} {currentRaw?.unit || 'جرام'}</span> {currentRaw?.name} (تكلفة الشراء الإجمالية: <span style={{ color: '#ef4444' }}>{formatCurrency(batchCost)}</span>):
+                      📊 العائد والأرباح المتوقعة لـ <span className="rp-accent">{grams} {currentRaw?.unit || 'جرام'}</span> {currentRaw?.name} (تكلفة الشراء الإجمالية: <span style={{ color: '#e56273' }}>{formatCurrency(batchCost)}</span>):
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
@@ -1591,7 +1687,7 @@ export default function ReportsPage() {
                             key={prod.productId}
                             style={{
                               background: 'var(--bg-surface)',
-                              border: '1px solid rgba(245, 158, 11, 0.3)',
+                              border: '1px solid rgba(169, 156, 255, 0.3)',
                               borderRadius: '12px',
                               padding: '16px',
                               display: 'flex',
@@ -1627,8 +1723,8 @@ export default function ReportsPage() {
                             </div>
 
                             <div style={{
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              background: 'rgba(100, 215, 189, 0.1)',
+                              border: '1px solid rgba(100, 215, 189, 0.3)',
                               borderRadius: '8px',
                               padding: '10px 12px',
                               display: 'flex',
@@ -1640,8 +1736,8 @@ export default function ReportsPage() {
                                 <strong style={{ fontSize: '1.2rem', color: 'var(--success)' }}>{formatCurrency(totalProfit)}</strong>
                               </div>
                               <div style={{ textAlign: 'left', fontSize: '0.8rem' }}>
-                                <div style={{ color: 'var(--text-secondary)' }}>الربح لكل فنجان:</div>
-                                <strong style={{ color: 'var(--success)' }}>+{formatCurrency(prodProfitPerCup)}</strong>
+                                <div className="rp-dim">الربح لكل فنجان:</div>
+                                <strong className="rp-pos">+{formatCurrency(prodProfitPerCup)}</strong>
                               </div>
                             </div>
                           </div>
@@ -1693,7 +1789,7 @@ export default function ReportsPage() {
                         <td className="data-table__number" style={{ fontWeight: 'bold' }}>
                           {formatCurrency(item.sellingPrice)}
                         </td>
-                        <td className="data-table__number" style={{ color: '#ef4444' }}>
+                        <td className="data-table__number" style={{ color: '#e56273' }}>
                           {formatCurrency(item.costPerUnitSold)}
                         </td>
                         <td className="data-table__number" style={{ color: 'var(--success)', fontWeight: 'bold' }}>
@@ -1705,8 +1801,8 @@ export default function ReportsPage() {
                             borderRadius: '6px',
                             fontSize: '0.8rem',
                             fontWeight: 'bold',
-                            background: item.profitMarginPercent >= 70 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                            color: item.profitMarginPercent >= 70 ? '#10b981' : '#f59e0b'
+                            background: item.profitMarginPercent >= 70 ? 'rgba(100, 215, 189, 0.15)' : 'rgba(169, 156, 255, 0.15)',
+                            color: item.profitMarginPercent >= 70 ? '#64d7bd' : '#a99cff'
                           }}>
                             {item.profitMarginPercent.toFixed(1)}%
                           </span>
@@ -1719,9 +1815,9 @@ export default function ReportsPage() {
                         </td>
                         <td className="data-table__number" style={{ fontWeight: 'bold' }}>
                           {item.actualQuantitySold > 0 ? (
-                            <span style={{ color: 'var(--accent)' }}>{item.actualQuantitySold} وحدة</span>
+                            <span className="rp-accent">{item.actualQuantitySold} وحدة</span>
                           ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>0</span>
+                            <span className="rp-muted">0</span>
                           )}
                         </td>
                         <td className="data-table__number" style={{ color: 'var(--text-secondary)' }}>

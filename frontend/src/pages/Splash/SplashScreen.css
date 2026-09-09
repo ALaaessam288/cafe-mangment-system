@@ -32,7 +32,7 @@
   width: 140px;
   height: 140px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 25px rgba(245, 158, 11, 0.45));
+  filter: drop-shadow(0 10px 25px rgba(169, 156, 255, 0.45));
   animation: floatSlow 3s ease-in-out infinite;
 }
 
@@ -44,7 +44,7 @@
 .splash__icon {
   width: 96px;
   height: 96px;
-  filter: drop-shadow(0 0 32px rgba(245, 158, 11, 0.4));
+  filter: drop-shadow(0 0 32px rgba(169, 156, 255, 0.4));
 }
 
 /* ── Brand ── */

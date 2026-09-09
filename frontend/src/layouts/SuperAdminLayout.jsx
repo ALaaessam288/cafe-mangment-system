@@ -14,6 +14,8 @@ export default function SuperAdminLayout({
   totalTenants = 0,
   activeTenants = 0,
   expiringCount = 0,
+  pendingPayments = 0,
+  planCount = 0,
 }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -24,8 +26,9 @@ export default function SuperAdminLayout({
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'الرئيسية', icon: 'bi-grid-1x2', badge: null },
     { id: 'tenants', label: 'العملاء', icon: 'bi-buildings', badge: totalTenants > 0 ? totalTenants : null, badgeColor: 'bg-primary' },
-    { id: 'plans', label: 'الباقات', icon: 'bi-box-seam', badge: '4' },
+    { id: 'plans', label: 'الباقات', icon: 'bi-box-seam', badge: planCount > 0 ? `${planCount}` : null },
     { id: 'subscriptions', label: 'الاشتراكات', icon: 'bi-key', badge: expiringCount > 0 ? `${expiringCount}` : null, badgeColor: 'bg-danger' },
+    { id: 'payments', label: 'المدفوعات', icon: 'bi-cash-coin', badge: pendingPayments > 0 ? `${pendingPayments}` : null, badgeColor: 'bg-warning text-dark' },
     { id: 'reports', label: 'التقارير', icon: 'bi-bar-chart-line', badge: null },
     { id: 'audit-logs', label: 'سجل النشاط', icon: 'bi-journal-text', badge: null },
     { id: 'settings', label: 'الإعدادات', icon: 'bi-sliders', badge: null },

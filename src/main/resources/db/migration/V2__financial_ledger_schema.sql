@@ -1,6 +1,6 @@
 -- V2: Financial Ledger Entries Schema
 CREATE TABLE IF NOT EXISTS financial_ledger_entries (
-    id BIGINT PRIMARY KEY,
+    id ${pk_id},
     tenant_id BIGINT NOT NULL,
     entry_type VARCHAR(50) NOT NULL,
     amount DECIMAL(12, 2) NOT NULL,

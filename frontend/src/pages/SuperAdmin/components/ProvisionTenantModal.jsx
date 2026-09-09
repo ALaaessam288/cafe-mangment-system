@@ -6,7 +6,7 @@ const INITIAL_DRAFT = {
   name: '',
   slug: '',
   businessType: 'CAFE_AND_RESTAURANT',
-  subscriptionPlan: 'PRO',
+  planCode: 'PRO',
   ownerWhatsapp: '',
   ownerUsername: '',
   ownerPassword: '',
@@ -21,7 +21,7 @@ const PERSISTED_DRAFT_FIELDS = [
   'name',
   'slug',
   'businessType',
-  'subscriptionPlan',
+  'planCode',
   'timezone',
   'currency',
   'templateId',
@@ -73,13 +73,6 @@ const BUSINESS_TYPES = [
   { value: 'CAFE_AND_RESTAURANT', title: 'كافيه ومطعم', description: 'تشغيل متكامل للبار والمطبخ', icon: 'bi-grid-1x2', template: 'CAFE_AND_RESTAURANT', tables: 12 },
 ];
 
-const PLANS = [
-  { value: 'TRIAL', title: 'تجربة', price: 'مجاناً', period: '14 يوم', description: 'لبدء تجربة العميل', limits: '5 طاولات · مستخدمان · 30 منتجاً', icon: 'bi-hourglass-split' },
-  { value: 'STARTER', title: 'Starter', price: '499', period: 'ج.م / شهر', description: 'للمواقع الصغيرة', limits: '20 طاولة · 5 مستخدمين · 100 منتج', icon: 'bi-lightning-charge' },
-  { value: 'PRO', title: 'Pro', price: '899', period: 'ج.م / شهر', description: 'أفضل اختيار للتشغيل', limits: '50 طاولة · 15 مستخدماً · 500 منتج', icon: 'bi-stars', featured: true },
-  { value: 'ENTERPRISE', title: 'Enterprise', price: '1499', period: 'ج.م / شهر', description: 'للسلاسل والفروع الكبيرة', limits: 'حدود تشغيل موسّعة', icon: 'bi-buildings' },
-];
-
 const TEMPLATES = [
   { value: '', title: 'بداية نظيفة', description: 'بدون أصناف جاهزة', icon: 'bi-file-earmark' },
   { value: 'CLASSIC_CAFE', title: 'منيو كافيه', description: 'قهوة، مشروبات وإضافات', icon: 'bi-cup-straw' },
@@ -87,7 +80,37 @@ const TEMPLATES = [
   { value: 'CAFE_AND_RESTAURANT', title: 'منيو متكامل', description: 'بار ومطبخ معاً', icon: 'bi-collection' },
 ];
 
-const PLAN_TABLE_LIMITS = { TRIAL: 5, STARTER: 20, PRO: 50, ENTERPRISE: 9999 };
+const UNLIMITED = -1;
+
+/*
+ * Plan presentation is derived from the catalogue the server serves, never from a list kept here.
+ * This file used to carry its own copy of every plan's price and limits — including a
+ * PLAN_TABLE_LIMITS map still using the retired 9999 "unlimited" sentinel — which drifted from the
+ * real terms the moment anyone edited a plan.
+ */
+const PLAN_ICONS = {
+  TRIAL: 'bi-hourglass-split',
+  STARTER: 'bi-lightning-charge',
+  PRO: 'bi-stars',
+  ENTERPRISE: 'bi-buildings',
+  CUSTOM: 'bi-sliders',
+};
+
+const limitLabel = (limit, unit) => (limit === UNLIMITED ? 'بلا حدود ♾' : `${limit} ${unit}`);
+
+function planLimitsText(plan) {
+  return [
+    limitLabel(plan.limits.maxTables, 'طاولة'),
+    limitLabel(plan.limits.maxUsers, 'مستخدم'),
+    limitLabel(plan.limits.maxProducts, 'صنف'),
+  ].join(' · ');
+}
+
+/** Table ceiling for a plan; unlimited plans impose none. */
+function tableCeiling(plan) {
+  if (!plan) return UNLIMITED;
+  return plan.limits.maxTables;
+}
 
 const ARABIC_LATIN = {
   ا: 'a', أ: 'a', إ: 'i', آ: 'a', ب: 'b', ت: 't', ث: 'th', ج: 'j', ح: 'h', خ: 'kh',
@@ -121,7 +144,7 @@ function passwordScore(password) {
     .filter(Boolean).length;
 }
 
-function validateStep(step, draft, tenants) {
+function validateStep(step, draft, tenants, plans) {
   const errors = {};
   const slug = draft.slug.trim().toLowerCase();
 
@@ -136,9 +159,12 @@ function validateStep(step, draft, tenants) {
 
   if (step === 2) {
     const tables = Number(draft.defaultTables);
-    const limit = PLAN_TABLE_LIMITS[draft.subscriptionPlan] || 50;
+    const plan = plans.find((candidate) => candidate.code === draft.planCode);
+    const limit = tableCeiling(plan);
     if (!Number.isInteger(tables) || tables < 0) errors.defaultTables = 'عدد الطاولات يجب أن يكون رقماً صحيحاً يبدأ من صفر.';
-    else if (tables > limit) errors.defaultTables = `هذه الباقة تسمح بحد أقصى ${limit === 9999 ? 'غير محدود عملياً' : `${limit} طاولة`}.`;
+    else if (limit !== UNLIMITED && tables > limit) {
+      errors.defaultTables = `هذه الباقة تسمح بحد أقصى ${limit} طاولة.`;
+    }
   }
 
   if (step === 3) {
@@ -159,7 +185,7 @@ function FieldError({ message }) {
   return message ? <span className="sa-pv-field-error"><i className="bi bi-exclamation-circle" />{message}</span> : null;
 }
 
-export default function ProvisionTenantModal({ tenants, updating, onClose, onProvision }) {
+export default function ProvisionTenantModal({ tenants, plans = [], updating, onClose, onProvision }) {
   const [draft, setDraft] = useState(loadSavedDraft);
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
@@ -170,10 +196,18 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
   const [restoredDraft] = useState(hasSavedDraft);
   const firstInputRef = useRef(null);
 
-  const selectedPlan = useMemo(() => PLANS.find((plan) => plan.value === draft.subscriptionPlan) || PLANS[2], [draft.subscriptionPlan]);
+  /* Sellable plans only — CUSTOM is negotiated with sales, never picked from a provisioning wizard. */
+  const sellablePlans = useMemo(
+    () => plans.filter((plan) => plan.active && !plan.customPlan),
+    [plans],
+  );
+  const selectedPlan = useMemo(
+    () => sellablePlans.find((plan) => plan.code === draft.planCode) ?? sellablePlans[0] ?? null,
+    [sellablePlans, draft.planCode],
+  );
   const selectedBusiness = useMemo(() => BUSINESS_TYPES.find((business) => business.value === draft.businessType) || BUSINESS_TYPES[2], [draft.businessType]);
   const strength = passwordScore(draft.ownerPassword);
-  const completedSignals = [draft.name, draft.slug, draft.subscriptionPlan, draft.ownerFullName, draft.ownerUsername, draft.ownerPassword].filter(Boolean).length;
+  const completedSignals = [draft.name, draft.slug, draft.planCode, draft.ownerFullName, draft.ownerUsername, draft.ownerPassword].filter(Boolean).length;
   const loginUrl = `${window.location.origin}/${draft.slug || 'your-cafe'}/login`;
 
   useEffect(() => {
@@ -214,7 +248,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
   }
 
   function continueFlow() {
-    const nextErrors = validateStep(step, draft, tenants);
+    const nextErrors = validateStep(step, draft, tenants, sellablePlans);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length === 0) setStep((current) => Math.min(3, current + 1));
   }
@@ -228,7 +262,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
 
   async function submitProvision(event) {
     event.preventDefault();
-    const allErrors = { ...validateStep(1, draft, tenants), ...validateStep(2, draft, tenants), ...validateStep(3, draft, tenants) };
+    const allErrors = { ...validateStep(1, draft, tenants, sellablePlans), ...validateStep(2, draft, tenants, sellablePlans), ...validateStep(3, draft, tenants, sellablePlans) };
     if (Object.keys(allErrors).length) {
       setErrors(allErrors);
       if (allErrors.name || allErrors.slug) setStep(1);
@@ -331,9 +365,28 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
                   <fieldset className="sa-pv-choice-block">
                     <legend>باقة الاشتراك</legend>
                     <div className="sa-pv-plan-grid">
-                      {PLANS.map((plan) => (
-                        <button type="button" key={plan.value} className={`${draft.subscriptionPlan === plan.value ? 'is-selected' : ''} ${plan.featured ? 'is-featured' : ''}`} onClick={() => { setField('subscriptionPlan', plan.value); const limit = PLAN_TABLE_LIMITS[plan.value]; if (draft.defaultTables > limit) setField('defaultTables', limit); }}>
-                          {plan.featured && <em>موصى بها</em>}<span><i className={`bi ${plan.icon}`} /></span><b>{plan.title}<small>{plan.description}</small></b><strong>{plan.price}<small>{plan.period}</small></strong><footer>{plan.limits}</footer>
+                      {sellablePlans.map((plan) => (
+                        <button
+                          type="button"
+                          key={plan.code}
+                          className={`${draft.planCode === plan.code ? 'is-selected' : ''} ${plan.code === 'PRO' ? 'is-featured' : ''}`}
+                          onClick={() => {
+                            setField('planCode', plan.code);
+                            // Clamp the seeded table count to what the new plan actually allows.
+                            const ceiling = tableCeiling(plan);
+                            if (ceiling !== UNLIMITED && Number(draft.defaultTables) > ceiling) {
+                              setField('defaultTables', ceiling);
+                            }
+                          }}
+                        >
+                          {plan.code === 'PRO' && <em>موصى بها</em>}
+                          <span><i className={`bi ${PLAN_ICONS[plan.code] ?? 'bi-box-seam'}`} /></span>
+                          <b>{plan.displayName}<small>{plan.description || ''}</small></b>
+                          <strong>
+                            {plan.price > 0 ? plan.price : 'مجاناً'}
+                            <small>{plan.price > 0 ? `${plan.currency} / ${plan.billingPeriodDays} يوم` : `${plan.trialDays} يوم`}</small>
+                          </strong>
+                          <footer>{planLimitsText(plan)}</footer>
                         </button>
                       ))}
                     </div>
@@ -350,7 +403,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
                     <div className="sa-pv-setup-fields">
                       <div className="sa-pv-field">
                         <label htmlFor="pv-tables">طاولات جاهزة عند التشغيل</label>
-                        <div className={`sa-pv-number ${errors.defaultTables ? 'has-error' : ''}`}><button type="button" onClick={() => setField('defaultTables', Math.max(0, Number(draft.defaultTables) - 1))}>−</button><input id="pv-tables" type="number" min="0" max={PLAN_TABLE_LIMITS[draft.subscriptionPlan]} value={draft.defaultTables} onChange={(event) => setField('defaultTables', event.target.value)} /><button type="button" onClick={() => setField('defaultTables', Math.min(PLAN_TABLE_LIMITS[draft.subscriptionPlan], Number(draft.defaultTables) + 1))}>+</button></div>
+                        <div className={`sa-pv-number ${errors.defaultTables ? 'has-error' : ''}`}><button type="button" onClick={() => setField('defaultTables', Math.max(0, Number(draft.defaultTables) - 1))}>−</button><input id="pv-tables" type="number" min="0" max={tableCeiling(selectedPlan) === UNLIMITED ? undefined : tableCeiling(selectedPlan)} value={draft.defaultTables} onChange={(event) => setField('defaultTables', event.target.value)} /><button type="button" onClick={() => { const ceiling = tableCeiling(selectedPlan); const next = Number(draft.defaultTables) + 1; setField('defaultTables', ceiling === UNLIMITED ? next : Math.min(ceiling, next)); }}>+</button></div>
                         <FieldError message={errors.defaultTables} />
                       </div>
                       <div className="sa-pv-field"><label htmlFor="pv-timezone">المنطقة الزمنية</label><div className="sa-pv-select"><i className="bi bi-clock" /><select id="pv-timezone" value={draft.timezone} onChange={(event) => setField('timezone', event.target.value)}><option value="Africa/Cairo">القاهرة (UTC+2/+3)</option><option value="Asia/Riyadh">الرياض (UTC+3)</option><option value="Asia/Dubai">دبي (UTC+4)</option><option value="UTC">UTC</option></select></div></div>
@@ -372,7 +425,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
                   </div>
 
                   <section className="sa-pv-review">
-                    <header><div><i className="bi bi-clipboard2-check" /><span><strong>ملخص أمر التأسيس</strong><small>راجع الإعدادات التي ستُنفذ الآن</small></span></div><b>{selectedPlan.title}</b></header>
+                    <header><div><i className="bi bi-clipboard2-check" /><span><strong>ملخص أمر التأسيس</strong><small>راجع الإعدادات التي ستُنفذ الآن</small></span></div><b>{selectedPlan?.displayName ?? '—'}</b></header>
                     <div className="sa-pv-review__grid"><span><small>المنشأة</small><strong>{draft.name}</strong></span><span><small>نموذج التشغيل</small><strong>{selectedBusiness.title}</strong></span><span><small>محتوى البداية</small><strong>{TEMPLATES.find((item) => item.value === draft.templateId)?.title}</strong></span><span><small>الطاولات</small><strong>{draft.defaultTables} طاولة</strong></span></div>
                     <div className="sa-pv-review__url" dir="ltr"><i className="bi bi-link-45deg" /><span>{loginUrl}</span><button type="button" onClick={() => navigator.clipboard?.writeText(loginUrl)}><i className="bi bi-copy" /></button></div>
                   </section>
@@ -387,7 +440,7 @@ export default function ProvisionTenantModal({ tenants, updating, onClose, onPro
               <h3>{step === 1 ? 'هوية قابلة للتوسع' : step === 2 ? 'تشغيل جاهز من اليوم الأول' : 'تسليم واضح وآمن'}</h3>
               <p>{step === 1 ? 'اختر رابطاً قصيراً؛ سيُستخدم في الدخول والروابط التشغيلية.' : step === 2 ? 'القالب والطاولات يختصران وقت إعداد العميل بعد البيع.' : 'لن نفتح واتساب تلقائياً؛ تختار طريقة التسليم بعد نجاح الإنشاء.'}</p>
               <div className="sa-pv-brief__meter"><span><i style={{ width: `${(completedSignals / 6) * 100}%` }} /></span><small>{completedSignals}/6 بيانات أساسية مكتملة</small></div>
-              <dl><div><dt>المنشأة</dt><dd>{draft.name || 'بانتظار الاسم'}</dd></div><div><dt>الرابط</dt><dd dir="ltr">/{draft.slug || '—'}</dd></div><div><dt>الباقة</dt><dd>{selectedPlan.title}</dd></div><div><dt>قيمة البداية</dt><dd>{draft.templateId ? 'منيو جاهز' : 'مساحة نظيفة'} · {draft.defaultTables} طاولة</dd></div></dl>
+              <dl><div><dt>المنشأة</dt><dd>{draft.name || 'بانتظار الاسم'}</dd></div><div><dt>الرابط</dt><dd dir="ltr">/{draft.slug || '—'}</dd></div><div><dt>الباقة</dt><dd>{selectedPlan?.displayName ?? '—'}</dd></div><div><dt>قيمة البداية</dt><dd>{draft.templateId ? 'منيو جاهز' : 'مساحة نظيفة'} · {draft.defaultTables} طاولة</dd></div></dl>
               <footer><i className="bi bi-shield-lock" /><span><strong>بيانات الدخول حساسة</strong><small>ستظهر مرة واحدة في بطاقة التسليم بعد الإنشاء.</small></span></footer>
             </aside>
           </main>

@@ -1178,12 +1178,15 @@ export default function POSPage() {
   }
 
   /* ── Cancel Order ── */
-  async function handleCancelOrder() {
+  async function handleCancelOrder(reason) {
     if (!state.activeOrder) return;
     // Only allow if order not already closed or cancelled
     if (['CLOSED', 'VOIDED'].includes(state.activeOrder.status)) return;
     try {
-      const updated = await ordersApi.voidOrder(state.activeOrder.id, { reason: 'إلغاء الأوردر' });
+      // The reason now comes from the supervisor who approved the void, not from a constant.
+      const updated = await ordersApi.voidOrder(state.activeOrder.id, {
+        reason: (typeof reason === 'string' && reason.trim()) || 'إلغاء الأوردر',
+      });
       sounds.playError();
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('الأوردر تم إلغاؤه.');
@@ -1444,8 +1447,8 @@ export default function POSPage() {
 
           {openShiftError && (
             <div style={{
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
+              background: 'rgba(229, 98, 115, 0.12)',
+              border: '1px solid rgba(229, 98, 115, 0.35)',
               color: '#fca5a5',
               padding: '10px 14px',
               borderRadius: '8px',
@@ -1456,7 +1459,7 @@ export default function POSPage() {
               marginBottom: '14px',
               lineHeight: 1.5
             }}>
-              <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+              <AlertCircle size={16} style={{ flexShrink: 0, color: '#e56273' }} />
               <span>{openShiftError}</span>
             </div>
           )}
@@ -1470,17 +1473,25 @@ export default function POSPage() {
                 onChange={e => { setStartShiftForm({...startShiftForm, registerId: e.target.value}); setOpenShiftError(''); }}
                 required
               >
+                {/*
+                  * Only real drawers. There used to be a fallback option here hardcoded to
+                  * value="5" whenever the list came back empty — a plausible-looking
+                  * "الدرج الرئيسي (كاشير 1)" pointing at an id from someone's dev database. The
+                  * cashier picked it, and the server correctly answered "register 5 does not
+                  * exist", with nothing on screen to explain why.
+                  */}
                 <option value="">-- اختار الدرج --</option>
-                {registers.length === 0 ? (
-                  <option value="5">الدرج الرئيسي (كاشير 1)</option>
-                ) : (
-                  registers.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.name || `الدرج الرئيسي (كاشير ${r.id})`}
-                    </option>
-                  ))
-                )}
+                {registers.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name || `الدرج رقم ${r.id}`}
+                  </option>
+                ))}
               </select>
+              {registers.length === 0 && (
+                <p className="field__hint" style={{ color: '#e56273', marginTop: '.4rem', fontSize: '.8rem' }}>
+                  لا يوجد درج مسجّل لهذه المنشأة. أضف درجاً من الإعدادات قبل فتح الشيفت.
+                </p>
+              )}
             </div>
             <div className="field">
               <label className="field__label">العهدة الافتتاحية (Float)</label>
@@ -1495,7 +1506,12 @@ export default function POSPage() {
                 onChange={e => { setStartShiftForm({...startShiftForm, openingFloat: e.target.value}); setOpenShiftError(''); }} 
               />
             </div>
-            <button type="submit" className="btn btn--primary btn--md" disabled={isOpenShiftLoading} style={{ gridColumn: '1/-1' }}>
+            <button
+              type="submit"
+              className="btn btn--primary btn--md"
+              disabled={isOpenShiftLoading || registers.length === 0}
+              style={{ gridColumn: '1/-1' }}
+            >
               {isOpenShiftLoading ? 'جاري فتح الشيفت...' : 'ابدأ الشيفت'}
             </button>
           </form>
@@ -1626,7 +1642,7 @@ export default function POSPage() {
             <form onSubmit={handleOpenTakeawayOrder} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {takeawayMode === 'DIRECT' ? (
                 <>
-                  <div style={{ padding: '8px 10px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(245, 158, 11, 0.3)', fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  <div style={{ padding: '8px 10px', background: 'rgba(169, 156, 255, 0.08)', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(169, 156, 255, 0.3)', fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                     ⚡ <strong>تيك أواي مباشر:</strong> افتح الأوردر فوراً واستلم من الكاونتر بدون أي بيانات مطلوبة.
                   </div>
                   <div className="field">
@@ -1850,9 +1866,9 @@ export default function POSPage() {
 
               {activeUnsettled.length > 0 && (
                 <div style={{
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                  color: '#ef4444',
+                  background: 'rgba(229, 98, 115, 0.12)',
+                  border: '1px solid rgba(229, 98, 115, 0.35)',
+                  color: '#e56273',
                   padding: '10px 12px',
                   borderRadius: '8px',
                   fontSize: '12.5px',
@@ -1970,12 +1986,12 @@ export default function POSPage() {
                 </div>
                 {isRecipe ? (
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span>المادة الخام: <strong style={{ color: 'var(--accent)' }}>{ingredientName}</strong> (المخزون الحالي: <strong style={{ color: currentRawStock <= 0 ? '#ef4444' : '#10b981' }}>{currentRawStock} {ingredientUnit}</strong>)</span>
+                    <span>المادة الخام: <strong style={{ color: 'var(--accent)' }}>{ingredientName}</strong> (المخزون الحالي: <strong style={{ color: currentRawStock <= 0 ? '#e56273' : '#64d7bd' }}>{currentRawStock} {ingredientUnit}</strong>)</span>
                     <span>المعيار: <strong>{perCup} {ingredientUnit}</strong> لكل فنجان</span>
                   </div>
                 ) : (
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    المخزون الحالي: <strong style={{ color: '#ef4444' }}>0 قطعة</strong>
+                    المخزون الحالي: <strong style={{ color: '#e56273' }}>0 قطعة</strong>
                   </div>
                 )}
               </div>
@@ -1990,9 +2006,9 @@ export default function POSPage() {
                       padding: '8px 12px',
                       borderRadius: '8px',
                       border: '1px solid',
-                      borderColor: refillMode === 'GRAMS' ? '#10b981' : 'var(--border-color)',
-                      background: refillMode === 'GRAMS' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)',
-                      color: refillMode === 'GRAMS' ? '#10b981' : 'var(--text-secondary)',
+                      borderColor: refillMode === 'GRAMS' ? '#64d7bd' : 'var(--border-color)',
+                      background: refillMode === 'GRAMS' ? 'rgba(100, 215, 189, 0.15)' : 'var(--bg-surface)',
+                      color: refillMode === 'GRAMS' ? '#64d7bd' : 'var(--text-secondary)',
                       fontWeight: '700',
                       fontSize: '13px',
                       cursor: 'pointer',
@@ -2015,9 +2031,9 @@ export default function POSPage() {
                       padding: '8px 12px',
                       borderRadius: '8px',
                       border: '1px solid',
-                      borderColor: refillMode === 'PIECES' ? '#10b981' : 'var(--border-color)',
-                      background: refillMode === 'PIECES' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)',
-                      color: refillMode === 'PIECES' ? '#10b981' : 'var(--text-secondary)',
+                      borderColor: refillMode === 'PIECES' ? '#64d7bd' : 'var(--border-color)',
+                      background: refillMode === 'PIECES' ? 'rgba(100, 215, 189, 0.15)' : 'var(--bg-surface)',
+                      color: refillMode === 'PIECES' ? '#64d7bd' : 'var(--text-secondary)',
                       fontWeight: '700',
                       fontSize: '13px',
                       cursor: 'pointer',
@@ -2067,7 +2083,7 @@ export default function POSPage() {
                             fontSize: '12px',
                             borderRadius: '6px',
                             border: '1px solid var(--border-color)',
-                            background: parseFloat(refillGrams) === amt ? '#10b981' : 'var(--bg-surface)',
+                            background: parseFloat(refillGrams) === amt ? '#64d7bd' : 'var(--bg-surface)',
                             color: parseFloat(refillGrams) === amt ? '#fff' : 'var(--text-primary)',
                             cursor: 'pointer',
                             fontWeight: '700',
@@ -2084,8 +2100,8 @@ export default function POSPage() {
                       marginTop: '8px',
                       fontSize: '12px',
                       textAlign: 'center',
-                      color: '#10b981',
-                      background: 'rgba(16, 185, 129, 0.08)',
+                      color: '#64d7bd',
+                      background: 'rgba(100, 215, 189, 0.08)',
                       padding: '6px 10px',
                       borderRadius: '6px',
                       fontWeight: 600
@@ -2121,7 +2137,7 @@ export default function POSPage() {
                             fontSize: '12px',
                             borderRadius: '6px',
                             border: '1px solid var(--border-color)',
-                            background: parseInt(refillQty) === amt ? '#10b981' : 'var(--bg-surface)',
+                            background: parseInt(refillQty) === amt ? '#64d7bd' : 'var(--bg-surface)',
                             color: parseInt(refillQty) === amt ? '#fff' : 'var(--text-primary)',
                             cursor: 'pointer',
                             fontWeight: '700',
@@ -2138,8 +2154,8 @@ export default function POSPage() {
                         marginTop: '8px',
                         fontSize: '12px',
                         textAlign: 'center',
-                        color: '#10b981',
-                        background: 'rgba(16, 185, 129, 0.08)',
+                        color: '#64d7bd',
+                        background: 'rgba(100, 215, 189, 0.08)',
                         padding: '6px 10px',
                         borderRadius: '6px',
                         fontWeight: 600
@@ -2163,7 +2179,7 @@ export default function POSPage() {
                     className="btn btn--primary btn--md"
                     disabled={isSavingRefill}
                     onClick={handleRefillAndAdd}
-                    style={{ backgroundColor: '#10b981', borderColor: '#10b981', flex: 2 }}
+                    style={{ backgroundColor: '#64d7bd', borderColor: '#64d7bd', flex: 2 }}
                   >
                     {isSavingRefill
                       ? 'جاري التغذية...'

@@ -82,7 +82,7 @@ public class UpgradeRequestController {
 
     @GetMapping("/api/admin/upgrade-requests")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public List<UpgradeRequest> all(@RequestParam(defaultValue = "false") boolean pendingOnly) {
+    public List<UpgradeRequest> all(@RequestParam(name = "pendingOnly", defaultValue = "false") boolean pendingOnly) {
         return pendingOnly ? service.pending() : service.all();
     }
 

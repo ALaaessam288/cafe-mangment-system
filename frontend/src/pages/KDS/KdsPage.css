@@ -26,7 +26,7 @@
   gap: 8px;
   padding: 8px 16px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #8e82eb 0%, #7468d8 100%);
   color: #ffffff !important;
   font-weight: 700;
   font-size: var(--text-sm);
@@ -38,7 +38,7 @@
 }
 
 .kds__back-btn:hover {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #aaa1ff 0%, #8e82eb 100%);
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
   color: #ffffff !important;
@@ -71,7 +71,7 @@
 
 .kds__tab--active {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-  color: #1a1205;
+  color: #0e0d18;
   border-color: transparent;
   font-weight: var(--fw-bold);
 }
@@ -121,11 +121,11 @@
 }
 
 /* Age drives the colour: a ticket that's been sitting is unmissable. */
-.kds-card--ok   { border-color: rgba(16, 185, 129, 0.35); }
-.kds-card--warn { border-color: rgba(245, 158, 11, 0.55); }
+.kds-card--ok   { border-color: rgba(100, 215, 189, 0.35); }
+.kds-card--warn { border-color: rgba(169, 156, 255, 0.55); }
 .kds-card--late {
   border-color: var(--danger);
-  box-shadow: 0 0 18px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 18px rgba(229, 98, 115, 0.25);
 }
 
 .kds-card__head {
@@ -186,7 +186,7 @@
 .kds-item--done {
   opacity: 0.45;
   text-decoration: line-through;
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: rgba(100, 215, 189, 0.4);
 }
 
 .kds-item__qty {
@@ -240,7 +240,7 @@
 .kds-card__ready:hover { color: var(--text-primary); border-color: var(--border-strong); }
 
 .kds-card__ready--armed {
-  background: linear-gradient(135deg, var(--success) 0%, #34d399 100%);
+  background: linear-gradient(135deg, var(--success) 0%, #82e6cf 100%);
   color: #06281c;
   border-color: transparent;
 }

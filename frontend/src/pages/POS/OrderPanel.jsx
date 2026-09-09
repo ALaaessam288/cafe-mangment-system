@@ -42,6 +42,7 @@ export default function OrderPanel({
 }) {
   const [cancelItemId, setCancelItemId] = useState(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [showVoidOrderModal, setShowVoidOrderModal] = useState(false);
   const [discountModalInitialTab, setDiscountModalInitialTab] = useState('discount');
 
   const [deliveryFeeInput, setDeliveryFeeInput] = useState('');
@@ -269,33 +270,19 @@ export default function OrderPanel({
                         const threshold = product.minStockThreshold ? product.minStockThreshold * 3 : 20;
                         const percent = Math.min(100, Math.max(0, (currentStock / threshold) * 100));
                         return (product.trackInventory || product.recipeInventory) && (
-                          <div style={{ marginTop: '6px', width: '100%' }}>
-                            <div 
-                              style={{
-                                width: '100%',
-                                height: '3px',
-                                background: 'rgba(255, 255, 255, 0.08)',
-                                borderRadius: '1.5px',
-                                overflow: 'hidden'
-                              }}
+                          <div className="order-item__stock">
+                            <div
+                              className="order-item__stock-track"
                               title={product.recipeInventory ? `المتاح إنتاجه من الخامات: ${currentStock}` : `المخزون المتاح: ${currentStock}`}
                             >
-                              <div 
-                                style={{
-                                  height: '100%',
-                                  width: `${percent}%`,
-                                  background: isLow 
-                                    ? '#ef4444' 
-                                    : isMed 
-                                      ? '#f59e0b' 
-                                      : '#10b981',
-                                  transition: 'width 0.3s ease'
-                                }}
+                              <div
+                                className={`order-item__stock-fill order-item__stock-fill--${isLow ? 'low' : isMed ? 'mid' : 'ok'}`}
+                                style={{ width: `${percent}%` }}
                               />
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            <div className="order-item__stock-meta">
                               <span>{product.recipeInventory ? 'المتاح من الخامات' : 'المخزون المتاح'}: {currentStock}</span>
-                              {isLow && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️ مخزون حرج!</span>}
+                              {isLow && <span className="order-item__stock-alert">⚠️ مخزون حرج!</span>}
                             </div>
                           </div>
                         );
@@ -391,9 +378,9 @@ export default function OrderPanel({
                 nine out of ten orders, for a charge that cannot apply to a customer sitting at a
                 table. Order.deliveryFee is documented takeaway-only on the entity as well. */}
             {order.type === 'TAKEAWAY' && !['CLOSED', 'VOIDED'].includes(order.status) && (
-              <div style={{ background: 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '8px', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <Bike size={18} style={{ color: '#8b5cf6', flexShrink: 0 }} />
+              <div className="order-delivery">
+                <div className="order-delivery__row">
+                  <Bike size={18} className="order-delivery__icon" />
                   <input
                     ref={deliveryInputRef}
                     type="number"
@@ -405,29 +392,19 @@ export default function OrderPanel({
                     onFocus={(e) => e.target.select()}
                     onBlur={() => submitDeliveryFee()}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitDeliveryFee(); } }}
-                    className="input"
-                    style={{ flex: 1, height: '32px', fontSize: '13px' }}
+                    className="input order-delivery__input"
                   />
-                  <button className="btn btn--secondary btn--sm" onClick={() => submitDeliveryFee()} style={{ flexShrink: 0 }}>
+                  <button className="btn btn--secondary btn--sm order-delivery__apply" onClick={() => submitDeliveryFee()}>
                     تطبيق
                   </button>
                 </div>
                 {/* Quick Delivery Presets */}
-                <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                <div className="order-delivery__presets">
                   {[10, 15, 20, 25, 30].map((amt) => (
                     <button
                       key={amt}
                       type="button"
-                      style={{
-                        padding: '2px 8px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-color)',
-                        background: parseFloat(deliveryFeeInput) === amt ? '#8b5cf6' : 'var(--bg-surface)',
-                        color: parseFloat(deliveryFeeInput) === amt ? '#fff' : 'var(--text-primary)',
-                        cursor: 'pointer',
-                        fontWeight: '600',
-                      }}
+                      className={`order-delivery__preset${parseFloat(deliveryFeeInput) === amt ? ' order-delivery__preset--active' : ''}`}
                       onClick={() => {
                         setDeliveryFeeInput(String(amt));
                         submitDeliveryFee(amt);
@@ -442,11 +419,10 @@ export default function OrderPanel({
 
             {/* Quick Discount and Service Fee Bar */}
             {!['CLOSED', 'VOIDED'].includes(order.status) && (
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              <div className="order-adjust-actions">
                 <button
                   type="button"
-                  className="btn btn--secondary btn--sm"
-                  style={{ flex: 1, fontSize: '11.5px', padding: '4px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                  className="btn btn--secondary btn--sm order-adjust-actions__btn"
                   onClick={() => { setDiscountModalInitialTab('discount'); setShowDiscountModal(true); }}
                 >
                   <Tag size={12} /> {parseFloat(order.discount) > 0 ? `خصم: -${formatCurrency(order.discount)}` : '+ إضافة خصم'}
@@ -454,8 +430,7 @@ export default function OrderPanel({
 
                 <button
                   type="button"
-                  className="btn btn--secondary btn--sm"
-                  style={{ flex: 1, fontSize: '11.5px', padding: '4px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                  className="btn btn--secondary btn--sm order-adjust-actions__btn"
                   onClick={() => { setDiscountModalInitialTab('service'); setShowDiscountModal(true); }}
                 >
                   <Sparkles size={12} /> {parseFloat(order.service) > 0 ? `خدمة: +${formatCurrency(order.service)}` : '+ رسوم خدمة'}
@@ -468,13 +443,13 @@ export default function OrderPanel({
               <span>{formatCurrency(order.subtotal)}</span>
             </div>
             {parseFloat(order.discount) > 0 && (
-              <div className="order-totals__row order-totals__row--discount" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="order-totals__row order-totals__row--discount order-totals__row--flex">
+                <span className="order-totals__label">
                   <span>خصم</span>
                   {!['CLOSED', 'VOIDED'].includes(order.status) && onClearDiscount && (
                     <button
                       type="button"
-                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}
+                      className="order-totals__clear"
                       onClick={onClearDiscount}
                       title="إلغاء الخصم"
                     >
@@ -486,13 +461,13 @@ export default function OrderPanel({
               </div>
             )}
             {parseFloat(order.service) > 0 && (
-              <div className="order-totals__row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="order-totals__row order-totals__row--flex">
+                <span className="order-totals__label">
                   <span>خدمة</span>
                   {!['CLOSED', 'VOIDED'].includes(order.status) && onClearServiceFee && (
                     <button
                       type="button"
-                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}
+                      className="order-totals__clear"
                       onClick={onClearServiceFee}
                       title="إلغاء الخدمة"
                     >
@@ -622,27 +597,14 @@ export default function OrderPanel({
             {order && !['CLOSED','VOIDED'].includes(order.status) && (
                <button
                  type="button"
-                 className="btn btn--danger btn--sm order-actions__btn"
-                 onClick={() => {
-                   if (window.confirm('هل أنت متأكد من إلغاء هذا الأوردر بالكامل؟ لا يمكن التراجع عن هذا الإجراء.')) {
-                     onCancelOrder();
-                   }
-                 }}
-                 style={{
-                   background: 'rgba(239, 68, 68, 0.12)',
-                   color: '#ef4444',
-                   border: '1px solid rgba(239, 68, 68, 0.35)',
-                   marginTop: '8px',
-                   width: '100%',
-                   justify: 'center',
-                   fontWeight: '600'
-                 }}
+                 className="btn btn--sm order-actions__btn order-actions__void"
+                 onClick={() => setShowVoidOrderModal(true)}
                >
                  <XCircle size={15} /> إلغاء الأوردر بالكامل
                </button>
              )}
             {(order.status === 'SERVED' || order.status === 'READY_FOR_PICKUP') && parseFloat(order.balanceDue) === 0 && (
-              <div className="order-closed-badge" style={{ background: 'var(--success-dim)', color: 'var(--success)' }}>
+              <div className="order-closed-badge order-closed-badge--served">
                 ✓ {order.type === 'TAKEAWAY' ? 'العميل استلم' : (order.openedBy?.fullName || 'الكابتن') + ' طلع بالأوردر'}
               </div>
             )}
@@ -653,6 +615,27 @@ export default function OrderPanel({
               <div className="order-void-badge">الأوردر ملغي</div>
             )}
           </div>
+
+          {/* Whole-order void.
+              Cancelling a single line already required a supervisor PIN and a recorded reason;
+              voiding the entire ticket - far more money, and the obvious way to make a paid order
+              disappear - asked only for an OK on a browser confirm(), and filed a fixed reason
+              nobody chose. Same gate, same audit trail, for the bigger action. */}
+          {showVoidOrderModal && (
+            <SupervisorApprovalModal
+              isOpen={showVoidOrderModal}
+              actionType="VOID_ORDER"
+              orderId={order?.id}
+              amount={parseFloat(order?.total) || null}
+              title="إلغاء الأوردر بالكامل"
+              description="إلغاء الفاتورة كلها عملية حساسة ولا يمكن التراجع عنها. تتطلب رمز PIN الخاص بمدير الوردية وسبباً مسجلاً."
+              onClose={() => setShowVoidOrderModal(false)}
+              onApproved={(_response, reason) => {
+                setShowVoidOrderModal(false);
+                onCancelOrder(reason);
+              }}
+            />
+          )}
 
           {/* Cancel item supervisor authorization dialog */}
           {cancelItemId && (

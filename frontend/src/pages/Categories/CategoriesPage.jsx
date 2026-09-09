@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, LayoutGrid, Eye, EyeOff, ArrowUpLeft, Layers3 } from 'lucide-react';
+import { Plus, Edit2, LayoutGrid, Eye, EyeOff, ArrowUpLeft, Layers3 } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -19,7 +19,7 @@ export default function CategoriesPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-  const [form, setForm] = useState({ name: '', displayOrder: 0, active: true });
+  const [form, setForm] = useState({ name: '', displayOrder: 0 });
   const [isSaving, setIsSaving] = useState(false);
 
   const loadCategories = useCallback(async () => {
@@ -28,7 +28,7 @@ export default function CategoriesPage() {
       const data = await menuApi.getCategories();
       setCategories(data);
     } catch (err) {
-      toast.error(err.message, 'Failed to load categories');
+      toast.error(err.message, 'تعذّر تحميل الأقسام');
     } finally {
       setLoading(false);
     }
@@ -42,11 +42,10 @@ export default function CategoriesPage() {
       setForm({
         name: category.name,
         displayOrder: category.displayOrder ?? 0,
-        active: category.active,
       });
     } else {
       setEditingCategory(null);
-      setForm({ name: '', displayOrder: 0, active: true });
+      setForm({ name: '', displayOrder: 0 });
     }
     setIsModalOpen(true);
   }
@@ -62,31 +61,45 @@ export default function CategoriesPage() {
           name: form.name.trim(),
           displayOrder: parseInt(form.displayOrder, 10),
         });
-        toast.success('Category updated successfully');
+        toast.success('تم تحديث القسم بنجاح');
       } else {
         await menuApi.createCategory({
           name: form.name.trim(),
           displayOrder: parseInt(form.displayOrder, 10),
         });
-        toast.success('Category created successfully');
+        toast.success('تم إضافة القسم بنجاح');
       }
       setIsModalOpen(false);
       await loadCategories();
     } catch (err) {
-      toast.error(err.message, 'Failed to save category');
+      toast.error(err.message, 'تعذّر حفظ القسم');
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleDelete(id) {
-    if (!window.confirm('متأكد إنك عايز تمسح القسم ده؟')) return;
+  /* The API only ever soft-deactivates a category, and there was no way back from the UI:
+     a hidden category sat in the "يحتاج مراجعة" counter forever. */
+  async function handleRestore(id) {
     try {
-      await menuApi.deleteCategory(id);
-      toast.success('Category deleted successfully');
+      await menuApi.activateCategory(id);
+      toast.success('تم إرجاع القسم للمنيو');
       await loadCategories();
     } catch (err) {
-      toast.error(err.message, 'Failed to delete category');
+      toast.error(err.message, 'تعذّر إرجاع القسم');
+    }
+  }
+
+  async function handleDelete(id) {
+    /* This endpoint deactivates rather than deletes - the wording used to promise a delete,
+       which is a different and much scarier thing to click on a live menu. */
+    if (!window.confirm('هيتم إخفاء القسم ده من المنيو والكاشير. الأصناف اللي جواه مش هتتمسح، وتقدر ترجّعه في أي وقت. تمام؟')) return;
+    try {
+      await menuApi.deleteCategory(id);
+      toast.success('تم إخفاء القسم من المنيو');
+      await loadCategories();
+    } catch (err) {
+      toast.error(err.message, 'تعذّر إخفاء القسم');
     }
   }
 
@@ -136,7 +149,11 @@ export default function CategoriesPage() {
                 {role === ROLES.SUPERVISOR && (
                   <div className="category-editorial-card__actions">
                     <button type="button" onClick={() => handleOpenModal(cat)}><Edit2 size={14} /> تعديل</button>
-                    <button type="button" className="is-danger" onClick={() => handleDelete(cat.id)}><Trash2 size={14} /></button>
+                    {cat.active ? (
+                      <button type="button" className="is-danger" title="إخفاء القسم من المنيو" onClick={() => handleDelete(cat.id)}><EyeOff size={14} /></button>
+                    ) : (
+                      <button type="button" title="إرجاع القسم للمنيو" onClick={() => handleRestore(cat.id)}><Eye size={14} /> إرجاع</button>
+                    )}
                   </div>
                 )}
                 <ArrowUpLeft size={17} className="category-editorial-card__arrow" />

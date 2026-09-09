@@ -108,7 +108,7 @@
 }
 
 .type-card.active {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(169, 156, 255, 0.1);
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -211,7 +211,7 @@
 
 .template-card.active {
   border-color: var(--accent);
-  background: rgba(245, 158, 11, 0.05);
+  background: rgba(169, 156, 255, 0.05);
 }
 
 .tpl-icon {
@@ -283,7 +283,7 @@
 }
 
 .trial-badge {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(169, 156, 255, 0.1);
   color: var(--accent);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
@@ -311,8 +311,8 @@
 }
 
 .setup-error {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+  color: #e56273;
+  background: rgba(229, 98, 115, 0.1);
   padding: var(--space-3);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-4);
@@ -336,12 +336,12 @@
   opacity: 0;
 }
 
-.confetti-piece:nth-child(1) { left: 10%; animation: makeItRain 3s infinite ease-out; background: #3b82f6; }
-.confetti-piece:nth-child(2) { left: 30%; animation: makeItRain 3s infinite ease-out 0.5s; background: #10b981; }
-.confetti-piece:nth-child(3) { left: 50%; animation: makeItRain 3s infinite ease-out 1s; background: #f59e0b; }
-.confetti-piece:nth-child(4) { left: 70%; animation: makeItRain 3s infinite ease-out 1.5s; background: #ef4444; }
-.confetti-piece:nth-child(5) { left: 90%; animation: makeItRain 3s infinite ease-out 2s; background: #8b5cf6; }
-.confetti-piece:nth-child(6) { left: 20%; animation: makeItRain 3s infinite ease-out 2.5s; background: #ec4899; }
+.confetti-piece:nth-child(1) { left: 10%; animation: makeItRain 3s infinite ease-out; background: #8e82eb; }
+.confetti-piece:nth-child(2) { left: 30%; animation: makeItRain 3s infinite ease-out 0.5s; background: #64d7bd; }
+.confetti-piece:nth-child(3) { left: 50%; animation: makeItRain 3s infinite ease-out 1s; background: #a99cff; }
+.confetti-piece:nth-child(4) { left: 70%; animation: makeItRain 3s infinite ease-out 1.5s; background: #e56273; }
+.confetti-piece:nth-child(5) { left: 90%; animation: makeItRain 3s infinite ease-out 2s; background: #8e82eb; }
+.confetti-piece:nth-child(6) { left: 20%; animation: makeItRain 3s infinite ease-out 2.5s; background: #c084fc; }
 
 @keyframes makeItRain {
   0% { opacity: 1; transform: translateY(0) rotate(0); }

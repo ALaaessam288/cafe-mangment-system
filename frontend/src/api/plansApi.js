@@ -30,3 +30,22 @@ export const isUnlimited = (limit) => limit === UNLIMITED;
 
 export const formatLimit = (limit, unit = '') =>
   isUnlimited(limit) ? 'بلا حدود ♾' : `${limit}${unit ? ` ${unit}` : ''}`;
+
+/*
+ * Whether a plan limit has actually been reached.
+ *
+ * Three screens each wrote this by hand as `limit && used >= limit`, which gets an unlimited plan
+ * exactly backwards: UNLIMITED is -1, which is truthy, and `used >= -1` is true for any count. So a
+ * tenant on an unlimited plan was blocked from adding the FIRST extra user, table or product, and
+ * told they had "3 من أصل -1". A limit of null/undefined means "not loaded yet", which is also not
+ * a reason to block.
+ */
+export const quotaReached = (used, limit) =>
+  limit != null && !isUnlimited(limit) && Number(used) >= Number(limit);
+
+/** "3 / 10", or "3 / بلا حدود ♾" — never "3 / -1". */
+export const quotaText = (used, limit) =>
+  `${used} / ${limit == null ? '—' : isUnlimited(limit) ? 'بلا حدود ♾' : limit}`;
+
+/** True when a limit is worth showing at all (a real ceiling, or a stated "unlimited"). */
+export const hasStatedLimit = (limit) => limit != null;

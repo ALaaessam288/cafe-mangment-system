@@ -27,7 +27,7 @@
 .crash__icon {
   font-size: 44px;
   line-height: 1;
-  color: var(--warning, #f59e0b);
+  color: var(--warning, #a99cff);
   margin-bottom: 18px;
 }
 
@@ -51,14 +51,14 @@
   font-size: 17px;
   font-weight: 700;
   color: #14110e;
-  background: var(--accent, #f59e0b);
+  background: var(--accent, #a99cff);
   border: none;
   border-radius: 10px;
   cursor: pointer;
 }
 
 .crash__button:hover {
-  background: var(--accent-hover, #fbbf24);
+  background: var(--accent-hover, #c9c1ff);
 }
 
 .crash__details {

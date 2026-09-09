@@ -2,6 +2,8 @@ package com.example.cafemangmentsystem.user;
 
 import com.example.cafemangmentsystem.user.dto.ChangePasswordRequest;
 import com.example.cafemangmentsystem.user.dto.CreateUserRequest;
+import com.example.cafemangmentsystem.user.dto.SelfPasswordRequest;
+import com.example.cafemangmentsystem.user.dto.SelfPinRequest;
 import com.example.cafemangmentsystem.user.dto.UpdateUserRequest;
 import com.example.cafemangmentsystem.user.dto.UserResponse;
 import com.example.cafemangmentsystem.user.entity.User;
@@ -104,6 +106,42 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
         }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+    }
+
+    /**
+     * A user changing their own password.
+     *
+     * <p>Self-service deliberately does not go through {@link #changePassword} and its admin-only
+     * endpoint. That route asked for no current password at all - the settings screen collected one
+     * and threw it away - so an unlocked terminal was enough to take over the account logged into
+     * it. It was also role-gated to ADMIN and SUPERVISOR, and its target check only permits managing
+     * cashiers, which left supervisors unable to change their own password and cashiers unable to
+     * reach the endpoint at all.
+     */
+    public void changeOwnPassword(Long id, SelfPasswordRequest request) {
+        User user = getOrThrow(id);
+        assertCurrentPassword(user, request.currentPassword());
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+    }
+
+    /** A user setting their own quick-login PIN, proved by their account password. */
+    public void changeOwnPin(Long id, SelfPinRequest request) {
+        User user = getOrThrow(id);
+        assertCurrentPassword(user, request.currentPassword());
+        String pin = request.pin().trim();
+        Long tenantId = com.example.cafemangmentsystem.common.tenant.TenantContext.get();
+        validateUniquePinInTenant(tenantId != null ? tenantId : user.getTenantId(), user.getId(), pin);
+        user.setPinHash(passwordEncoder.encode(pin));
+    }
+
+    private void assertCurrentPassword(User user, String currentPassword) {
+        if (user.getRole() == com.example.cafemangmentsystem.user.entity.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform identities cannot be managed through tenant APIs");
+        }
+        if (currentPassword == null || user.getPasswordHash() == null
+                || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "كلمة المرور الحالية غير صحيحة");
+        }
     }
 
     public UserResponse deactivate(Long id, Long deactivatedByUserId) {

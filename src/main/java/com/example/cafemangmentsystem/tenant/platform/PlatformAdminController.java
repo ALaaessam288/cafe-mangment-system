@@ -40,13 +40,40 @@ public class PlatformAdminController {
 
     // ── Tenants ─────────────────────────────────────────────────────────────
 
+    /**
+     * The full tenant list. Kept for exports and bulk selection, which genuinely need every row.
+     * Screens that only display a page should call {@link #searchTenants} instead.
+     */
     @GetMapping
     public List<TenantResponse> listAllTenants() {
         return tenantService.findAllTenants();
     }
 
+    /** Paged, filtered, sorted tenant search for the console table. */
+    @GetMapping("/search")
+    public org.springframework.data.domain.Page<TenantResponse> searchTenants(
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "25") int size,
+            @RequestParam(name = "sortBy", defaultValue = "name") String sortBy,
+            @RequestParam(name = "direction", defaultValue = "asc") String direction) {
+        return tenantService.searchTenants(query, page, size, sortBy, direction);
+    }
+
+    /**
+     * Operator-driven provisioning.
+     *
+     * <p>{@code planCode} is required <em>here</em>, unlike public signup where its absence
+     * legitimately means "the free trial". An operator provisioning a customer has always chosen a
+     * plan; a missing code means the client failed to send it, and silently defaulting to the trial
+     * is how a customer who paid for ENTERPRISE ended up with fourteen days. Fail loudly instead.
+     */
     @PostMapping("/provision")
     public ProvisionTenantResponse provisionTenant(@Valid @RequestBody ProvisionTenantRequest request) {
+        if (request.planCode() == null || request.planCode().isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "planCode is required when provisioning from the platform console");
+        }
         return tenantService.provisionWithSetup(request);
     }
 
@@ -75,6 +102,34 @@ public class PlatformAdminController {
     @GetMapping("/activity-log")
     public List<TenantActivityLog> getPlatformActivityLogs() {
         return tenantService.getPlatformActivityLogs();
+    }
+
+    /**
+     * Audit search across every tenant.
+     *
+     * <p>The console used to filter the newest 200 rows in the browser, so its search box could not
+     * reach anything older and did not say so.
+     */
+    @GetMapping("/activity-log/search")
+    public org.springframework.data.domain.Page<TenantActivityLog> searchActivityLogs(
+            @RequestParam(name = "tenantId", required = false) Long tenantId,
+            @RequestParam(name = "action", required = false) String action,
+            @RequestParam(name = "from", required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME)
+            java.time.Instant from,
+            @RequestParam(name = "to", required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME)
+            java.time.Instant to,
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "50") int size) {
+        return tenantService.searchActivityLogs(tenantId, action, from, to, query, page, size);
+    }
+
+    /** Action codes actually present in the log, for the filter dropdown. */
+    @GetMapping("/activity-log/actions")
+    public List<String> activityActions() {
+        return tenantService.knownActivityActions();
     }
 
     public record SettingsRequest(Integer serviceChargePercent, Boolean whatsappAlertsEnabled) {}

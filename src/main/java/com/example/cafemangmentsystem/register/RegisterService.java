@@ -4,6 +4,9 @@ import com.example.cafemangmentsystem.register.dto.RegisterRequest;
 import com.example.cafemangmentsystem.register.dto.RegisterResponse;
 import com.example.cafemangmentsystem.register.entity.Register;
 import com.example.cafemangmentsystem.register.repository.RegisterRepository;
+import com.example.cafemangmentsystem.billing.EntitlementService;
+import com.example.cafemangmentsystem.billing.entity.Feature;
+import com.example.cafemangmentsystem.common.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,8 +21,26 @@ import java.util.List;
 public class RegisterService {
 
     private final RegisterRepository registerRepository;
+    private final EntitlementService entitlementService;
 
+    /**
+     * Creates a cash drawer.
+     *
+     * <p>The first one is always allowed: a café cannot open a shift without a drawer, so refusing it
+     * would refuse the product. Additional drawers are what MULTI_REGISTER sells, so the check is a
+     * count, not a blanket gate on the endpoint.
+     */
     public RegisterResponse create(RegisterRequest request) {
+        if (registerRepository.count() > 0) {
+            Long tenantId = TenantContext.get();
+            boolean allowed = tenantId == null
+                    || entitlementService.forTenant(tenantId).has(Feature.MULTI_REGISTER);
+            if (!allowed) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "باقتك الحالية تسمح بدرج واحد فقط. يرجى ترقية الباقة لإضافة أدراج إضافية.");
+            }
+        }
+
         Register register = new Register();
         register.setName(request.name());
 

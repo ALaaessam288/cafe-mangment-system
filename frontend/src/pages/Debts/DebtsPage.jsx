@@ -262,11 +262,11 @@ export default function DebtsPage() {
         </div>
         <div className="kpi-box kpi-box--net">
           <span className="kpi-box__label">إجمالي المبالغ المسددة</span>
-          <strong className="kpi-box__val" style={{ color: '#22c55e' }}>{formatCurrency(totals.totalPaid)}</strong>
+          <strong className="kpi-box__val" style={{ color: '#64d7bd' }}>{formatCurrency(totals.totalPaid)}</strong>
         </div>
         <div className="kpi-box kpi-box--advance">
           <span className="kpi-box__label">صافي المتبقي المستحق</span>
-          <strong className="kpi-box__val" style={{ color: '#ef4444' }}>{formatCurrency(totals.totalRemaining)}</strong>
+          <strong className="kpi-box__val" style={{ color: '#e56273' }}>{formatCurrency(totals.totalRemaining)}</strong>
         </div>
         <div className="kpi-box kpi-box--base">
           <span className="kpi-box__label">عدد الحسابات المعلقة</span>
@@ -334,10 +334,10 @@ export default function DebtsPage() {
                   <tr key={debt.id}>
                     <td style={{ fontWeight: 600 }}>{debt.creditorName}</td>
                     <td className="data-table__number">{formatCurrency(debt.amount)}</td>
-                    <td className="data-table__number" style={{ color: '#22c55e' }}>
+                    <td className="data-table__number" style={{ color: '#64d7bd' }}>
                       {debt.paidAmount > 0 ? formatCurrency(debt.paidAmount) : '0 ج.م'}
                     </td>
-                    <td className="data-table__number" style={{ color: isFull ? 'var(--text-muted)' : '#ef4444', fontWeight: 700 }}>
+                    <td className="data-table__number" style={{ color: isFull ? 'var(--text-muted)' : '#e56273', fontWeight: 700 }}>
                       {formatCurrency(rem)}
                     </td>
                     <td className="data-table__muted">{debt.debtDate}</td>
@@ -362,7 +362,7 @@ export default function DebtsPage() {
                             size="sm"
                             leftIcon={<DollarSign size={14} />}
                             onClick={() => openSettleModal(debt)}
-                            style={{ background: 'var(--accent)', color: '#1c1917', fontWeight: 600 }}
+                            style={{ background: 'var(--accent)', color: '#0e0d18', fontWeight: 600 }}
                             title="سداد أي مبلغ جزئي أو كلي"
                           >
                             سداد مبلغ
@@ -477,11 +477,11 @@ export default function DebtsPage() {
                 <span>أصل المديونية:</span>
                 <strong>{formatCurrency(settlingDebt.amount)}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64d7bd' }}>
                 <span>المسدد سابقاً:</span>
                 <strong>{formatCurrency(settlingDebt.paidAmount || 0)}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444', fontWeight: 'bold', borderTop: '1px dashed var(--border-default)', paddingTop: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e56273', fontWeight: 'bold', borderTop: '1px dashed var(--border-default)', paddingTop: '6px' }}>
                 <span>المتبقي المطلوب:</span>
                 <strong>{formatCurrency(settlingDebt.remainingAmount != null ? settlingDebt.remainingAmount : settlingDebt.amount)}</strong>
               </div>

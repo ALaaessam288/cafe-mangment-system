@@ -66,10 +66,10 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
                   height: '100%',
                   width: `${percent}%`,
                   background: currentStock <= 3
-                    ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+                    ? 'linear-gradient(90deg, #e56273, #d44f61)'
                     : currentStock <= 10
-                      ? 'linear-gradient(90deg, #f59e0b, #d97706)'
-                      : 'linear-gradient(90deg, #10b981, #059669)',
+                      ? 'linear-gradient(90deg, #a99cff, #7468d8)'
+                      : 'linear-gradient(90deg, #64d7bd, #4bbfa5)',
                   transition: 'width 0.3s ease',
                   borderRadius: '2px'
                 }}
@@ -85,7 +85,7 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
                   fontWeight: 'bold',
                   padding: '1px 5px',
                   borderRadius: '4px',
-                  background: currentStock <= 3 ? '#ef4444' : '#f59e0b',
+                  background: currentStock <= 3 ? '#e56273' : '#a99cff',
                   color: '#ffffff',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
                 }}

@@ -19,4 +19,6 @@ public interface EmployeeTransactionRepository extends JpaRepository<EmployeeTra
     List<EmployeeTransaction> findBySettledFalseAndTransactionDateLessThanEqual(LocalDate transactionDate);
 
     List<EmployeeTransaction> findBySettledFalse();
+
+    long countByEmployeeId(Long employeeId);
 }

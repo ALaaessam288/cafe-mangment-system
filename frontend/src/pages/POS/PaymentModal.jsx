@@ -21,10 +21,10 @@ import Spinner from '../../components/Spinner/Spinner';
 import './PaymentModal.css';
 
 const METHODS = [
-  { id: 'CASH', label: 'كاش', icon: Banknote, color: '#10b981' },
-  { id: 'CARD', label: 'فيزا / بطاقة', icon: CreditCard, color: '#38bdf8' },
-  { id: 'INSTAPAY', label: 'انستاباي', icon: Zap, color: '#f59e0b' },
-  { id: 'WALLET', label: 'محفظة', icon: Smartphone, color: '#a855f7' },
+  { id: 'CASH', label: 'كاش', icon: Banknote, color: '#64d7bd' },
+  { id: 'CARD', label: 'فيزا / بطاقة', icon: CreditCard, color: '#8e82eb' },
+  { id: 'INSTAPAY', label: 'انستاباي', icon: Zap, color: '#a99cff' },
+  { id: 'WALLET', label: 'محفظة', icon: Smartphone, color: '#8e82eb' },
 ];
 
 export default function PaymentModal({ order, onClose, onSuccess }) {
@@ -41,12 +41,26 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
   const initialBalanceDue = parseFloat(order?.balanceDue ?? order?.total ?? 0);
   const [currentBalanceDue, setCurrentBalanceDue] = useState(initialBalanceDue);
 
-  useEffect(() => {
-    setAmount(currentBalanceDue.toString());
-  }, [currentBalanceDue]);
-
   // Per-person share for split equal
   const perPersonShare = guestCount > 0 ? +(currentBalanceDue / guestCount).toFixed(2) : currentBalanceDue;
+
+  /*
+   * Seed the amount once, and again only when the mode changes.
+   *
+   * This used to re-run on every change to currentBalanceDue, which fought the split flow: paying
+   * guest 1 set the box to guest 2's share, then this effect immediately overwrote it with the
+   * whole remaining balance. The next guest was then charged for the rest of the table unless the
+   * cashier noticed.
+   */
+  useEffect(() => {
+    setAmount(checkoutMode === 'SPLIT_EQUAL' ? String(perPersonShare) : String(currentBalanceDue));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutMode, guestCount]);
+
+  useEffect(() => {
+    setAmount(String(initialBalanceDue));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id]);
 
   const amountNum = parseFloat(amount) || 0;
   const change = method === 'CASH' && amountNum > currentBalanceDue ? amountNum - currentBalanceDue : 0;
@@ -92,15 +106,24 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
 
       if (isFullPayment || remaining <= 0.05) {
         updatedOrder = await ordersApi.close(order.id);
+        /*
+         * A split that does not divide evenly leaves a few piastres. Closing the bill absorbs them,
+         * which is right — but it was silent, so the drawer and the bill disagreed with no record
+         * of why. Say it out loud instead.
+         */
+        if (!isFullPayment && remaining > 0) {
+          toast.info(`تم إغلاق الفاتورة وتسوية فرق ${formatCurrency(remaining)} (كسور التقسيم).`);
+        }
         toast.success(`تم سداد وإغلاق الفاتورة بنجاح! الإجمالي: ${formatCurrency(total)}`, 'تم الدفع بالكامل 🎉');
         onSuccess(updatedOrder, true);
       } else {
         toast.success(`تم تسجيل دفعة بمقدار ${formatCurrency(payAmt)}. المتبقي: ${formatCurrency(remaining)}`, 'دفعة مسجلة');
         if (checkoutMode === 'SPLIT_EQUAL') {
           setActiveGuestIndex((prev) => Math.min(guestCount - 1, prev + 1));
-          setAmount(perPersonShare.toString());
+          // The next guest owes their own share, never the whole remainder.
+          setAmount(String(Math.min(perPersonShare, remaining)));
         } else {
-          setAmount(remaining.toString());
+          setAmount(String(remaining));
         }
       }
     } catch (err) {
@@ -109,6 +132,38 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
       setLoading(false);
     }
   }
+
+  /* Typed entry. A POS with a physical keyboard should not force the cashier onto an on-screen pad. */
+  function handleAmountInput(raw) {
+    // Digits and at most one decimal point, max two decimal places.
+    const cleaned = raw.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+    const [whole, decimals] = cleaned.split('.');
+    setAmount(decimals !== undefined ? `${whole}.${decimals.slice(0, 2)}` : whole);
+  }
+
+  /* Physical-keyboard support: digits type, Backspace deletes, Esc closes. */
+  useEffect(() => {
+    function onKey(e) {
+      if (loading) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      // Let the amount input handle its own typing.
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (/^[0-9]$/.test(e.key) || e.key === '.') {
+        e.preventDefault();
+        handleNumpad(e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        handleNumpad('⌫');
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [loading, onClose]);
 
   /* Numpad input */
   function handleNumpad(key) {
@@ -124,7 +179,14 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
   const numpadKeys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '⌫'];
 
   return (
-    <div className="payment-overlay" onClick={onClose} dir="rtl">
+    <div
+      className="payment-overlay"
+      onClick={() => {
+        // Never let a stray backdrop click drop the cashier out of an in-flight payment.
+        if (!loading) onClose();
+      }}
+      dir="rtl"
+    >
       <div className="payment-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="payment-modal__header">
@@ -251,9 +313,16 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
               <div className="payment-amount-display__label">
                 {method === 'CASH' ? 'المبلغ المستلم من العميل' : 'مبلغ الخصم / السداد'}
               </div>
-              <div className="payment-amount-display__value">
-                {formatCurrency(parseFloat(amount) || 0)}
-              </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="payment-amount-display__value payment-amount-display__input"
+                value={amount}
+                onChange={(e) => handleAmountInput(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                disabled={loading}
+                aria-label="المبلغ"
+              />
             </div>
 
             {/* Quick Presets */}
@@ -263,7 +332,9 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
                   key={preset}
                   type="button"
                   className="payment-preset"
-                  onClick={() => setAmount(preset.toString())}
+                  onClick={() =>
+                    setAmount((prev) => String(+(((parseFloat(prev) || 0) + preset).toFixed(2))))
+                  }
                 >
                   +{preset}
                 </button>

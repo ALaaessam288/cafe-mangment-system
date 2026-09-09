@@ -37,8 +37,8 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(100, 215, 189, 0.12);
+  border: 1px solid rgba(100, 215, 189, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -54,9 +54,9 @@
 .inventory-count-badge {
   font-size: 11px;
   font-weight: 800;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #82e6cf;
+  background: rgba(100, 215, 189, 0.12);
+  border: 1px solid rgba(100, 215, 189, 0.3);
   padding: 2px 8px;
   border-radius: 999px;
 }
@@ -78,7 +78,7 @@
   border-radius: 12px;
   background: rgba(18, 24, 38, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
+  color: #9995a8;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -92,10 +92,10 @@
 }
 
 .inventory-tab-btn--active {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(16, 185, 129, 0.1) 100%) !important;
-  border-color: rgba(16, 185, 129, 0.5) !important;
-  color: #34d399 !important;
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.2);
+  background: linear-gradient(135deg, rgba(100, 215, 189, 0.25) 0%, rgba(100, 215, 189, 0.1) 100%) !important;
+  border-color: rgba(100, 215, 189, 0.5) !important;
+  color: #82e6cf !important;
+  box-shadow: 0 0 14px rgba(100, 215, 189, 0.2);
 }
 
 .inventory-tab-badge {
@@ -112,10 +112,10 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 18px;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%);
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: linear-gradient(135deg, rgba(229, 98, 115, 0.15) 0%, rgba(169, 156, 255, 0.08) 100%);
+  border: 1px solid rgba(229, 98, 115, 0.35);
   border-radius: 14px;
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15);
+  box-shadow: 0 6px 20px rgba(229, 98, 115, 0.15);
 }
 
 .inventory-alert-pills {
@@ -136,15 +136,15 @@
 }
 
 .inventory-alert-pill--critical {
-  background: rgba(239, 68, 68, 0.25);
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(229, 98, 115, 0.25);
+  border: 1px solid rgba(229, 98, 115, 0.5);
   color: #fca5a5;
 }
 
 .inventory-alert-pill--warning {
-  background: rgba(245, 158, 11, 0.2);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  color: #fbbf24;
+  background: rgba(169, 156, 255, 0.2);
+  border: 1px solid rgba(169, 156, 255, 0.4);
+  color: #c9c1ff;
 }
 
 /* ── Recipes 3D Grid ── */
@@ -169,7 +169,7 @@
 
 .recipe-3d-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: rgba(100, 215, 189, 0.4);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
@@ -196,11 +196,11 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 11.5px;
-  color: #cbd5e1;
+  color: #d2cfdd;
 }
 
 .recipe-ingredient-tag strong {
-  color: #34d399;
+  color: #82e6cf;
   font-family: monospace;
 }
 
@@ -234,36 +234,219 @@
 /* Danger — out of stock */
 .inventory-page .data-table tbody tr[data-stock="danger"] td:nth-child(3) {
   color: var(--danger);
-  text-shadow: 0 0 18px rgba(239, 68, 68, 0.4);
+  text-shadow: 0 0 18px rgba(229, 98, 115, 0.4);
 }
 
 /* Warning — low stock */
 .inventory-page .data-table tbody tr[data-stock="warning"] td:nth-child(3) {
   color: var(--warning);
-  text-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+  text-shadow: 0 0 18px rgba(169, 156, 255, 0.35);
 }
 
 /* Good — sufficient stock */
 .inventory-page .data-table tbody tr[data-stock="good"] td:nth-child(3) {
   color: var(--success);
-  text-shadow: 0 0 18px rgba(16, 185, 129, 0.3);
+  text-shadow: 0 0 18px rgba(100, 215, 189, 0.3);
 }
 
 /* Row tint on hover */
 .inventory-page .data-table tbody tr[data-stock="danger"]:hover td {
-  background: rgba(239, 68, 68, 0.05);
+  background: rgba(229, 98, 115, 0.05);
 }
 
 .inventory-page .data-table tbody tr[data-stock="warning"]:hover td {
-  background: rgba(245, 158, 11, 0.05);
+  background: rgba(169, 156, 255, 0.05);
 }
 
 .inventory-page .data-table tbody tr[data-stock="good"]:hover td {
-  background: rgba(16, 185, 129, 0.04);
+  background: rgba(100, 215, 189, 0.04);
 }
 
 /* Category cell — secondary colour */
 .inventory-page .data-table tbody td:nth-child(2) {
   color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Inventory — rebuilt presentation
+   The page previously carried its layout in inline style objects, which meant
+   it ignored the design tokens every other screen uses and drifted with each
+   edit. Everything below is token-driven and lives in one place.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Attention banner ─────────────────────────────────────────────────────── */
+
+.inv-alert {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--warning);
+  border-radius: 12px;
+  background: var(--warning-dim);
+}
+.inv-alert__icon { color: var(--warning); flex-shrink: 0; margin-top: 1px; }
+.inv-alert__body { flex: 1 1 auto; min-width: 0; }
+.inv-alert__body > strong {
+  display: block;
+  font-size: .9rem;
+  color: var(--warning-text);
+  margin-bottom: 8px;
+}
+.inv-alert__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.inv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: .78rem;
+  cursor: pointer;
+}
+.inv-chip:hover { border-color: var(--warning); color: var(--warning-text); }
+.inv-chip span { opacity: .7; font-size: .72rem; }
+.inv-chip.is-out { border-color: var(--danger); color: var(--danger); }
+.inv-chip--more { cursor: default; opacity: .7; }
+.inv-chip--more:hover { border-color: var(--border-strong); color: var(--text-secondary); }
+
+.inv-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+
+.inv-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.inv-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.inv-tab:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.inv-tab.is-active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.inv-tab b {
+  font-size: .76rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.inv-tab.is-active b { background: var(--accent); color: var(--bg-app); }
+
+/* A dot, not a number: it says "look here" without competing with the count. */
+.inv-tab__alert {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+/* ── Stat strip ───────────────────────────────────────────────────────────── */
+
+.inv-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.inv-stat {
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  background: var(--bg-secondary);
+}
+.inv-stat > span { display: block; font-size: .78rem; color: var(--text-secondary); }
+.inv-stat > strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.inv-stat > strong.is-mint { color: var(--mint); }
+.inv-stat--note p { margin: 6px 0 0; font-size: .78rem; line-height: 1.5; color: var(--text-secondary); }
+
+/* ── Search ───────────────────────────────────────────────────────────────── */
+
+.inv-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 380px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+.inv-search:focus-within { border-color: var(--border-focus); }
+.inv-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--text-primary);
+  font-size: .9rem;
+}
+
+/* ── Table cells ──────────────────────────────────────────────────────────── */
+
+.inv-stock { font-size: .98rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.inv-stock.is-low { color: var(--danger); }
+.inv-unit { color: var(--text-muted); font-size: .76rem; }
+.inv-muted { color: var(--text-muted); font-size: .84rem; }
+.inv-col-actions { text-align: left; }
+
+/* ── Empty states ─────────────────────────────────────────────────────────── */
+
+.inv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.inv-empty svg { opacity: .45; }
+.inv-empty strong { font-size: 1rem; color: var(--text-primary); }
+.inv-empty p { margin: 0; max-width: 46ch; font-size: .85rem; line-height: 1.6; }
+
+@media (max-width: 560px) {
+  .inv-tab { flex: 1 1 auto; justify-content: center; }
+  .inv-search { max-width: none; }
 }

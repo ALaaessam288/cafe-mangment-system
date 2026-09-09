@@ -1,85 +1,92 @@
 /* ============================================================
-   WANAS CAFÉ POS — MODERN LUXE CSS DESIGN TOKENS
+   CAFFIO — PLATFORM VIOLET DESIGN TOKENS
+   Shared by the café workspace and the platform administration UI.
    ============================================================ */
 
 :root {
-  /* ── Ultra Dark Modern Surfaces ── */
+  /* ── Platform surfaces ── */
   --bg-app:        #08090d;
-  --bg-primary:    #0d0f15;
-  --bg-secondary:  #131722;
-  --bg-tertiary:   #1a1f2e;
-  --bg-elevated:   #21273a;
-  --bg-surface:    #151926;
-  --bg-card:       rgba(21, 25, 38, 0.75);
-  --bg-card-hover: rgba(30, 36, 54, 0.85);
-  --bg-hover:      #262d42;
-  --bg-active:     #2f3752;
+  --bg-primary:    #0d0e14;
+  --bg-secondary:  #11131a;
+  --bg-tertiary:   #171923;
+  --bg-elevated:   #20212d;
+  --bg-surface:    #13151d;
+  --bg-input:      #13151d;
+  --bg-card:       rgba(17, 19, 26, 0.82);
+  --bg-card-hover: rgba(27, 29, 41, 0.9);
+  --bg-hover:      #201f2d;
+  --bg-active:     #2b2940;
 
   /* ── Modern Glassmorphism & Depth ── */
-  --glass-bg:        rgba(19, 23, 34, 0.72);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.03);
-  --glass-bg-card:   rgba(255, 255, 255, 0.04);
-  --glass-border:    rgba(255, 255, 255, 0.08);
-  --glass-border-light: rgba(255, 255, 255, 0.14);
+  --glass-bg:        rgba(17, 19, 26, 0.78);
+  --glass-bg-subtle: rgba(218, 211, 255, 0.025);
+  --glass-bg-card:   rgba(218, 211, 255, 0.04);
+  --glass-border:    rgba(218, 211, 255, 0.09);
+  --glass-border-light: rgba(218, 211, 255, 0.16);
   --glass-blur:      blur(16px);
   --glass-shadow:    0 8px 32px 0 rgba(0, 0, 0, 0.37);
 
   /* ── Borders ── */
-  --border-subtle:   rgba(255, 255, 255, 0.06);
-  --border-default:  rgba(255, 255, 255, 0.09);
-  --border-strong:   rgba(255, 255, 255, 0.16);
-  --border-focus:    #f59e0b;
-  --border-color:    rgba(255, 255, 255, 0.08);
+  --border-subtle:   rgba(218, 211, 255, 0.06);
+  --border-default:  rgba(218, 211, 255, 0.1);
+  --border-strong:   rgba(218, 211, 255, 0.18);
+  --border-focus:    #a99cff;
+  --border-hover:    rgba(169, 156, 255, 0.34);
+  --border-color:    rgba(218, 211, 255, 0.09);
 
-  /* ── Brand / Accent (Warm Café Amber & Gold) ── */
-  --accent:          #f59e0b;
-  --accent-hover:    #fbbf24;
-  --accent-active:   #d97706;
-  --accent-dim:      rgba(245, 158, 11, 0.16);
-  --accent-glow:     rgba(245, 158, 11, 0.35);
-  --accent-text:     #fef3c7;
-  --color-primary:   #f59e0b;
+  /* ── Brand / Accent (shared with Super Admin login) ── */
+  --accent:          #a99cff;
+  --accent-hover:    #c9c1ff;
+  --accent-active:   #7468d8;
+  --accent-dim:      rgba(169, 156, 255, 0.16);
+  --accent-glow:     rgba(169, 156, 255, 0.32);
+  --accent-text:     #eeeaff;
+  --accent-rgb:      169, 156, 255;
+  --color-primary:   #a99cff;
+  --mint:            #64d7bd;
+  --mint-dim:        rgba(100, 215, 189, 0.14);
 
   /* ── Section Specific Themes (Food, Bar, Snacks) ── */
-  --food-color:      #f97316;
-  --food-dim:        rgba(249, 115, 22, 0.15);
-  --beverage-color:  #06b6d4;
-  --beverage-dim:    rgba(6, 182, 212, 0.15);
-  --snacks-color:    #eab308;
-  --snacks-dim:      rgba(234, 179, 8, 0.15);
+  --food-color:      #8e82eb;
+  --food-dim:        rgba(142, 130, 235, 0.15);
+  --beverage-color:  #64d7bd;
+  --beverage-dim:    rgba(100, 215, 189, 0.15);
+  --snacks-color:    #c9c1ff;
+  --snacks-dim:      rgba(201, 193, 255, 0.15);
 
   /* ── Semantic Colors ── */
-  --success:         #10b981;
-  --success-hover:   #34d399;
-  --success-dim:     rgba(16, 185, 129, 0.16);
-  --success-glow:    rgba(16, 185, 129, 0.3);
-  --success-text:    #d1fae5;
+  --success:         #64d7bd;
+  --success-hover:   #82e6cf;
+  --success-dim:     rgba(100, 215, 189, 0.16);
+  --success-glow:    rgba(100, 215, 189, 0.3);
+  --success-text:    #d8fff5;
 
-  --danger:          #ef4444;
-  --danger-hover:    #f87171;
-  --danger-dim:      rgba(239, 68, 68, 0.16);
-  --danger-glow:     rgba(239, 68, 68, 0.3);
-  --danger-text:     #fee2e2;
+  --danger:          #e56273;
+  --danger-hover:    #f17b8a;
+  --danger-dim:      rgba(229, 98, 115, 0.16);
+  --danger-glow:     rgba(229, 98, 115, 0.3);
+  --danger-text:     #ffdfe3;
 
-  --warning:         #f59e0b;
-  --warning-hover:   #fbbf24;
-  --warning-dim:     rgba(245, 158, 11, 0.14);
-  --warning-text:    #fef3c7;
+  --warning:         #f0b866;
+  --warning-hover:   #f8c878;
+  --warning-dim:     rgba(240, 184, 102, 0.14);
+  --warning-text:    #fff1d6;
 
-  --info:            #3b82f6;
-  --info-hover:      #60a5fa;
-  --info-dim:        rgba(59, 130, 246, 0.16);
-  --info-text:       #dbeafe;
+  --info:            #8e82eb;
+  --info-hover:      #aaa1ff;
+  --info-dim:        rgba(142, 130, 235, 0.16);
+  --info-text:       #eeeaff;
 
-  --neutral:         #64748b;
-  --neutral-dim:     rgba(100, 116, 139, 0.15);
+  --neutral:         #777386;
+  --neutral-dim:     rgba(119, 115, 134, 0.15);
 
   /* ── Text ── */
-  --text-primary:    #f8fafc;
-  --text-secondary:  #94a3b8;
-  --text-muted:      #64748b;
-  --text-disabled:   #334155;
-  --text-inverse:    #090a0f;
+  --text-primary:    #f8f6ff;
+  --text-secondary:  #aaa6b8;
+  --text-muted:      #777386;
+  --text-disabled:   #4d4b58;
+  --text-inverse:    #0e0d18;
+  --text-on-accent:  #0e0d18;
 
   /* ── Typography (Compact & Crisp) ── */
   --font-sans:      'Cairo', 'Outfit', system-ui, -apple-system, sans-serif;
@@ -133,11 +140,13 @@
   --shadow-xl:   0 14px 40px rgba(0, 0, 0, 0.7);
   --shadow-glow: 0 0 18px var(--accent-glow);
 
-  --gradient-gold: linear-gradient(135deg, #f59e0b, #d97706);
-  --gradient-card: linear-gradient(180deg, rgba(25, 30, 44, 0.6) 0%, rgba(17, 20, 30, 0.8) 100%);
-  --gradient-card-hover: linear-gradient(180deg, rgba(32, 38, 56, 0.7) 0%, rgba(20, 24, 36, 0.9) 100%);
-  --gradient-food: linear-gradient(135deg, #f97316, #ea580c);
-  --gradient-drink: linear-gradient(135deg, #06b6d4, #0284c7);
+  --gradient-brand: linear-gradient(135deg, #c9c1ff, #8e82eb);
+  /* Backward-compatible name used throughout the existing component styles. */
+  --gradient-gold: var(--gradient-brand);
+  --gradient-card: linear-gradient(180deg, rgba(25, 27, 39, 0.78) 0%, rgba(13, 14, 21, 0.9) 100%);
+  --gradient-card-hover: linear-gradient(180deg, rgba(31, 33, 47, 0.86) 0%, rgba(18, 20, 29, 0.96) 100%);
+  --gradient-food: linear-gradient(135deg, #a99cff, #7468d8);
+  --gradient-drink: linear-gradient(135deg, #82e6cf, #4bbfa5);
 
   /* ── Layout (Compact Dimensions) ── */
   --sidebar-width:       200px;
@@ -151,13 +160,24 @@
   --transition-normal:  0.22s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow:    0.38s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ── Z-Index ── */
+  /*
+   * ── Z-Index ──
+   *
+   * These tokens describe the intended stacking order, but most overlays in the app were written
+   * with hardcoded values instead (Modal.css alone sits at 10000, and there are 9990 / 9999 /
+   * 10050 / 10060 / 99999 elsewhere). The toast layer at 500 therefore rendered UNDERNEATH every
+   * modal: an action taken inside a dialog reported its success or its error to a toast nobody
+   * could see, which reads as "the button does nothing".
+   *
+   * Toasts are raised above the whole hardcoded range until those values are brought back onto
+   * this scale. The splash screen stays on top of everything, including toasts.
+   */
   --z-sidebar:   100;
   --z-topbar:    200;
   --z-dropdown:  300;
   --z-modal:     400;
-  --z-toast:     500;
-  --z-splash:    999;
+  --z-toast:     100000;
+  --z-splash:    100001;
 }
 
 

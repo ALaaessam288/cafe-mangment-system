@@ -11,6 +11,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printReceipt, buildEmployeeStatementHtml } from '../../utils/printUtils';
+import { printOptionsFor } from '../../utils/printerSettings';
 import Button from '../../components/Button/Button';
 import Badge from '../../components/Badge/Badge';
 import Spinner from '../../components/Spinner/Spinner';
@@ -22,12 +23,12 @@ import { sounds } from '../../utils/soundEffects';
 import './EmployeesPage.css';
 
 const PRESET_ROLES = [
-  { id: 'شيف', label: 'شيف / طباخ', icon: Utensils, color: '#f97316' },
-  { id: 'باريستا', label: 'باريستا', icon: Coffee, color: '#f59e0b' },
-  { id: 'ويتر', label: 'ويتر / صالة', icon: UserCheck, color: '#3b82f6' },
-  { id: 'كاشير', label: 'كاشير', icon: CreditCard, color: '#10b981' },
-  { id: 'مشرف', label: 'مشرف تشغيل', icon: Shield, color: '#8b5cf6' },
-  { id: '__CUSTOM__', label: 'مسمى آخر...', icon: Sparkles, color: '#ec4899' },
+  { id: 'شيف', label: 'شيف / طباخ', icon: Utensils, color: '#a99cff' },
+  { id: 'باريستا', label: 'باريستا', icon: Coffee, color: '#a99cff' },
+  { id: 'ويتر', label: 'ويتر / صالة', icon: UserCheck, color: '#8e82eb' },
+  { id: 'كاشير', label: 'كاشير', icon: CreditCard, color: '#64d7bd' },
+  { id: 'مشرف', label: 'مشرف تشغيل', icon: Shield, color: '#8e82eb' },
+  { id: '__CUSTOM__', label: 'مسمى آخر...', icon: Sparkles, color: '#c084fc' },
 ];
 
 const DEDUCTION_REASONS = ['أكل ومشروبات', 'سلفة عاجلة', 'تأخير عن الشيفت', 'عدم التزام بالزي', 'عجز كاشير / أوردر', 'أخرى'];
@@ -263,14 +264,21 @@ export default function EmployeesPage() {
   }
 
   async function handleDeleteEmployee(id, name) {
-    if (!window.confirm(`هل أنت متأكد من مسح الموظف "${name}" نهائياً من النظام؟`)) return;
+    /* The server keeps anyone with payroll history and deactivates them instead of deleting, so
+       the wage ledger behind money that changed hands survives. Say that up front rather than
+       promising a permanent wipe the system will not perform. */
+    if (!window.confirm(`هيتم شيل "${name}" من الفريق. لو ليه أي حركات رواتب (سُلف، خصومات، بونص) هيتحوّل لـ"غير نشط" وسجله المالي هيفضل محفوظ. تمام؟`)) return;
     try {
-      await employeesApi.delete(id);
-      toast.success(`تم مسح الموظف "${name}" بنجاح`);
+      const result = await employeesApi.delete(id);
+      if (result?.deactivated) {
+        toast.success(`تم تعطيل حساب "${name}" — سجل الرواتب بتاعه اتحفظ.`);
+      } else {
+        toast.success(`تم مسح "${name}" من الفريق.`);
+      }
       loadEmployees();
       loadPayrollSummary();
     } catch (err) {
-      toast.error(err.message, 'فشل مسح الموظف');
+      toast.error(err.message, 'فشل تنفيذ العملية');
     }
   }
 
@@ -358,21 +366,42 @@ export default function EmployeesPage() {
   // Print Employee Statement
   function handlePrintEmployee(emp) {
     sounds.playTap();
-    const html = buildEmployeeStatementHtml(emp, user?.tenantName, { startDate, endDate });
-    printReceipt(html, false);
+    /* buildEmployeeStatementHtml takes ONE options object, not three positional arguments.
+       Called the old way it saw only `emp`, so `baseSalary` (the DTO calls it baseWeeklySalary)
+       came through as undefined and the statement printed a zero basic wage and a net to match -
+       on the sheet the employee signs. The café name and the period were missing for the same
+       reason. */
+    const html = buildEmployeeStatementHtml({
+      employeeName: emp.employeeName,
+      jobTitle: emp.jobTitle,
+      baseSalary: emp.baseWeeklySalary,
+      summary: emp,
+      transactions: emp.transactions || [],
+      startDate,
+      endDate,
+      cafeName: user?.tenantName,
+    });
+    printReceipt(html, printOptionsFor('REPORT', { width: 80 }));
   }
 
   // Print Full Team Payroll
   function handlePrintTeamPayroll() {
     sounds.playTap();
+    /* Employee names and job titles are free text typed by a supervisor; interpolating them raw
+       into the printed sheet meant a name containing & or < silently mangled the table. */
+    const esc = (v) => String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
     const rows = payrollSummaries.map((s, idx) => `
       <tr style="border-bottom: 1px solid #ddd;">
-        <td style="padding: 6px 4px; text-align: right;">${idx + 1}. ${s.employeeName}</td>
-        <td style="padding: 6px 4px; text-align: center;">${s.jobTitle || '—'}</td>
+        <td style="padding: 6px 4px; text-align: right;">${idx + 1}. ${esc(s.employeeName)}</td>
+        <td style="padding: 6px 4px; text-align: center;">${esc(s.jobTitle) || '—'}</td>
         <td style="padding: 6px 4px; text-align: center;">${formatCurrency(s.baseWeeklySalary)}</td>
-        <td style="padding: 6px 4px; text-align: center; color: #10b981;">+${formatCurrency(s.totalBonuses)}</td>
-        <td style="padding: 6px 4px; text-align: center; color: #ef4444;">-${formatCurrency(s.totalDeductions)}</td>
-        <td style="padding: 6px 4px; text-align: center; color: #f59e0b;">-${formatCurrency(s.totalAdvances)}</td>
+        <td style="padding: 6px 4px; text-align: center; color: #64d7bd;">+${formatCurrency(s.totalBonuses)}</td>
+        <td style="padding: 6px 4px; text-align: center; color: #e56273;">-${formatCurrency(s.totalDeductions)}</td>
+        <td style="padding: 6px 4px; text-align: center; color: #a99cff;">-${formatCurrency(s.totalAdvances)}</td>
         <td style="padding: 6px 4px; text-align: left; font-weight: bold;">${formatCurrency(s.netPayable)}</td>
       </tr>
     `).join('');
@@ -380,7 +409,7 @@ export default function EmployeesPage() {
     const html = `
       <div style="font-family: Arial, sans-serif; direction: rtl; padding: 20px; color: #111;">
         <div style="text-align: center; border-bottom: 2px dashed #333; padding-bottom: 12px; margin-bottom: 16px;">
-          <h2 style="margin: 0 0 6px;">${user?.tenantName || 'كافيو POS'}</h2>
+          <h2 style="margin: 0 0 6px;">${esc(user?.tenantName) || 'كافيو POS'}</h2>
           <h3 style="margin: 0 0 4px; color: #444;">كشف مسير رواتب الموظفين</h3>
           <p style="margin: 0; font-size: 12px; color: #666;">الفترة من: <strong>${startDate}</strong> إلى: <strong>${endDate}</strong></p>
         </div>
@@ -414,7 +443,7 @@ export default function EmployeesPage() {
       </div>
     `;
 
-    printReceipt(html, false);
+    printReceipt(html, printOptionsFor('REPORT', { width: 80 }));
   }
 
   // Open Pay Salary Modal
@@ -1385,7 +1414,7 @@ export default function EmployeesPage() {
               variant="danger"
               loading={resettingWeek}
               onClick={handleResetWeek}
-              style={{ background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', color: '#fff' }}
+              style={{ background: 'linear-gradient(135deg, #e56273 0%, #c45661 100%)', color: '#fff' }}
             >
               تأكيد بدء الأسبوع الجديد
             </Button>

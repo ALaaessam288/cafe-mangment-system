@@ -28,9 +28,23 @@ public class BillingAdminController {
         return billingService.revenueStats();
     }
 
+    /**
+     * Every invoice on the platform, newest first. This is the list an operator needs to chase
+     * money; until now the only way in was one tenant at a time, so nothing on the console could
+     * answer "what is outstanding right now".
+     */
+    @GetMapping("/invoices")
+    public org.springframework.data.domain.Page<com.example.cafemangmentsystem.billing.dto.AdminInvoiceDto> invoiceConsole(
+            @RequestParam(name = "status", required = false) com.example.cafemangmentsystem.billing.entity.InvoiceStatus status,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "25") int size) {
+        return billingService.invoiceConsole(status,
+                org.springframework.data.domain.PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 200)));
+    }
+
     @GetMapping("/tenants/{tenantId}/invoices")
-    public List<SubscriptionInvoice> invoices(@PathVariable Long tenantId) {
-        return billingService.invoicesFor(tenantId);
+    public List<com.example.cafemangmentsystem.billing.dto.AdminInvoiceDto> invoices(@PathVariable Long tenantId) {
+        return billingService.invoiceDtosFor(tenantId);
     }
 
     @GetMapping("/tenants/{tenantId}/payments")

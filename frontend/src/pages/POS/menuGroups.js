@@ -41,49 +41,49 @@ export const GROUP_PHOTOS = {
 export function getCategoryVisual(name = '') {
   const norm = normalizeText(name);
   if (norm.includes('قهوه') || norm.includes('اسبريسو') || norm.includes('تركي') || norm.includes('فرنساوي') || norm.includes('نسكافيه') || norm.includes('لاتيه') || norm.includes('كابتشينو') || norm.includes('موكا') || norm.includes('امريكانو')) {
-    return { icon: '☕', photo: '/images/categories/hot.jpg', color: '#f59e0b', tag: 'قهوة' };
+    return { icon: '☕', photo: '/images/categories/hot.jpg', color: '#a99cff', tag: 'قهوة' };
   }
   if (norm.includes('شاي') || norm.includes('ينسون') || norm.includes('اعشاب') || norm.includes('كركديه') || norm.includes('نعناع') || norm.includes('قرفه') || norm.includes('جنزبيل')) {
-    return { icon: '🫖', photo: '/images/categories/hot.jpg', color: '#10b981', tag: 'أعشاب' };
+    return { icon: '🫖', photo: '/images/categories/hot.jpg', color: '#64d7bd', tag: 'أعشاب' };
   }
   if (norm.includes('سخن') || norm.includes('ساخن') || norm.includes('هوت') || norm.includes('سحلب') || norm.includes('كاكاو')) {
-    return { icon: '☕', photo: '/images/categories/hot.jpg', color: '#f97316', tag: 'مشروبات ساخنة' };
+    return { icon: '☕', photo: '/images/categories/hot.jpg', color: '#a99cff', tag: 'مشروبات ساخنة' };
   }
   if (norm.includes('ايس') || norm.includes('بارد') || norm.includes('ساقع') || norm.includes('موهيتو') || norm.includes('صودا') || norm.includes('غازي') || norm.includes('مياه') || norm.includes('ريد بول') || norm.includes('كولد')) {
-    return { icon: '🧊', photo: '/images/categories/cold.jpg', color: '#38bdf8', tag: 'مشروبات مثلجة' };
+    return { icon: '🧊', photo: '/images/categories/cold.jpg', color: '#8e82eb', tag: 'مشروبات مثلجة' };
   }
   if (norm.includes('عصير') || norm.includes('فريش') || norm.includes('فرابيه') || norm.includes('ميلك') || norm.includes('شيك') || norm.includes('سموزي') || norm.includes('كوكتيل')) {
-    return { icon: '🍹', photo: '/images/categories/juice.jpg', color: '#ec4899', tag: 'عصائر وفرابيه' };
+    return { icon: '🍹', photo: '/images/categories/juice.jpg', color: '#c084fc', tag: 'عصائر وفرابيه' };
   }
   if (norm.includes('وافل') || norm.includes('بان كيك') || norm.includes('بانكيك') || norm.includes('فريسكا')) {
-    return { icon: '🧇', photo: '/images/categories/desserts.jpg', color: '#f59e0b', tag: 'وافل وبان كيك' };
+    return { icon: '🧇', photo: '/images/categories/desserts.jpg', color: '#a99cff', tag: 'وافل وبان كيك' };
   }
   if (norm.includes('قشطوط') || norm.includes('مولتن') || norm.includes('فادج') || norm.includes('طاجن') || norm.includes('كيك') || norm.includes('تشيز') || norm.includes('سينابون') || norm.includes('دونتس')) {
-    return { icon: '🍰', photo: '/images/categories/desserts.jpg', color: '#a855f7', tag: 'كيك وحلويات' };
+    return { icon: '🍰', photo: '/images/categories/desserts.jpg', color: '#8e82eb', tag: 'كيك وحلويات' };
   }
   if (norm.includes('ايس كريم') || norm.includes('جيلاتي') || norm.includes('مثلج')) {
-    return { icon: '🍨', photo: '/images/categories/desserts.jpg', color: '#06b6d4', tag: 'آيس كريم' };
+    return { icon: '🍨', photo: '/images/categories/desserts.jpg', color: '#64d7bd', tag: 'آيس كريم' };
   }
   if (norm.includes('ساندوتش') || norm.includes('سوري') || norm.includes('رول') || norm.includes('شاورما') || norm.includes('بانيني')) {
-    return { icon: '🥪', photo: '/images/categories/food.jpg', color: '#eab308', tag: 'سندوتشات' };
+    return { icon: '🥪', photo: '/images/categories/food.jpg', color: '#c9c1ff', tag: 'سندوتشات' };
   }
   if (norm.includes('بيتزا') || norm.includes('فطير')) {
-    return { icon: '🍕', photo: '/images/categories/food.jpg', color: '#ef4444', tag: 'بيتزا' };
+    return { icon: '🍕', photo: '/images/categories/food.jpg', color: '#e56273', tag: 'بيتزا' };
   }
   if (norm.includes('برجر') || norm.includes('لحم') || norm.includes('فراخ') || norm.includes('وجب')) {
-    return { icon: '🍔', photo: '/images/categories/food.jpg', color: '#f97316', tag: 'برجر ووجبات' };
+    return { icon: '🍔', photo: '/images/categories/food.jpg', color: '#a99cff', tag: 'برجر ووجبات' };
   }
   if (norm.includes('كريب')) {
-    return { icon: '🌯', photo: '/images/categories/food.jpg', color: '#84cc16', tag: 'كريب' };
+    return { icon: '🌯', photo: '/images/categories/food.jpg', color: '#64d7bd', tag: 'كريب' };
   }
   if (norm.includes('مكرون') || norm.includes('باستا') || norm.includes('نجريسكو')) {
-    return { icon: '🍝', photo: '/images/categories/food.jpg', color: '#f43f5e', tag: 'باستا' };
+    return { icon: '🍝', photo: '/images/categories/food.jpg', color: '#e56273', tag: 'باستا' };
   }
   if (norm.includes('بطاطس') || norm.includes('فرايز') || norm.includes('مقرمش') || norm.includes('مقبلات') || norm.includes('سناكس')) {
-    return { icon: '🍟', photo: '/images/categories/snacks.jpg', color: '#eab308', tag: 'مقبلات وسناكس' };
+    return { icon: '🍟', photo: '/images/categories/snacks.jpg', color: '#c9c1ff', tag: 'مقبلات وسناكس' };
   }
   if (norm.includes('اضاف') || norm.includes('صوص') || norm.includes('نكه') || norm.includes('سيرب') || norm.includes('توبينج')) {
-    return { icon: '➕', photo: '/images/categories/snacks.jpg', color: '#64748b', tag: 'إضافات' };
+    return { icon: '➕', photo: '/images/categories/snacks.jpg', color: '#777386', tag: 'إضافات' };
   }
   return { icon: '🍽️', photo: '/images/categories/food.jpg', color: 'var(--accent)', tag: 'عام' };
 }

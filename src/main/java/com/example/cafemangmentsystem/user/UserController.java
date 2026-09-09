@@ -3,6 +3,8 @@ package com.example.cafemangmentsystem.user;
 import com.example.cafemangmentsystem.security.UserPrincipal;
 import com.example.cafemangmentsystem.user.dto.ChangePasswordRequest;
 import com.example.cafemangmentsystem.user.dto.CreateUserRequest;
+import com.example.cafemangmentsystem.user.dto.SelfPasswordRequest;
+import com.example.cafemangmentsystem.user.dto.SelfPinRequest;
 import com.example.cafemangmentsystem.user.dto.UpdateUserRequest;
 import com.example.cafemangmentsystem.user.dto.UserResponse;
 import com.example.cafemangmentsystem.user.entity.Role;
@@ -34,6 +36,22 @@ public class UserController {
     @GetMapping("/me")
     public UserResponse me(@AuthenticationPrincipal UserPrincipal principal) {
         return userService.findById(principal.getId());
+    }
+
+    /* Self-service credentials. Any signed-in user, for their own account only - the id comes from
+       the token, never from the path, so there is nothing to tamper with. */
+    @PutMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changeOwnPassword(@Valid @RequestBody SelfPasswordRequest request,
+                                  @AuthenticationPrincipal UserPrincipal principal) {
+        userService.changeOwnPassword(principal.getId(), request);
+    }
+
+    @PutMapping("/me/pin")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changeOwnPin(@Valid @RequestBody SelfPinRequest request,
+                             @AuthenticationPrincipal UserPrincipal principal) {
+        userService.changeOwnPin(principal.getId(), request);
     }
 
     @PostMapping

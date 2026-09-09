@@ -509,7 +509,7 @@ export function buildDebtReceiptHtml({ debt, paymentAmount, cafeName }) {
 
     <div style="margin:6px 0;">
       ${row('إجمالي أصل المديونية', `${money(totalAmount)} ج.م`)}
-      ${currentPaid != null ? row('المبلغ المسدد الآن', `+ ${money(currentPaid)} ج.م`, 'style="color:#16a34a; font-weight:800;"') : ''}
+      ${currentPaid != null ? row('المبلغ المسدد الآن', `+ ${money(currentPaid)} ج.م`, 'style="color:#64d7bd; font-weight:800;"') : ''}
       ${row('إجمالي المسدد حتى الآن', `${money(paidAmount)} ج.م`)}
       
       <div class="grand">
@@ -651,7 +651,7 @@ export function buildShiftSummaryHtml({ report, cafeName }) {
 
     <div class="sec-title">💰 إجمالي المبيعات والإيرادات</div>
     ${row('إجمالي المبيعات الكلي', `${money(totalRevenue + totalDiscounts - totalService)} ج.م`)}
-    ${totalDiscounts > 0 ? row('إجمالي الخصومات الممنوحة', `- ${money(totalDiscounts)} ج.م`, 'style="color:#dc2626;"') : ''}
+    ${totalDiscounts > 0 ? row('إجمالي الخصومات الممنوحة', `- ${money(totalDiscounts)} ج.م`, 'style="color:#d44f61;"') : ''}
     ${totalService > 0 ? row('إجمالي رسوم الخدمة', `+ ${money(totalService)} ج.م`) : ''}
     ${row('صافي مبيعات الشيفت', `${money(totalRevenue)} ج.م`, 'style="font-weight:900; font-size:13.5px;"')}
 
@@ -668,7 +668,7 @@ export function buildShiftSummaryHtml({ report, cafeName }) {
     ${expenses.length > 0 || totalExpenses > 0 ? `
       <div class="sec-title">💸 المصاريف والمسحوبات (${expenses.length})</div>
       ${expenseRows}
-      ${row('إجمالي المصاريف', `- ${money(totalExpenses)} ج.م`, 'style="font-weight:800; color:#dc2626;"')}
+      ${row('إجمالي المصاريف', `- ${money(totalExpenses)} ج.م`, 'style="font-weight:800; color:#d44f61;"')}
     ` : ''}
 
     ${employeeMovements.length > 0 || totalEmployeeAdvances > 0 ? `
@@ -705,7 +705,7 @@ export function buildShiftSummaryHtml({ report, cafeName }) {
       ${countedCash != null ? `
         <div style="margin-top:6px; font-size:13px;">
           ${row('النقدية الفعلية المحصية', `${money(countedCash)} ج.م`, 'style="font-weight:800;"')}
-          <div class="row" style="font-size:13.5px; font-weight:900; color:${variance < 0 ? '#dc2626' : variance > 0 ? '#16a34a' : '#000'};">
+          <div class="row" style="font-size:13.5px; font-weight:900; color:${variance < 0 ? '#d44f61' : variance > 0 ? '#64d7bd' : '#000'};">
             <span>${variance < 0 ? '⚠️ عجز في النقدية' : variance > 0 ? '✨ زيادة في النقدية' : '✅ النقدية متطابقة بالكامل'}</span>
             <span class="num">${variance > 0 ? '+' : ''}${money(variance)} ج.م</span>
           </div>
@@ -852,13 +852,13 @@ export function buildPeriodicFinancialReportHtml({ financialData, startDate, end
     ${row('مصاريف تشغيل المطعم', `- ${money(totalRestaurantExpenses)} ج.م`)}
     ${row('المصاريف العامة والمشتركة', `- ${money(totalGeneralExpenses)} ج.م`)}
     ${row('الرواتب وأجور الموظفين', `- ${money(totalWages)} ج.م`)}
-    <div class="row" style="font-weight:900; border-top:1px dashed #000; padding-top:2px; margin-top:2px; font-size:13px; color:#dc2626;">
+    <div class="row" style="font-weight:900; border-top:1px dashed #000; padding-top:2px; margin-top:2px; font-size:13px; color:#d44f61;">
       <span>إجمالي كافة المصاريف</span>
       <span class="num">- ${money(totalExpenses)} ج.م</span>
     </div>
 
     <div class="grand-box">
-      <div class="grand" style="background:${netProfit >= 0 ? '#000' : '#dc2626'};">
+      <div class="grand" style="background:${netProfit >= 0 ? '#000' : '#d44f61'};">
         <span>${netProfit >= 0 ? 'صافي الربح المحقق (Net Profit)' : 'صافي الخسارة (Net Loss)'}</span>
         <span class="num">${money(netProfit)} ج.م</span>
       </div>
@@ -928,7 +928,7 @@ export function buildExpenseVoucherHtml({ expense, cafeName }) {
         <span>المبلغ المسحوب من الخزينة:</span>
         <span class="num">${money(expense.advanceAmount || expense.amount)} ج.م</span>
       </div>
-      <div style="font-size:10px; color:#dc2626; font-weight:bold; margin-top:2px; text-align:center;">
+      <div style="font-size:10px; color:#d44f61; font-weight:bold; margin-top:2px; text-align:center;">
         ⚠️ عُهدة مؤقتة تحت التسوية (ينبغي إرفاق فواتير الشراء والباقي)
       </div>
     `;
@@ -942,7 +942,7 @@ export function buildExpenseVoucherHtml({ expense, cafeName }) {
         <span>المبلغ الفعلي (حسب الفواتير):</span>
         <span class="num">${money(expense.actualAmount)} ج.م</span>
       </div>
-      <div class="row" style="font-weight:900; font-size:13px; color:#16a34a; border-top:1px dashed #000; padding-top:4px; margin-top:2px;">
+      <div class="row" style="font-weight:900; font-size:13px; color:#64d7bd; border-top:1px dashed #000; padding-top:4px; margin-top:2px;">
         <span>المبلغ المرتجع للدرج (الباقي):</span>
         <span class="num">${money(expense.returnedAmount)} ج.م</span>
       </div>

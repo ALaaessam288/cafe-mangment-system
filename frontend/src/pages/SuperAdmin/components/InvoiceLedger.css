@@ -1,0 +1,292 @@
+/* The platform invoice ledger. Deliberately dense: this is a table an operator scans for money,
+   not a marketing surface. */
+
+.inv-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inv-ledger__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inv-ledger__filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inv-chip {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cfd3e0;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.inv-chip:hover { background: rgba(255, 255, 255, 0.09); }
+
+.inv-chip--on {
+  background: rgba(108, 92, 231, 0.22);
+  border-color: rgba(108, 92, 231, 0.6);
+  color: #fff;
+}
+
+.inv-refresh {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cfd3e0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inv-refresh:disabled { opacity: 0.5; cursor: default; }
+
+.inv-ledger__totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.inv-ledger__totals > div {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inv-ledger__totals span {
+  font-size: 11.5px;
+  color: #8f95a8;
+  font-weight: 600;
+}
+
+.inv-ledger__totals strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-ledger__totals .is-ok  { color: #64d7bd; }
+.inv-ledger__totals .is-due { color: #f0b45e; }
+.inv-ledger__totals .is-bad { color: #e56273; }
+
+.inv-ledger__empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: #8f95a8;
+  font-size: 13.5px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+/* Wide content scrolls inside its own box; the page itself never scrolls sideways. */
+.inv-ledger__table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.inv-table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.inv-table thead th {
+  position: sticky;
+  top: 0;
+  background: #14161f;
+  color: #8f95a8;
+  font-weight: 700;
+  text-align: right;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.inv-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #d6d9e3;
+  vertical-align: middle;
+}
+
+.inv-table tbody tr:hover td { background: rgba(255, 255, 255, 0.025); }
+
+.inv-table .num {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.inv-table .mono {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: #a99cff;
+  white-space: nowrap;
+}
+
+.inv-table .is-ok  { color: #64d7bd; }
+.inv-table .is-due { color: #f0b45e; }
+
+/* An overdue invoice is the reason this screen exists — make it findable at a glance. */
+.inv-table tr.is-overdue td {
+  background: rgba(229, 98, 115, 0.06);
+}
+
+.inv-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  margin-inline-end: 4px;
+}
+
+.inv-badge--due     { background: rgba(240, 180, 94, 0.16); color: #f0b45e; }
+.inv-badge--partial { background: rgba(169, 156, 255, 0.16); color: #a99cff; }
+.inv-badge--ok      { background: rgba(100, 215, 189, 0.16); color: #64d7bd; }
+.inv-badge--bad     { background: rgba(229, 98, 115, 0.16); color: #e56273; }
+.inv-badge--muted   { background: rgba(255, 255, 255, 0.07); color: #8f95a8; }
+
+.inv-table .actions {
+  white-space: nowrap;
+  text-align: left;
+}
+
+.inv-table .actions button {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #d6d9e3;
+  border-radius: 7px;
+  padding: 4px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-inline-start: 5px;
+}
+
+.inv-table .actions button:hover { background: rgba(255, 255, 255, 0.1); }
+.inv-table .actions button:disabled { opacity: 0.45; cursor: default; }
+
+.inv-table .actions .is-danger {
+  color: #e56273;
+  border-color: rgba(229, 98, 115, 0.35);
+  background: rgba(229, 98, 115, 0.1);
+}
+
+.inv-form-row td { background: rgba(108, 92, 231, 0.06); }
+
+.inv-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 6px 2px;
+}
+
+.inv-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.inv-form label.wide { grid-column: span 2; }
+
+.inv-form span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #8f95a8;
+}
+
+.inv-form small {
+  font-size: 11px;
+  color: #6f7488;
+}
+
+.inv-form input,
+.inv-form select {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: #fff;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.inv-form input:focus,
+.inv-form select:focus {
+  outline: none;
+  border-color: rgba(108, 92, 231, 0.7);
+}
+
+.inv-form__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+}
+
+.inv-form__actions button {
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.inv-form__actions .is-ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #cfd3e0;
+}
+
+.inv-form__actions .is-primary {
+  background: #6c5ce7;
+  color: #fff;
+}
+
+.inv-form__actions .is-primary:disabled { opacity: 0.55; cursor: default; }
+
+.inv-ledger__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-size: 12.5px;
+  color: #8f95a8;
+}
+
+.inv-ledger__pager button {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #d6d9e3;
+  border-radius: 8px;
+  padding: 5px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inv-ledger__pager button:disabled { opacity: 0.4; cursor: default; }

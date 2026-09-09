@@ -5,7 +5,7 @@
 -- nobody could see which requests were outstanding, and the transfer reference lived in a chat.
 
 CREATE TABLE IF NOT EXISTS upgrade_requests (
-    id BIGSERIAL PRIMARY KEY,
+    id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

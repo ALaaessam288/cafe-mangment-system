@@ -69,7 +69,7 @@ public class LicenseKeyController {
     // ── Anyone: is this key worth anything? ─────────────────────────────────
 
     @GetMapping("/api/license/validate")
-    public LicenseKeyValidationResult validate(@RequestParam @NotBlank String key) {
+    public LicenseKeyValidationResult validate(@RequestParam(name = "key") @NotBlank String key) {
         return service.validate(key);
     }
 

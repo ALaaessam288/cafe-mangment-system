@@ -157,7 +157,7 @@ export default function PrinterSettings() {
           }}
         >
           <div>
-            <div style={{ fontWeight: 800, color: 'var(--success, #22c55e)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontWeight: 800, color: 'var(--success, #64d7bd)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Zap size={16} /> تم العثور على طابعة كاشير حرارية: <strong>{detectedThermal.displayName}</strong>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -221,7 +221,7 @@ export default function PrinterSettings() {
       )}
 
       {settings.silent !== false && (
-        <p className="printer-ok" style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success, #22c55e)', fontSize: '12px' }}>
+        <p className="printer-ok" style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success, #64d7bd)', fontSize: '12px' }}>
           <CheckCircle2 size={14} /> الطباعة المباشرة على مقاس 80mm مفعلة بنجاح ✓
         </p>
       )}

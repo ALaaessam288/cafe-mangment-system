@@ -4,6 +4,7 @@ import {
   Users, CheckCircle2, XCircle, Search, Sparkles, MapPin, Eye
 } from 'lucide-react';
 import { tablesApi } from '../../api/tablesApi';
+import { quotaReached, quotaText, hasStatedLimit } from '../../api/plansApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/Button/Button';
@@ -86,10 +87,10 @@ export default function TablesPage() {
       });
       setIsModalOpen(true);
     } else {
-      if (user?.maxTables && tables.length >= user.maxTables) {
+      if (quotaReached(tables.length, user?.maxTables)) {
         setQuotaModal({
           open: true,
-          message: `لقد بلغت الحد الأقصى للطاولات المسموحة في باقتك (${tables.length} من أصل ${user.maxTables} طاولة). يرجى ترقية الباقة لزيادة السعة.`
+          message: `لقد بلغت الحد الأقصى للطاولات المسموحة في باقتك (${quotaText(tables.length, user?.maxTables)} طاولة). يرجى ترقية الباقة لزيادة السعة.`
         });
         return;
       }
@@ -187,10 +188,10 @@ export default function TablesPage() {
             </button>
           </div>
 
-          {user?.maxTables && (
+          {hasStatedLimit(user?.maxTables) && (
             <div className="tables-quota-pill">
               <span>السعة:</span>
-              <strong className="font-mono">{tables.length} / {user.maxTables}</strong>
+              <strong className="font-mono">{quotaText(tables.length, user?.maxTables)}</strong>
             </div>
           )}
 
@@ -390,7 +391,7 @@ export default function TablesPage() {
         onClose={() => setQuotaModal({ open: false, message: '' })}
         resourceName="الطاولات"
         currentCount={tables.length}
-        maxLimit={user?.maxTables || tables.length}
+        maxLimit={user?.maxTables}
         customMessage={quotaModal.message}
       />
 

@@ -41,6 +41,7 @@ class ShiftAuditServiceTest {
     @Mock ProductRepository productRepository;
     @Mock ShiftRepository shiftRepository;
     @Mock OrderItemRepository orderItemRepository;
+    @Mock RawMaterialLedgerService rawMaterialLedgerService;
     @Mock Product product;
 
     private ShiftAuditService service;
@@ -51,9 +52,10 @@ class ShiftAuditServiceTest {
     @BeforeEach
     void setUp() {
         service = new ShiftAuditService(auditItemRepository, recipeRepository, auditRecordRepository,
-                productRepository, shiftRepository, orderItemRepository);
+                productRepository, shiftRepository, rawMaterialLedgerService, orderItemRepository);
         order = Order.builder().build();
         ingredient = ShiftAuditItem.builder().name("Coffee beans").unit("g").stockQuantity(100.0).build();
+        ingredient.setId(1L);
         item = OrderItem.builder().product(product).quantity(2).status(OrderItemStatus.SENT).build();
         ProductRecipe recipe = ProductRecipe.builder()
                 .product(product)
@@ -175,7 +177,10 @@ class ShiftAuditServiceTest {
         ProductRecipe tenGramsPerCup = ProductRecipe.builder()
                 .product(product).auditItem(ingredient).deductionQuantity(10.0).build();
         when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(tenGramsPerCup));
-        when(orderItemRepository.sumNewQuantityByProductId(7L)).thenReturn(90L);
+        // The hold is now counted against the ingredient rather than the product, because
+        // ingredients are what run out and two products can share one. 90 cups at 10 g is 900 g.
+        when(recipeRepository.sumReservedByIngredient())
+                .thenReturn(List.<Object[]>of(new Object[]{ 1L, 900.0 }));
 
         service.validateRecipeAvailability(product, 10);
         ResponseStatusException error = assertThrows(ResponseStatusException.class,

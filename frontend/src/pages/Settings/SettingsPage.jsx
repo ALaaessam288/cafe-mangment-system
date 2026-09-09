@@ -13,7 +13,7 @@ import Modal from '../../components/Modal/Modal';
 import Spinner from '../../components/Spinner/Spinner';
 import { 
   Building2, User, KeyRound, Shield, RefreshCw, Sparkles, MessageCircle, 
-  Upload, Trash2, Image, Key, CheckCircle, Crown, ArrowUpRight, Check,
+  Upload, Trash2, Image, Key, CheckCircle, Crown, Check,
   Wand2, ZoomIn, ZoomOut, RotateCcw, Download, Columns2, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { ROLES } from '../../utils/constants';
@@ -140,6 +140,7 @@ export default function SettingsPage() {
 
   // PIN state
   const [pinForm, setPinForm] = useState({
+    currentPassword: '',
     newPin: '',
     confirmPin: '',
   });
@@ -151,20 +152,24 @@ export default function SettingsPage() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   // Load tenant usage
+  /* `logoPreview` used to be a dependency here while the body also set it, so the callback's
+     identity changed on its own result and the effect below re-ran the request. Anything else that
+     touches the logo preview - the logo studio does, repeatedly - fired another usage call too.
+     The functional update reads the current value without depending on it. */
   const loadUsage = useCallback(async () => {
     setLoadingUsage(true);
     try {
       const data = await subscriptionApi.usage();
       setUsage(data);
-      if (data.logoUrl && data.logoUrl !== logoPreview) {
-        setLogoPreview(data.logoUrl);
+      if (data.logoUrl) {
+        setLogoPreview((prev) => (prev === data.logoUrl ? prev : data.logoUrl));
       }
     } catch (err) {
       console.error('Failed to load usage:', err);
     } finally {
       setLoadingUsage(false);
     }
-  }, [logoPreview]);
+  }, []);
 
   useEffect(() => {
     loadUsage();
@@ -373,10 +378,21 @@ export default function SettingsPage() {
       toast.warning('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل');
       return;
     }
+    if (!passwordForm.currentPassword) {
+      setPasswordFormError('اكتب كلمة المرور الحالية للتأكيد');
+      toast.warning('اكتب كلمة المرور الحالية للتأكيد');
+      return;
+    }
 
     setIsSavingPassword(true);
     try {
-      await usersApi.changePassword(user.id, { newPassword: passwordForm.newPassword });
+      /* The current password used to be collected and discarded: this screen called the admin
+         reset endpoint, which verifies nothing. It was also role-gated, so a supervisor could not
+         change their own password and a cashier could not reach it at all. */
+      await usersApi.changeOwnPassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
       toast.success('تم تغيير كلمة المرور بنجاح');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
@@ -396,22 +412,27 @@ export default function SettingsPage() {
       toast.warning('رمز PIN غير متطابق');
       return;
     }
-    if (pinForm.newPin.length < 4) {
+    if (!/^\d{4,8}$/.test(pinForm.newPin.trim())) {
       setPinFormError('رمز PIN يجب أن يكون من 4 إلى 8 أرقام');
       toast.warning('رمز PIN يجب أن يكون من 4 إلى 8 أرقام');
+      return;
+    }
+    if (!pinForm.currentPassword) {
+      setPinFormError('اكتب كلمة المرور الحالية للتأكيد');
+      toast.warning('اكتب كلمة المرور الحالية للتأكيد');
       return;
     }
 
     setIsSavingPin(true);
     try {
-      await usersApi.update(user.id, {
-        fullName: user.fullName || user.username,
-        username: user.username,
-        role: user.role,
+      /* Setting your own quick-login PIN is not an administrative action, and it was shaped like
+         one: the admin update endpoint, carrying this user's role and username along for the ride. */
+      await usersApi.changeOwnPin({
+        currentPassword: pinForm.currentPassword,
         pin: pinForm.newPin.trim(),
       });
       toast.success('تم تعيين رمز PIN بنجاح! يمكنك استخدامه في شاشة الدخول السريع 🚀');
-      setPinForm({ newPin: '', confirmPin: '' });
+      setPinForm({ currentPassword: '', newPin: '', confirmPin: '' });
     } catch (err) {
       setPinFormError(err.message || 'فشل تعيين رمز PIN');
       toast.error(err.message, 'فشل تعيين رمز PIN');
@@ -728,7 +749,9 @@ export default function SettingsPage() {
                 rel="noopener noreferrer"
                 className="settings-upgrade-wa-btn"
               >
-                <MessageCircle size={16} /> تواصل لتجديد أو ترقية الاشتراك
+                {/* Support contact, not an upgrade route - the upgrade form is below and it is
+                    the one that actually files a request. */}
+                <MessageCircle size={16} /> تواصل مع الدعم
               </a>
             </div>
 
@@ -736,8 +759,8 @@ export default function SettingsPage() {
             <div className="settings-quotas-grid">
               {[
                 { type: 'TABLES', fallback: 'الطاولات', color: 'var(--accent)' },
-                { type: 'USERS', fallback: 'المستخدمين والموظفين', color: '#10b981' },
-                { type: 'PRODUCTS', fallback: 'أصناف المنيو', color: '#3b82f6' },
+                { type: 'USERS', fallback: 'المستخدمين والموظفين', color: '#64d7bd' },
+                { type: 'PRODUCTS', fallback: 'أصناف المنيو', color: '#8e82eb' },
               ].map(({ type, fallback, color }) => {
                 const q = quotaOf(usage, type, fallback);
                 return (
@@ -781,7 +804,7 @@ export default function SettingsPage() {
                     key={feature.code}
                     style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)' }}
                   >
-                    <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                    <CheckCircle2 size={16} color="#64d7bd" style={{ flexShrink: 0 }} />
                     <span>{feature.displayName}</span>
                   </div>
                 ))}
@@ -819,85 +842,12 @@ export default function SettingsPage() {
             </form>
           </div>
 
-          {/* Plan Comparison Matrix */}
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '28px 0 16px', color: 'var(--text-primary)' }}>
-            باقات الاشتراك السحابية والمحلية
-          </h3>
-
-          <div className="settings-plans-grid">
-            {/* Starter Plan */}
-            <div className="settings-plan-card">
-              <div className="settings-plan-card-header">
-                <h4>باقة الكافيه الأساسية</h4>
-                <div className="settings-plan-price">499 <span>ج.م / شهرياً</span></div>
-              </div>
-              <ul className="settings-plan-features">
-                <li><CheckCircle size={14} color="#10b981" /> حتى 20 طاولة</li>
-                <li><CheckCircle size={14} color="#10b981" /> حتى 5 مستخدمين / كاشيرات</li>
-                <li><CheckCircle size={14} color="#10b981" /> حتى 100 صنف منيو</li>
-                <li><CheckCircle size={14} color="#10b981" /> إدارة المصاريف والعهد</li>
-                <li className="disabled">✕ شاشة تحضير المطبخ KDS</li>
-                <li className="disabled">✕ دعم الفروع المتعددة</li>
-              </ul>
-              <a
-                href={getWhatsAppUpgradeUrl('باقة الكافيه الأساسية', 499)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="settings-plan-btn"
-              >
-                طلب الباقة الأساسية <ArrowUpRight size={14} />
-              </a>
-            </div>
-
-            {/* Pro Plan */}
-            <div className="settings-plan-card settings-plan-card--featured">
-              <div className="settings-plan-badge">الأكثر طلباً ⭐</div>
-              <div className="settings-plan-card-header">
-                <h4>الباقة الاحترافية (PRO)</h4>
-                <div className="settings-plan-price">899 <span>ج.م / شهرياً</span></div>
-              </div>
-              <ul className="settings-plan-features">
-                <li><CheckCircle size={14} color="#10b981" /> حتى 50 طاولة</li>
-                <li><CheckCircle size={14} color="#10b981" /> حتى 15 مستخدم</li>
-                <li><CheckCircle size={14} color="#10b981" /> حتى 500 صنف منيو</li>
-                <li><CheckCircle size={14} color="#10b981" /> شاشة تحضير المطبخ KDS</li>
-                <li><CheckCircle size={14} color="#10b981" /> تعدد الخزائن وتعدد الكاشيرات</li>
-                <li><CheckCircle size={14} color="#10b981" /> تنبيهات واتساب اليومية</li>
-              </ul>
-              <a
-                href={getWhatsAppUpgradeUrl('الباقة الاحترافية (PRO)', 899)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="settings-plan-btn settings-plan-btn--featured"
-              >
-                ترقية إلى الباقة الاحترافية <ArrowUpRight size={14} />
-              </a>
-            </div>
-
-            {/* Enterprise Plan */}
-            <div className="settings-plan-card">
-              <div className="settings-plan-card-header">
-                <h4>الباقة الشاملة (ENTERPRISE)</h4>
-                <div className="settings-plan-price">1499 <span>ج.م / شهرياً</span></div>
-              </div>
-              <ul className="settings-plan-features">
-                <li><CheckCircle size={14} color="#10b981" /> طاولات غير محدودة ♾</li>
-                <li><CheckCircle size={14} color="#10b981" /> مستخدمين غير محدودين ♾</li>
-                <li><CheckCircle size={14} color="#10b981" /> أصناف منيو غير محدودة ♾</li>
-                <li><CheckCircle size={14} color="#10b981" /> كافة الميزات الاحترافية</li>
-                <li><CheckCircle size={14} color="#10b981" /> ترخيص دائم متاح (Lifetime)</li>
-                <li><CheckCircle size={14} color="#10b981" /> أولوية في الدعم الفني 24/7</li>
-              </ul>
-              <a
-                href={getWhatsAppUpgradeUrl('الباقة الشاملة (ENTERPRISE)', 1499)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="settings-plan-btn"
-              >
-                طلب الباقة الشاملة <ArrowUpRight size={14} />
-              </a>
-            </div>
-          </div>
+          {/* The plan comparison used to be three hand-written cards with prices - 499 / 899 / 1499 -
+              typed into this file, each linking to a WhatsApp message. Two problems. The prices went
+              stale the moment anyone edited a plan, on the screen where a customer decides what to
+              pay; and the button next to the real upgrade form led out of the product entirely, so a
+              customer who used it created no request, and the platform had nothing to approve. The
+              live plan list and the working request form are both in UpgradeRequestCard above. */}
         </div>
       )}
 
@@ -934,8 +884,8 @@ export default function SettingsPage() {
             </h2>
             {passwordFormError && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(229, 98, 115, 0.12)',
+                border: '1px solid rgba(229, 98, 115, 0.35)',
                 color: '#fca5a5',
                 padding: '10px 14px',
                 borderRadius: '8px',
@@ -947,7 +897,7 @@ export default function SettingsPage() {
                 marginBottom: '14px',
                 lineHeight: 1.5
               }}>
-                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#e56273' }} />
                 <span>{passwordFormError}</span>
               </div>
             )}
@@ -990,8 +940,8 @@ export default function SettingsPage() {
             </p>
             {pinFormError && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(229, 98, 115, 0.12)',
+                border: '1px solid rgba(229, 98, 115, 0.35)',
                 color: '#fca5a5',
                 padding: '10px 14px',
                 borderRadius: '8px',
@@ -1002,13 +952,23 @@ export default function SettingsPage() {
                 marginBottom: '14px',
                 lineHeight: 1.5
               }}>
-                <AlertCircle size={16} style={{ flexShrink: 0, color: '#ef4444' }} />
+                <AlertCircle size={16} style={{ flexShrink: 0, color: '#e56273' }} />
                 <span>{pinFormError}</span>
               </div>
             )}
             <form onSubmit={handlePinChange} className="form-grid">
               <Input
+                label="كلمة المرور الحالية"
+                type="password"
+                value={pinForm.currentPassword}
+                onChange={(e) => { setPinForm({ ...pinForm, currentPassword: e.target.value }); setPinFormError(''); }}
+                placeholder="للتأكيد إن ده حسابك"
+                autoComplete="current-password"
+                required
+              />
+              <Input
                 label="رمز PIN الجديد (4 - 8 أرقام)"
+                inputMode="numeric"
                 type="password"
                 value={pinForm.newPin}
                 onChange={(e) => { setPinForm({ ...pinForm, newPin: e.target.value }); setPinFormError(''); }}

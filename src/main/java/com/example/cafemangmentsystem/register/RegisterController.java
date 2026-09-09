@@ -1,7 +1,5 @@
 package com.example.cafemangmentsystem.register;
 
-import com.example.cafemangmentsystem.billing.RequiresFeature;
-import com.example.cafemangmentsystem.billing.entity.Feature;
 import com.example.cafemangmentsystem.register.dto.RegisterRequest;
 import com.example.cafemangmentsystem.register.dto.RegisterResponse;
 import com.example.cafemangmentsystem.security.UserPrincipal;
@@ -21,7 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@RequiresFeature(Feature.MULTI_REGISTER)
+/**
+ * Cash drawers.
+ *
+ * <p>Deliberately NOT gated as a whole. Every POS tenant has a drawer — you cannot open a shift, and
+ * therefore cannot sell anything, without one. Gating the class behind MULTI_REGISTER meant a TRIAL
+ * or STARTER tenant got a 403 when listing its own drawer, the POS fell back to an empty list, and
+ * the café could not open a shift at all.
+ *
+ * <p>What the plan actually sells is the <em>second</em> drawer, so the limit lives on creation,
+ * where {@code RegisterService} allows the first one on any plan and requires the feature beyond it.
+ */
 @RestController
 @RequestMapping("/api/registers")
 @RequiredArgsConstructor

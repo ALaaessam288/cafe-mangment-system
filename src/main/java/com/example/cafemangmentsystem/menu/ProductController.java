@@ -35,7 +35,7 @@ public class ProductController {
     }
 
     @GetMapping("/top-sellers")
-    public List<ProductResponse> getTopSellers(@RequestParam(defaultValue = "10") int limit) {
+    public List<ProductResponse> getTopSellers(@RequestParam(name = "limit", defaultValue = "10") int limit) {
         return productService.getTopSellers(limit);
     }
 

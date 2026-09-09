@@ -388,7 +388,7 @@ export default function ExpensesPage() {
                 variant="secondary"
                 rightIcon={<Clock size={16} />}
                 onClick={() => handleOpenModal('ADVANCE')}
-                style={{ borderColor: '#f59e0b', color: '#d97706' }}
+                style={{ borderColor: '#a99cff', color: '#7468d8' }}
               >
                 سحب عُهدة مؤقتة ⏳
               </Button>
@@ -409,11 +409,11 @@ export default function ExpensesPage() {
             <span className="exp-card__sub">{summary.count} عملية — {DATE_RANGES[dateRange]}</span>
           </div>
 
-          <div className="exp-card" style={{ borderColor: summary.pendingCount > 0 ? '#f59e0b' : 'var(--border)' }}>
-            <span className="exp-card__label" style={{ color: summary.pendingCount > 0 ? '#d97706' : 'var(--text-primary)' }}>
+          <div className="exp-card" style={{ borderColor: summary.pendingCount > 0 ? '#a99cff' : 'var(--border)' }}>
+            <span className="exp-card__label" style={{ color: summary.pendingCount > 0 ? '#7468d8' : 'var(--text-primary)' }}>
               <Clock size={13} /> عُهد معلقة (تحت التسوية)
             </span>
-            <strong className="exp-card__value" style={{ color: summary.pendingCount > 0 ? '#d97706' : 'inherit' }}>
+            <strong className="exp-card__value" style={{ color: summary.pendingCount > 0 ? '#7468d8' : 'inherit' }}>
               {formatCurrency(summary.pendingTotal)}
             </strong>
             <span className="exp-card__sub">{summary.pendingCount} عُهدة تحتاج تسوية وباقي</span>
@@ -553,7 +553,7 @@ export default function ExpensesPage() {
                         </Badge>
                       )}
                     </td>
-                    <td className="data-table__number" style={{ color: isPending ? '#d97706' : 'var(--danger)', fontWeight: 700 }}>
+                    <td className="data-table__number" style={{ color: isPending ? '#7468d8' : 'var(--danger)', fontWeight: 700 }}>
                       -{formatCurrency(exp.amount)}
                     </td>
                     <td style={{ fontSize: '0.85rem' }}>
@@ -562,10 +562,10 @@ export default function ExpensesPage() {
                           <div>
                             <div>المسحوب: <b>{formatCurrency(exp.advanceAmount)}</b></div>
                             <div>الفعلي: <b>{formatCurrency(exp.actualAmount)}</b></div>
-                            <div style={{ color: '#16a34a', fontWeight: 600 }}>مرتجع للدرج: +{formatCurrency(exp.returnedAmount)}</div>
+                            <div style={{ color: '#64d7bd', fontWeight: 600 }}>مرتجع للدرج: +{formatCurrency(exp.returnedAmount)}</div>
                           </div>
                         ) : (
-                          <div style={{ color: '#d97706' }}>
+                          <div style={{ color: '#7468d8' }}>
                             مسحوب مؤقتاً: <b>{formatCurrency(exp.advanceAmount || exp.amount)}</b>
                           </div>
                         )
@@ -589,7 +589,7 @@ export default function ExpensesPage() {
                             size="sm"
                             variant="secondary"
                             onClick={() => handleOpenSettleModal(exp)}
-                            style={{ backgroundColor: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' }}
+                            style={{ backgroundColor: '#eeeaff', color: '#92400e', borderColor: '#a99cff' }}
                             title="تسوية العُهدة وإرجاع الباقي"
                           >
                             <CheckCircle size={14} style={{ marginInlineEnd: '4px' }} /> تسوية الباقي
@@ -738,7 +738,7 @@ export default function ExpensesPage() {
                   type="button"
                   onClick={handleAddLineItem}
                   style={{
-                    background: 'rgba(245, 158, 11, 0.15)',
+                    background: 'rgba(169, 156, 255, 0.15)',
                     color: 'var(--accent)',
                     border: '1px solid var(--accent)',
                     borderRadius: '6px',
@@ -793,8 +793,8 @@ export default function ExpensesPage() {
                         onClick={() => handleRemoveLineItem(idx)}
                         style={{
                           background: 'rgba(220, 38, 38, 0.2)',
-                          color: '#ef4444',
-                          border: '1px solid #ef4444',
+                          color: '#e56273',
+                          border: '1px solid #e56273',
                           borderRadius: '6px',
                           padding: '6px 10px',
                           cursor: 'pointer',
@@ -911,7 +911,7 @@ export default function ExpensesPage() {
               </div>
               <div className="settle-calc-item settle-calc-item--highlight">
                 <span>المبلغ الواجب إرجاعه لدرج الخزينة (الباقي):</span>
-                <strong style={{ color: calculatedReturned >= 0 ? '#16a34a' : '#dc2626' }}>
+                <strong style={{ color: calculatedReturned >= 0 ? '#64d7bd' : '#d44f61' }}>
                   {calculatedReturned >= 0 ? `+${formatCurrency(calculatedReturned)}` : formatCurrency(calculatedReturned)}
                 </strong>
               </div>
@@ -931,7 +931,7 @@ export default function ExpensesPage() {
 
             <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px', gridColumn: '1 / -1' }}>
               <Button variant="secondary" onClick={() => setSettleModalOpen(false)} type="button">إلغاء</Button>
-              <Button type="submit" loading={isSettling} style={{ backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
+              <Button type="submit" loading={isSettling} style={{ backgroundColor: '#64d7bd', borderColor: '#64d7bd' }}>
                 تأكيد التسوية وإعادة الباقي للدرج ✅
               </Button>
             </div>

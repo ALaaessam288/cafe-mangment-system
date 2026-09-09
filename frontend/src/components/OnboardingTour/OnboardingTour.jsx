@@ -4,45 +4,69 @@ import './OnboardingTour.css';
 
 const TOUR_STEPS = [
   {
-    target: '.pos-tables-grid',
+    target: '.pos__tables',
     content: 'اضغط على أي طاولة فاضية لفتح أوردر جديد',
     position: 'bottom',
   },
   {
-    target: '.pos-menu-panel',
+    target: '.pos__menu',
     content: 'اختار المنتجات من القائمة أو ابحث بالاسم',
     position: 'left',
   },
   {
-    target: '.pos-order-panel',
+    target: '.pos__order',
     content: 'المنتجات المطلوبة هتظهر هنا',
     position: 'right',
   },
   {
-    target: '.pos-payment-area',
-    content: 'لما العميل يدفع، اضغط "حساب" لإنهاء الأوردر',
+    target: '.shift-strip',
+    content: 'من هنا تتابع حالة الشيفت والمبيعات وحركة الدرج',
     position: 'top',
   },
   {
-    target: '.app-sidebar',
-    content: 'من هنا تقدر توصل للتقارير والإعدادات',
+    target: '.app-topbar__menu-btn',
+    content: 'زر القائمة يوصّلك لكل الشاشات المتاحة لصلاحيتك',
     position: 'left',
   },
 ];
 
-export default function OnboardingTour() {
+export default function OnboardingTour({ enabled = false }) {
   const [isVisible, setIsVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
 
   useEffect(() => {
+    setIsVisible(false);
+    setCurrentStep(0);
+    setTargetRect(null);
+
+    // The tour teaches the POS workflow, so it must never cover unrelated pages.
+    if (!enabled) return undefined;
+
     const isCompleted = localStorage.getItem('onboardingCompleted');
-    if (!isCompleted) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(() => setIsVisible(true), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+    if (isCompleted) return undefined;
+
+    let timer;
+    const startWhenReady = () => {
+      if (!document.querySelector(TOUR_STEPS[0].target)) return false;
+      timer = window.setTimeout(() => setIsVisible(true), 600);
+      return true;
+    };
+
+    if (startWhenReady()) return () => window.clearTimeout(timer);
+
+    // A cashier may still be opening a shift. Wait for the POS workspace instead
+    // of showing an empty full-screen overlay that blocks the application.
+    const observer = new MutationObserver(() => {
+      if (startWhenReady()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -64,7 +88,8 @@ export default function OnboardingTour() {
     return () => window.removeEventListener('resize', updateTarget);
   }, [currentStep, isVisible]);
 
-  if (!isVisible) return null;
+  // Never mount the blocking overlay without a real, visible target.
+  if (!isVisible || !targetRect) return null;
 
   const handleNext = () => {
     if (currentStep < TOUR_STEPS.length - 1) {
@@ -81,10 +106,8 @@ export default function OnboardingTour() {
 
   const step = TOUR_STEPS[currentStep];
 
-  // Render a clip-path based overlay if target exists, else full overlay
-  const overlayStyle = targetRect
-    ? {
-        clipPath: `polygon(
+  const overlayStyle = {
+    clipPath: `polygon(
           0% 0%, 0% 100%, 100% 100%, 100% 0%, 0% 0%,
           ${targetRect.left - 8}px ${targetRect.top - 8}px,
           ${targetRect.right + 8}px ${targetRect.top - 8}px,
@@ -92,28 +115,22 @@ export default function OnboardingTour() {
           ${targetRect.left - 8}px ${targetRect.bottom + 8}px,
           ${targetRect.left - 8}px ${targetRect.top - 8}px
         )`,
-      }
-    : {};
+  };
 
   // Calculate tooltip position
-  let tooltipStyle = {};
-  if (targetRect) {
-    if (step.position === 'bottom') {
-      tooltipStyle = { top: targetRect.bottom + 20, left: targetRect.left + (targetRect.width / 2) };
-      tooltipStyle.transform = 'translateX(-50%)';
-    } else if (step.position === 'top') {
-      tooltipStyle = { bottom: window.innerHeight - targetRect.top + 20, left: targetRect.left + (targetRect.width / 2) };
-      tooltipStyle.transform = 'translateX(-50%)';
-    } else if (step.position === 'left') {
-      tooltipStyle = { top: targetRect.top + (targetRect.height / 2), right: window.innerWidth - targetRect.left + 20 };
-      tooltipStyle.transform = 'translateY(-50%)';
-    } else if (step.position === 'right') {
-      tooltipStyle = { top: targetRect.top + (targetRect.height / 2), left: targetRect.right + 20 };
-      tooltipStyle.transform = 'translateY(-50%)';
-    }
+  let tooltipStyle;
+  if (step.position === 'bottom') {
+    tooltipStyle = { top: targetRect.bottom + 20, left: targetRect.left + (targetRect.width / 2) };
+    tooltipStyle.transform = 'translateX(-50%)';
+  } else if (step.position === 'top') {
+    tooltipStyle = { bottom: window.innerHeight - targetRect.top + 20, left: targetRect.left + (targetRect.width / 2) };
+    tooltipStyle.transform = 'translateX(-50%)';
+  } else if (step.position === 'left') {
+    tooltipStyle = { top: targetRect.top + (targetRect.height / 2), right: window.innerWidth - targetRect.left + 20 };
+    tooltipStyle.transform = 'translateY(-50%)';
   } else {
-    // Center it if target not found
-    tooltipStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+    tooltipStyle = { top: targetRect.top + (targetRect.height / 2), left: targetRect.right + 20 };
+    tooltipStyle.transform = 'translateY(-50%)';
   }
 
   return (

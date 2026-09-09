@@ -36,13 +36,13 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(229, 98, 115, 0.12);
+  border: 1px solid rgba(229, 98, 115, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #ef4444;
+  color: #e56273;
 }
 
 .debts-header__title-row {
@@ -54,9 +54,9 @@
 .debts-count-badge {
   font-size: 11px;
   font-weight: 800;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #e56273;
+  background: rgba(229, 98, 115, 0.12);
+  border: 1px solid rgba(229, 98, 115, 0.3);
   padding: 2px 8px;
   border-radius: 999px;
 }
@@ -90,7 +90,7 @@
 .debts-kpi-card__label {
   font-size: 11.5px;
   font-weight: 700;
-  color: #94a3b8;
+  color: #9995a8;
 }
 
 .debts-kpi-card__val {
@@ -100,8 +100,8 @@
   font-family: monospace;
 }
 
-.debts-kpi-card--unpaid .debts-kpi-card__val { color: #ef4444; }
-.debts-kpi-card--paid .debts-kpi-card__val { color: #10b981; }
+.debts-kpi-card--unpaid .debts-kpi-card__val { color: #e56273; }
+.debts-kpi-card--paid .debts-kpi-card__val { color: #64d7bd; }
 .debts-kpi-card--total .debts-kpi-card__val { color: var(--accent); }
 
 /* ── Filter Strip ── */
@@ -131,7 +131,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  color: #94a3b8;
+  color: #9995a8;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -144,10 +144,10 @@
 }
 
 .debt-status-pill--active {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(239, 68, 68, 0.1) 100%) !important;
-  border-color: rgba(239, 68, 68, 0.5) !important;
+  background: linear-gradient(135deg, rgba(229, 98, 115, 0.25) 0%, rgba(229, 98, 115, 0.1) 100%) !important;
+  border-color: rgba(229, 98, 115, 0.5) !important;
   color: #fca5a5 !important;
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 12px rgba(229, 98, 115, 0.2);
 }
 
 .debt-progress-bar {
@@ -161,6 +161,6 @@
 
 .debt-progress-bar__fill {
   height: 100%;
-  background: #10b981;
+  background: #64d7bd;
   border-radius: 999px;
 }

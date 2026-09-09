@@ -360,8 +360,8 @@ export default function SetupWizard() {
       <div className="setup-container">
         {/* Brand Logo Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '16px' }}>
-          <img src="/caffio-logo-mark.png" alt="Caffio" style={{ width: 44, height: 44, objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(245, 158, 11, 0.45))' }} />
-          <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.5px' }}>Caffio Setup</span>
+          <img src="/caffio-logo-mark.png" alt="Caffio" style={{ width: 44, height: 44, objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(169, 156, 255, 0.45))' }} />
+          <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8f6ff', letterSpacing: '-0.5px' }}>Caffio Setup</span>
         </div>
 
         {/* Progress Bar */}

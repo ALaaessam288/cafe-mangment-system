@@ -14,14 +14,14 @@
 .quota-modal-card {
   position: relative;
   background: #0d121f;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  border: 1px solid rgba(169, 156, 255, 0.35);
   border-radius: 20px;
   padding: 32px 28px;
   width: 100%;
   max-width: 480px;
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.9),
-    0 0 35px rgba(245, 158, 11, 0.18);
+    0 0 35px rgba(169, 156, 255, 0.18);
   text-align: center;
   overflow: hidden;
 }
@@ -33,7 +33,7 @@
   transform: translateX(-50%);
   width: 200px;
   height: 150px;
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, rgba(245, 158, 11, 0) 70%);
+  background: radial-gradient(circle, rgba(169, 156, 255, 0.3) 0%, rgba(169, 156, 255, 0) 70%);
   pointer-events: none;
 }
 
@@ -43,7 +43,7 @@
   left: 16px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
+  color: #9995a8;
   border-radius: 8px;
   width: 32px;
   height: 32px;
@@ -65,23 +65,23 @@
   height: 72px;
   margin: 0 auto 18px;
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(180, 83, 9, 0.3));
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, rgba(169, 156, 255, 0.2), rgba(180, 83, 9, 0.3));
+  border: 1px solid rgba(169, 156, 255, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+  box-shadow: 0 8px 24px rgba(169, 156, 255, 0.25);
 }
 
 .quota-modal-crown {
-  color: #f59e0b;
+  color: #a99cff;
 }
 
 .quota-modal-sparkle {
   position: absolute;
   top: -4px;
   right: -4px;
-  color: #fbbf24;
+  color: #c9c1ff;
   animation: pulse 1.5s infinite;
 }
 
@@ -94,14 +94,14 @@
 
 .quota-modal-desc {
   font-size: 0.95rem;
-  color: #cbd5e1;
+  color: #d2cfdd;
   line-height: 1.6;
   margin-bottom: 20px;
 }
 
 .quota-modal-meter-box {
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(17, 19, 26, 0.7);
+  border: 1px solid rgba(169, 156, 255, 0.2);
   border-radius: 14px;
   padding: 14px 16px;
   margin-bottom: 20px;
@@ -111,13 +111,13 @@
   display: flex;
   justify-content: space-between;
   font-size: 0.9rem;
-  color: #94a3b8;
+  color: #9995a8;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
 .quota-modal-meter-val {
-  color: #f59e0b;
+  color: #a99cff;
   font-weight: 800;
 }
 
@@ -131,7 +131,7 @@
 
 .quota-modal-meter-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  background: linear-gradient(90deg, #a99cff, #e56273);
   border-radius: 99px;
   transition: width 0.4s ease;
 }
@@ -139,7 +139,7 @@
 .quota-modal-meter-status {
   display: block;
   font-size: 0.8rem;
-  color: #f87171;
+  color: #f17b8a;
   font-weight: 600;
 }
 
@@ -156,7 +156,7 @@
 
 .quota-benefit-item {
   font-size: 0.88rem;
-  color: #e2e8f0;
+  color: #e8e4f6;
   font-weight: 500;
 }
 
@@ -168,11 +168,11 @@
 
 .quota-btn-upgrade {
   width: 100%;
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  background: linear-gradient(135deg, #a99cff, #7468d8) !important;
   border: none !important;
   color: #05070c !important;
   font-weight: 800 !important;
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(169, 156, 255, 0.4) !important;
 }
 
 .quota-btn-wa {

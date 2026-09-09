@@ -53,9 +53,9 @@
 
 .sub-banner__dismiss:hover { opacity: 1; }
 
-.sub-banner--info    { background: rgba(56, 132, 255, .12); border-color: rgba(56, 132, 255, .38); color: #93c0ff; }
-.sub-banner--warning { background: rgba(245, 158, 11, .14); border-color: rgba(245, 158, 11, .45); color: #f5bd5a; }
-.sub-banner--danger  { background: rgba(220, 60, 55, .14);  border-color: rgba(220, 60, 55, .45);  color: #ff9b96; }
+.sub-banner--info    { background: var(--info-dim); border-color: rgba(142, 130, 235, .38); color: var(--info-hover); }
+.sub-banner--warning { background: var(--warning-dim); border-color: rgba(240, 184, 102, .4); color: var(--warning); }
+.sub-banner--danger  { background: var(--danger-dim); border-color: rgba(229, 98, 115, .4); color: var(--danger-hover); }
 
 @media (prefers-color-scheme: light) {
   .sub-banner--info    { color: #14509e; }

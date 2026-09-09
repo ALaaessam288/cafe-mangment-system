@@ -72,7 +72,7 @@
   width: 120px;
   height: 120px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 25px rgba(245, 158, 11, 0.45));
+  filter: drop-shadow(0 10px 25px rgba(169, 156, 255, 0.45));
 }
 
 .welcome-page__title {
@@ -147,17 +147,17 @@
 }
 
 .welcome-card--primary {
-  background: linear-gradient(145deg, rgba(245, 158, 11, 0.1) 0%, var(--bg-card) 100%);
-  border-color: rgba(245, 158, 11, 0.3);
+  background: linear-gradient(145deg, rgba(169, 156, 255, 0.1) 0%, var(--bg-card) 100%);
+  border-color: rgba(169, 156, 255, 0.3);
 }
 
 .welcome-card--primary:hover {
-  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 8px 30px rgba(169, 156, 255, 0.15);
   border-color: var(--accent);
 }
 
 .welcome-card--primary .welcome-card__icon-wrapper {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(169, 156, 255, 0.15);
   color: var(--accent);
 }
 

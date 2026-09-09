@@ -149,7 +149,10 @@ public class UpgradeRequestService {
                 request.getQuotedAmount(),
                 SubscriptionSource.MANUAL_ADMIN,
                 null,
-                "Bank transfer, request #" + request.getId());
+                "Bank transfer, request #" + request.getId(),
+                // The settled invoice below is the bill for this period. Letting changePlan raise
+                // one too left a phantom unpaid invoice on every approved transfer.
+                false);
 
         SubscriptionInvoice invoice = billingService.issueSettled(
                 subscription,

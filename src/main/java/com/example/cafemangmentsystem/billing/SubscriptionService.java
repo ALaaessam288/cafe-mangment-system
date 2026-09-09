@@ -98,6 +98,21 @@ public class SubscriptionService {
     public TenantSubscription changePlan(Long tenantId, String planCode, Integer periodDays,
                                          BigDecimal negotiatedPrice, SubscriptionSource source,
                                          QuotaOverrides overrides, String note) {
+        return changePlan(tenantId, planCode, periodDays, negotiatedPrice, source, overrides, note, true);
+    }
+
+    /**
+     * @param raiseInvoice whether to bill for the new period here.
+     *
+     * <p>Pass {@code false} when the caller has already collected the money and will raise its own
+     * settled invoice — otherwise the tenant is billed twice. That is not hypothetical: approving a
+     * bank transfer called this method and then issued a settled invoice of its own, so every
+     * approval left a second, phantom, permanently-unpaid invoice behind and the platform's
+     * "outstanding" total grew by the full list price on every successful sale.
+     */
+    public TenantSubscription changePlan(Long tenantId, String planCode, Integer periodDays,
+                                         BigDecimal negotiatedPrice, SubscriptionSource source,
+                                         QuotaOverrides overrides, String note, boolean raiseInvoice) {
         Plan plan = requirePlan(planCode);
         TenantSubscription previous = currentFor(tenantId).orElse(null);
         Instant now = Instant.now();
@@ -126,7 +141,9 @@ public class SubscriptionService {
         TenantSubscription saved = persistAsCurrent(subscription, "PLAN_CHANGED",
                 "الباقة: " + (previous != null ? previous.getPlan().getCode() : "—") + " ← " + plan.getCode());
 
-        billingService.issueFor(saved, saved.getCurrentPeriodStart(), saved.getCurrentPeriodEnd());
+        if (raiseInvoice) {
+            billingService.issueFor(saved, saved.getCurrentPeriodStart(), saved.getCurrentPeriodEnd());
+        }
         return saved;
     }
 
@@ -299,7 +316,10 @@ public class SubscriptionService {
                         previous.setCancelledAt(Instant.now());
                         previous.setCancelReason("Superseded");
                     }
-                    subscriptionRepository.save(previous);
+                    // Hibernate flushes all INSERTs before UPDATEs regardless of call order, so
+                    // without an explicit flush here the new row below would be inserted while this
+                    // one still reads current_subscription=true, tripping the partial unique index.
+                    subscriptionRepository.saveAndFlush(previous);
                 });
         subscription.setCurrent(true);
         TenantSubscription saved = subscriptionRepository.save(subscription);

@@ -359,8 +359,8 @@
   overflow-y: auto;
   padding: 18px clamp(14px, 2vw, 28px) 30px;
   background:
-    radial-gradient(circle at 86% -10%, rgba(245, 158, 11, .055), transparent 28%),
-    radial-gradient(circle at 10% 24%, rgba(59, 130, 246, .035), transparent 24%),
+    radial-gradient(circle at 86% -10%, rgba(169, 156, 255, .055), transparent 28%),
+    radial-gradient(circle at 10% 24%, rgba(142, 130, 235, .035), transparent 24%),
     var(--bg-app);
 }
 
@@ -376,7 +376,7 @@
   overflow: hidden;
 }
 
-.app-layout--admin .page__header::before { content: ''; position: absolute; inset-inline-start: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: linear-gradient(var(--accent), #d97706); box-shadow: 0 0 14px rgba(245,158,11,.35); }
+.app-layout--admin .page__header::before { content: ''; position: absolute; inset-inline-start: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: linear-gradient(var(--accent), #7468d8); box-shadow: 0 0 14px rgba(169, 156, 255,.35); }
 .app-layout--admin .page__title { font-size: clamp(17px, 1.5vw, 21px); letter-spacing: -.35px; }
 .app-layout--admin .page__subtitle { color: #748197; line-height: 1.65; max-width: 680px; }
 .app-layout--admin .page__actions { padding-inline-start: 12px; }
@@ -396,10 +396,10 @@
 .app-layout--admin .data-table thead tr { background: #171c2a; }
 .app-layout--admin .data-table th { height: 38px; color: #8290a7; text-transform: none; }
 .app-layout--admin .data-table td { height: 42px; }
-.app-layout--admin .data-table tbody tr:hover td { background: rgba(245,158,11,.035); }
+.app-layout--admin .data-table tbody tr:hover td { background: rgba(169, 156, 255,.035); }
 
 .app-layout--admin .stat-card { border-radius: 14px; background: linear-gradient(150deg, rgba(27,33,49,.92), rgba(17,21,32,.94)); }
-.app-layout--admin .stat-card:hover { transform: translateY(-3px); border-color: rgba(245,158,11,.22); }
+.app-layout--admin .stat-card:hover { transform: translateY(-3px); border-color: rgba(169, 156, 255,.22); }
 .app-layout--admin .section-card { border-radius: 16px; background: linear-gradient(155deg, rgba(22,27,41,.92), rgba(16,20,31,.94)); box-shadow: 0 10px 28px rgba(0,0,0,.23); }
 
 .app-layout--admin input:not([type='checkbox']):not([type='radio']),
@@ -407,7 +407,7 @@
 .app-layout--admin textarea { border-radius: 9px; }
 
 .app-layout--admin button, .app-layout--admin a { -webkit-tap-highlight-color: transparent; }
-.app-layout--admin :focus-visible { outline: 2px solid rgba(245,158,11,.9); outline-offset: 2px; }
+.app-layout--admin :focus-visible { outline: 2px solid rgba(169, 156, 255,.9); outline-offset: 2px; }
 
 @media (max-width: 760px) {
   .app-layout--admin .page__header { align-items: flex-start; flex-direction: column; min-height: auto; }

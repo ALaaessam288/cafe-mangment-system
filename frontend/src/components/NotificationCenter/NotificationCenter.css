@@ -73,7 +73,7 @@
 .notif-close-btn:hover {
   color: var(--danger);
   background: var(--danger-dim);
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(229, 98, 115, 0.3);
 }
 
 .notif-sound-strip {
@@ -109,8 +109,8 @@
 }
 
 .notif-sound-toggle--active {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(100, 215, 189, 0.15);
+  border-color: rgba(100, 215, 189, 0.4);
   color: var(--success-text);
 }
 
@@ -160,17 +160,17 @@
 }
 
 .notif-item--warning .notif-item__icon-wrap {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(169, 156, 255, 0.15);
   color: var(--accent);
 }
 
 .notif-item--success .notif-item__icon-wrap {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(100, 215, 189, 0.15);
   color: var(--success);
 }
 
 .notif-item--info .notif-item__icon-wrap {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(142, 130, 235, 0.15);
   color: var(--info);
 }
 

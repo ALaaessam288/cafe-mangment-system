@@ -17,9 +17,9 @@
 /* ── Modal Card ── */
 .modal {
   background: linear-gradient(180deg, #1b2132 0%, #121622 100%);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  border: 1px solid rgba(169, 156, 255, 0.25);
   border-radius: 18px;
-  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.8), 0 0 35px rgba(245, 158, 11, 0.08);
+  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.8), 0 0 35px rgba(169, 156, 255, 0.08);
   display: flex;
   flex-direction: column;
   max-height: 88vh;
@@ -71,8 +71,8 @@
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(169, 156, 255, 0.12);
+  border: 1px solid rgba(169, 156, 255, 0.25);
   color: var(--accent);
   display: flex;
   align-items: center;
@@ -108,9 +108,9 @@
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(169, 156, 255, 0.15);
   color: var(--accent);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  border: 1px solid rgba(169, 156, 255, 0.3);
 }
 
 .modal__close {
@@ -130,8 +130,8 @@
 
 .modal__close:hover {
   color: #fff;
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(229, 98, 115, 0.2);
+  border-color: rgba(229, 98, 115, 0.4);
   transform: rotate(90deg);
 }
 
@@ -230,7 +230,7 @@
 .modal-field-select:focus,
 .modal-field-textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+  box-shadow: 0 0 0 3px rgba(169, 156, 255, 0.18);
   background: rgba(20, 25, 40, 0.95);
 }
 

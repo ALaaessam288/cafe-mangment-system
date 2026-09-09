@@ -38,6 +38,7 @@ public class BillingService {
     private final SubscriptionPaymentRepository paymentRepository;
     private final TenantSubscriptionRepository subscriptionRepository;
     private final BillingProperties properties;
+    private final com.example.cafemangmentsystem.tenant.repository.TenantRepository tenantRepository;
 
     /** Raise the invoice for a subscription period. Free periods (trials) are not invoiced. */
     public SubscriptionInvoice issueFor(TenantSubscription subscription, Instant periodStart, Instant periodEnd) {
@@ -134,6 +135,46 @@ public class BillingService {
         invoice.setStatus(InvoiceStatus.VOID);
         invoice.setNotes(reason);
         return invoiceRepository.save(invoice);
+    }
+
+    /**
+     * Every invoice on the platform, newest first, optionally narrowed to one status.
+     *
+     * <p>The console could only ever ask for one tenant's invoices at a time, which is useless for
+     * the question an operator actually has ("who owes me money?"). Tenant names are resolved here
+     * in one pass rather than per row.
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.example.cafemangmentsystem.billing.dto.AdminInvoiceDto>
+            invoiceConsole(com.example.cafemangmentsystem.billing.entity.InvoiceStatus status,
+                           org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<SubscriptionInvoice> page = status == null
+                ? invoiceRepository.findAllByOrderByIssuedAtDesc(pageable)
+                : invoiceRepository.findByStatusOrderByIssuedAtDesc(status, pageable);
+
+        java.util.Set<Long> tenantIds = page.getContent().stream()
+                .map(SubscriptionInvoice::getTenantId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        java.util.Map<Long, String> names = tenantIds.isEmpty()
+                ? java.util.Map.of()
+                : tenantRepository.findAllById(tenantIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.example.cafemangmentsystem.tenant.entity.Tenant::getId,
+                                com.example.cafemangmentsystem.tenant.entity.Tenant::getName));
+
+        return page.map(i -> com.example.cafemangmentsystem.billing.dto.AdminInvoiceDto.from(
+                i, names.getOrDefault(i.getTenantId(), "\u2014")));
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.example.cafemangmentsystem.billing.dto.AdminInvoiceDto> invoiceDtosFor(Long tenantId) {
+        String name = tenantRepository.findById(tenantId)
+                .map(com.example.cafemangmentsystem.tenant.entity.Tenant::getName).orElse("\u2014");
+        return invoicesFor(tenantId).stream()
+                .map(i -> com.example.cafemangmentsystem.billing.dto.AdminInvoiceDto.from(i, name))
+                .toList();
     }
 
     @Transactional(readOnly = true)

@@ -92,6 +92,7 @@ export function AuthProvider({ children }) {
       storage.setAccessToken(data.token);
       storage.setRefreshToken(data.refreshToken);
       storage.setTenantSlug(tenantSlug);
+      storage.setLastTenantSlug(tenantSlug);
 
       const userInfo = toUserInfo(data, tenantSlug);
       storage.setUser(userInfo);
@@ -112,6 +113,7 @@ export function AuthProvider({ children }) {
       storage.setAccessToken(data.token);
       storage.setRefreshToken(data.refreshToken);
       storage.setTenantSlug(tenantSlug);
+      storage.setLastTenantSlug(tenantSlug);
 
       const userInfo = toUserInfo(data, tenantSlug);
       storage.setUser(userInfo);

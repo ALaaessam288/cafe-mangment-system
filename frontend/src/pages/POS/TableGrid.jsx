@@ -248,7 +248,7 @@ export default function TableGrid({
                 >
                   <span className="takeaway-card__row">
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {isDelivery ? <Bike size={13} style={{ color: '#8b5cf6' }} /> : <ShoppingBag size={13} style={{ color: 'var(--accent)' }} />}
+                      {isDelivery ? <Bike size={13} style={{ color: '#8e82eb' }} /> : <ShoppingBag size={13} style={{ color: 'var(--accent)' }} />}
                       <strong>#{order.orderNumber}</strong>
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

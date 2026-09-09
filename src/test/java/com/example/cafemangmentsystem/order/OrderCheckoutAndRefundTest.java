@@ -1,6 +1,7 @@
 package com.example.cafemangmentsystem.order;
 
 import com.example.cafemangmentsystem.common.idempotency.IdempotencyService;
+import com.example.cafemangmentsystem.common.idempotency.InMemoryIdempotencyRepository;
 import com.example.cafemangmentsystem.common.tenant.TenantContext;
 import com.example.cafemangmentsystem.menu.entity.Product;
 import com.example.cafemangmentsystem.order.dto.CheckoutRequest;
@@ -35,7 +36,7 @@ public class OrderCheckoutAndRefundTest {
 
     @Test
     public void idempotencyServiceReturnsCachedResult() {
-        IdempotencyService idempotency = new IdempotencyService();
+        IdempotencyService idempotency = InMemoryIdempotencyRepository.service();
         String key = "IDEMP-KEY-12345";
         String dummyCachedResult = "CHECKOUT_COMPLETED_SUCCESSFULLY";
 

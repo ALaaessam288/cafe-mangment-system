@@ -11,6 +11,9 @@ const LEGACY_KEYS = {
   TENANT_SLUG:    'wanas_tenant_slug',
   USER:           'wanas_user',
 };
+const PREFERENCE_KEYS = {
+  LAST_TENANT_SLUG: 'caffio_last_tenant_slug',
+};
 
 function getItemWithFallback(key, legacyKey) {
   return localStorage.getItem(key) || localStorage.getItem(legacyKey);
@@ -41,6 +44,11 @@ export const storage = {
     localStorage.removeItem(LEGACY_KEYS.TENANT_SLUG);
   },
 
+  /* Remember only the last workspace identifier, never credentials. */
+  getLastTenantSlug:    () => localStorage.getItem(PREFERENCE_KEYS.LAST_TENANT_SLUG),
+  setLastTenantSlug:    (slug) => localStorage.setItem(PREFERENCE_KEYS.LAST_TENANT_SLUG, slug),
+  removeLastTenantSlug: () => localStorage.removeItem(PREFERENCE_KEYS.LAST_TENANT_SLUG),
+
   /* User Info */
   getUser: () => {
     try {
@@ -56,7 +64,7 @@ export const storage = {
     localStorage.removeItem(LEGACY_KEYS.USER);
   },
 
-  /* Clear Everything */
+  /* Clear the authenticated session while keeping device preferences. */
   clearAll: () => {
     Object.values(KEYS).forEach((key) => localStorage.removeItem(key));
     Object.values(LEGACY_KEYS).forEach((key) => localStorage.removeItem(key));

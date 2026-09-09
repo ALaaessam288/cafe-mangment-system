@@ -87,6 +87,27 @@ export default function ModifierDialog({
     }
   }
 
+  /*
+   * One option at a time.
+   *
+   * The header of this file has always said it "enforces strictly ONE option selection", but the
+   * chip was wired straight to a plain toggle, so every size and add-on accumulated: picking
+   * كيوي، فراولة and بلوبيري together added +30 to a smoothie that can only be one flavour.
+   * Clicking the selected chip again clears it, so an optional group can still be left empty.
+   *
+   * The parent updates through `setSelectedOptionIds(prev => ...)`, so clearing the old selection
+   * and setting the new one in the same tick is safe — each call sees the previous result.
+   */
+  function handleOptionSelect(optionId) {
+    const alreadySelected = selectedIds.includes(optionId);
+
+    customOptions
+      .filter((o) => o.id !== optionId && selectedIds.includes(o.id))
+      .forEach((o) => onToggle(o.id));
+
+    if (!alreadySelected) onToggle(optionId);
+  }
+
   const extra = options
     .filter((o) => selectedIds.includes(o.id))
     .reduce((sum, o) => sum + parseFloat(o.priceDelta ?? 0), 0);
@@ -102,8 +123,8 @@ export default function ModifierDialog({
         {/* Section 1: Custom Addons / Sizes (if any exist) */}
         {customOptions.length > 0 && (
           <div style={{ marginBottom: '14px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 800, color: '#e5d8cc', display: 'block', marginBottom: '8px' }}>
-              الحجم / الإضافات:
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#d2cfdd', display: 'block', marginBottom: '8px' }}>
+              الحجم / الإضافات (اختيار واحد):
             </span>
             <div className="modifier-dialog__options">
               {customOptions.map((option) => {
@@ -114,7 +135,7 @@ export default function ModifierDialog({
                     key={option.id}
                     type="button"
                     className={`modifier-chip ${selected ? 'modifier-chip--selected' : ''}`}
-                    onClick={() => onToggle(option.id)}
+                    onClick={() => handleOptionSelect(option.id)}
                     aria-pressed={selected}
                   >
                     <span className="modifier-chip__name">{option.nameAr}</span>
@@ -132,7 +153,7 @@ export default function ModifierDialog({
 
         {/* Section 2: Sugar Selector (Single Choice) */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, color: '#e5d8cc', display: 'block', marginBottom: '8px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 800, color: '#d2cfdd', display: 'block', marginBottom: '8px' }}>
             🍬 مستوى السكر (اختيار واحد):
           </span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
@@ -143,12 +164,12 @@ export default function ModifierDialog({
                   key={s}
                   type="button"
                   style={{
-                    border: isSelected ? '1.5px solid #5fd2b7' : '1px solid rgba(255,255,255,0.09)',
+                    border: isSelected ? '1.5px solid #64d7bd' : '1px solid rgba(255,255,255,0.09)',
                     borderRadius: '8px',
                     padding: '8px 4px',
                     fontSize: '12px',
-                    background: isSelected ? '#5fd2b7' : 'rgba(255,255,255,0.03)',
-                    color: isSelected ? '#110e0c' : '#dcd1c6',
+                    background: isSelected ? '#64d7bd' : 'rgba(255,255,255,0.03)',
+                    color: isSelected ? '#0d0e14' : '#dcd1c6',
                     fontWeight: isSelected ? 900 : 600,
                     cursor: 'pointer',
                     transition: 'all 0.14s',
