@@ -50,3 +50,9 @@ _to_delete/
 # Scratch diagnostic output — railway-env dumps can contain live secrets (JWT key, DB URL, etc.)
 /Claude outputs/
 /entity_cols.tsv
+
+### WhatsApp bridge ###
+whatsapp-bridge/node_modules/
+# Linked-device credentials. These ARE the WhatsApp session - anyone holding them can send as
+# that number. They belong in a mounted volume, never in the repository.
+whatsapp-bridge/.auth/
