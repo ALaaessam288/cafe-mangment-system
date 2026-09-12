@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -22,6 +24,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 
@@ -110,6 +113,44 @@ public class SecurityConfig {
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
-        return source;
+
+        // This application serves its own frontend, so the browser attaches an Origin header equal
+        // to the app's own address on every POST/PUT/DELETE - even though nothing cross-origin is
+        // happening. Spring validates that header against the allow-list regardless, so a
+        // deployment whose own address was not listed rejected its own login form with
+        // "403 Invalid CORS request". That response carries no Access-Control-Allow-Origin, so the
+        // browser hides it from JavaScript and reports a bare network error: the UI said "cannot
+        // reach the server" while the server was up and answering /api/health in 117 ms.
+        // Returning null for a same-origin request tells Spring there is no CORS decision to make.
+        return request -> isSameOrigin(request) ? null : source.getCorsConfiguration(request);
+    }
+
+    /**
+     * True when the request carries no Origin (not a CORS request at all) or carries one naming
+     * this very host. Behind a reverse proxy - Railway, nginx - the Host header holds the internal
+     * address, so the forwarded host is preferred when present.
+     */
+    private static boolean isSameOrigin(HttpServletRequest request) {
+        String origin = request.getHeader(HttpHeaders.ORIGIN);
+        if (origin == null || origin.isBlank()) {
+            return true;
+        }
+
+        String originAuthority;
+        try {
+            originAuthority = URI.create(origin).getAuthority();
+        } catch (IllegalArgumentException malformedOrigin) {
+            return false;
+        }
+        if (originAuthority == null) {
+            return false;
+        }
+
+        String forwardedHost = request.getHeader("X-Forwarded-Host");
+        String host = (forwardedHost != null && !forwardedHost.isBlank())
+                ? forwardedHost.split(",")[0].trim()
+                : request.getHeader(HttpHeaders.HOST);
+
+        return originAuthority.equalsIgnoreCase(host);
     }
 }

@@ -46,3 +46,7 @@ _to_delete/
 *.tgz
 .attach_pid*
 *_tmp
+
+# Scratch diagnostic output — railway-env dumps can contain live secrets (JWT key, DB URL, etc.)
+/Claude outputs/
+/entity_cols.tsv
