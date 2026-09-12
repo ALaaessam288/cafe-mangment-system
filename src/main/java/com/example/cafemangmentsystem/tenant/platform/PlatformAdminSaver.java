@@ -45,4 +45,28 @@ public class PlatformAdminSaver {
         admin.setRole(Role.SUPER_ADMIN);
         return userRepository.save(admin);
     }
+
+    /**
+     * Creates the platform owner or deliberately resets the matching owner's credentials.
+     *
+     * <p>This method is used only by the provisioning-key protected recovery endpoint. The old
+     * recovery path silently did nothing when the platform tenant already existed and the supplied
+     * username was missing; when it did find the user, it promoted the role but ignored the new
+     * password. That left a Railway deployment permanently locked out despite a successful 201.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public User upsertSuperAdmin(Long tenantId, String username, String fullName, String rawPassword) {
+        User admin = userRepository.findByTenantIdAndUsername(tenantId, username)
+                .orElseGet(User::new);
+
+        if (admin.getId() == null) {
+            admin.setTenantId(tenantId);
+            admin.setUsername(username);
+        }
+        admin.setFullName(fullName);
+        admin.setPasswordHash(passwordEncoder.encode(rawPassword));
+        admin.setRole(Role.SUPER_ADMIN);
+        admin.activate();
+        return userRepository.save(admin);
+    }
 }
