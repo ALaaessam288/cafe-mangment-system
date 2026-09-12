@@ -1,13 +1,13 @@
 package com.example.cafemangmentsystem.common.config;
 
-import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.output.MigrateResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.boot.jpa.autoconfigure.EntityManagerFactoryDependsOnPostProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.ObjectUtils;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -37,19 +37,27 @@ import java.util.Map;
 @Configuration
 public class FlywayConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(FlywayConfig.class);
+
     /**
-     * Forces every {@link EntityManagerFactory} bean to wait for {@code flyway} to finish before
-     * Hibernate touches the schema, so {@code JPA_DDL_AUTO=update} (or any other non-{@code none}
-     * value) can never again race a migration for the same table.
+     * Forces the {@code EntityManagerFactory} to wait for {@code flyway} to finish, so Hibernate
+     * can never touch the schema before the migrations have built it.
+     *
+     * <p>This used to be hand-rolled as a {@code BeanFactoryPostProcessor} that looked the factory
+     * up with {@code getBeanNamesForType(EntityManagerFactory.class, false, false)}. That call
+     * returns nothing: the entity manager factory is contributed by a {@code FactoryBean}, and with
+     * {@code allowEagerInit=false} its object type cannot be determined at post-processing time, so
+     * the loop had no names to add the dependency to and silently did nothing. Hibernate therefore
+     * still won the race - under {@code ddl-auto=update} it created every table itself in the wrong
+     * shape, and under {@code validate} it failed on the first missing table before Flyway had run
+     * at all, which is why a crashed deployment showed "missing table [cafe_tables]" and not one
+     * single Flyway log line.
+     *
+     * <p>Spring Boot ships the post-processor that does resolve those names. Use it.
      */
     @Bean
-    static BeanFactoryPostProcessor entityManagerFactoryDependsOnFlyway() {
-        return (ConfigurableListableBeanFactory beanFactory) -> {
-            for (String name : beanFactory.getBeanNamesForType(EntityManagerFactory.class, false, false)) {
-                var definition = beanFactory.getBeanDefinition(name);
-                definition.setDependsOn(ObjectUtils.addObjectToArray(definition.getDependsOn(), "flyway"));
-            }
-        };
+    static EntityManagerFactoryDependsOnPostProcessor entityManagerFactoryDependsOnFlyway() {
+        return new EntityManagerFactoryDependsOnPostProcessor("flyway");
     }
 
     @Bean
@@ -65,9 +73,19 @@ public class FlywayConfig {
                         "pk_id", primaryKeyDdl(dataSource),
                         "add_col_if_not_exists", addColumnIfNotExistsDdl(dataSource)))
                 .load();
-        if (enabled) {
-            flyway.migrate();
+        // Say out loud what happened. A disabled or no-op Flyway used to leave no trace whatsoever
+        // in the log, so the first sign of trouble was Hibernate reporting a missing table hundreds
+        // of lines later - which reads like a Hibernate problem and sends you looking in the wrong
+        // place. One line here names the real cause at the moment it occurs.
+        if (!enabled) {
+            log.error("[FLYWAY] DISABLED (spring.flyway.enabled=false). No migration will run and "
+                    + "the schema will be whatever ddl-auto leaves behind. Set FLYWAY_ENABLED=true.");
+            return flyway;
         }
+
+        MigrateResult result = flyway.migrate();
+        log.info("[FLYWAY] schema '{}' at version {} - applied {} migration(s) from {}",
+                result.schemaName, result.targetSchemaVersion, result.migrationsExecuted, locations);
         return flyway;
     }
 
