@@ -124,7 +124,11 @@ async function drain() {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const mask = (jid) => `***${String(jid).replace(/\D/g, '').slice(-4)}`;
+// A JID carries a device suffix - 201061967618:21@s.whatsapp.net - and stripping non-digits
+// blindly folded that suffix into the number, so /status reported "***1821" for a number
+// ending 7618 and made it look like a different line had been linked. Cut at ':' and '@'
+// first, then mask.
+const mask = (jid) => `***${String(jid).split('@')[0].split(':')[0].replace(/\D/g, '').slice(-4)}`;
 
 /**
  * Egyptian numbers arrive in every shape a human might type. Reduce to digits, drop the trunk 0,
