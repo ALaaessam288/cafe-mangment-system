@@ -37,6 +37,9 @@ export const tenantApi = {
   updateWhatsApp: ({ ownerWhatsapp, whatsappAlertsEnabled }) =>
     client.put('/tenant/whatsapp', { ownerWhatsapp, whatsappAlertsEnabled }).then((r) => r.data),
 
+  /* No recipient argument on purpose - the server sends to the number it has stored. */
+  testWhatsApp: () => client.post('/tenant/whatsapp/test').then((r) => r.data),
+
   /** Takes a plan CODE. Only self-selectable plans (the trial) are accepted. */
   selectPlan: (planCode) => client.put('/tenant/plan', { plan: planCode }).then((r) => r.data),
 

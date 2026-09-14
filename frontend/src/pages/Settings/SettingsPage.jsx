@@ -159,6 +159,7 @@ export default function SettingsPage() {
   const [whatsappForm, setWhatsappForm] = useState({ ownerWhatsapp: '', whatsappAlertsEnabled: false });
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
   const [whatsappError, setWhatsappError] = useState('');
+  const [isTestingWhatsapp, setIsTestingWhatsapp] = useState(false);
 
   // Load tenant usage
   /* `logoPreview` used to be a dependency here while the body also set it, so the callback's
@@ -207,6 +208,21 @@ export default function SettingsPage() {
       .catch(() => { /* the card still works; it just starts empty */ });
     return () => { cancelled = true; };
   }, [role]);
+
+  async function handleTestWhatsApp() {
+    setWhatsappError('');
+    setIsTestingWhatsapp(true);
+    try {
+      await tenantApi.testWhatsApp();
+      toast.success('تم إرسال رسالة التجربة — شوف واتساب');
+    } catch (err) {
+      // The server explains itself (gateway unreachable, session not linked, no number saved).
+      // Showing that beats "حدث خطأ".
+      setWhatsappError(err.message || 'تعذر إرسال رسالة التجربة');
+    } finally {
+      setIsTestingWhatsapp(false);
+    }
+  }
 
   async function handleSaveWhatsApp(event) {
     event.preventDefault();
@@ -1084,7 +1100,17 @@ export default function SettingsPage() {
                 </p>
               )}
 
-              <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px' }}>
+                {/* Only offered once a number is stored - testing before saving would send to
+                    whatever the server still has, which is the opposite of what the button says. */}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleTestWhatsApp}
+                  disabled={isTestingWhatsapp || isSavingWhatsapp || !whatsappForm.ownerWhatsapp}
+                >
+                  {isTestingWhatsapp ? 'جاري الإرسال...' : 'إرسال رسالة تجربة'}
+                </Button>
                 <Button
                   type="submit"
                   variant="primary"

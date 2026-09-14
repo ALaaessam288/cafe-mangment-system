@@ -25,7 +25,9 @@ import com.example.cafemangmentsystem.shift.entity.Shift;
 import com.example.cafemangmentsystem.shift.repository.ShiftRepository;
 import com.example.cafemangmentsystem.user.entity.User;
 import com.example.cafemangmentsystem.user.repository.UserRepository;
+import com.example.cafemangmentsystem.shift.event.ShiftEvents;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +63,7 @@ public class ShiftService {
     private final DebtRepository debtRepository;
     private final EmployeeTransactionRepository employeeTransactionRepository;
     private final com.example.cafemangmentsystem.cashmovement.repository.CashMovementRepository cashMovementRepository;
+    private final ApplicationEventPublisher events;
 
     @Transactional
     public ShiftResponse open(Long userId, OpenShiftRequest request) {
@@ -98,7 +101,21 @@ public class ShiftService {
         shift.setOpeningFloat(request.openingFloat() != null ? request.openingFloat() : BigDecimal.ZERO);
         shift.setOpenedAt(Instant.now());
 
-        return ShiftResponse.from(shiftRepository.save(shift));
+        Shift saved = shiftRepository.save(shift);
+
+        events.publishEvent(new ShiftEvents.ShiftOpened(
+                currentTenantId, saved.getId(), displayName(user),
+                register.getName() != null ? register.getName() : "نقطة البيع",
+                saved.getOpeningFloat(), saved.getOpenedAt()));
+
+        return ShiftResponse.from(saved);
+    }
+
+    /** The name a human would recognise, not whichever field happens to be populated. */
+    private String displayName(User user) {
+        if (user == null) return "—";
+        return user.getFullName() != null && !user.getFullName().isBlank()
+                ? user.getFullName() : user.getUsername();
     }
 
     @Transactional
@@ -192,7 +209,17 @@ public class ShiftService {
         }
         shift.setClosedAt(Instant.now());
 
-        return ShiftResponse.from(shiftRepository.save(shift));
+        Shift saved = shiftRepository.save(shift);
+
+        events.publishEvent(new ShiftEvents.ShiftClosed(
+                com.example.cafemangmentsystem.common.tenant.TenantContext.get(),
+                saved.getId(), displayName(saved.getUser()),
+                saved.getRegister() != null && saved.getRegister().getName() != null
+                        ? saved.getRegister().getName() : "نقطة البيع",
+                saved.getOpenedAt(), saved.getClosedAt(),
+                openFloat, cash, expected, counted, saved.getVariance()));
+
+        return ShiftResponse.from(saved);
     }
 
     @Transactional
