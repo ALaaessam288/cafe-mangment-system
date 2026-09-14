@@ -151,6 +151,15 @@ export default function SettingsPage() {
   const [updateStatus, setUpdateStatus] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
+  /* WhatsApp alert settings.
+     These are controlled inputs on purpose. The card used to use defaultValue/defaultChecked with
+     no state and no request at all: its onSubmit called preventDefault and then popped a success
+     toast, so every owner believed they had switched alerts on while the tenant kept the
+     whatsappAlertsEnabled = false default and SubscriptionExpiryJob correctly skipped them. */
+  const [whatsappForm, setWhatsappForm] = useState({ ownerWhatsapp: '', whatsappAlertsEnabled: false });
+  const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
+  const [whatsappError, setWhatsappError] = useState('');
+
   // Load tenant usage
   /* `logoPreview` used to be a dependency here while the body also set it, so the callback's
      identity changed on its own result and the effect below re-ran the request. Anything else that
@@ -180,6 +189,43 @@ export default function SettingsPage() {
       setLogoPreview(user.logoUrl);
     }
   }, [user?.logoUrl]);
+
+  /* Show what is actually stored, not a guess. The field used to default to user?.phone — a
+     different field on a different entity — so the number on screen was frequently not the number
+     any alert would have been sent to. */
+  useEffect(() => {
+    if (role !== ROLES.ADMIN) return;
+    let cancelled = false;
+    tenantApi.getMe()
+      .then((tenant) => {
+        if (cancelled) return;
+        setWhatsappForm({
+          ownerWhatsapp: tenant.ownerWhatsapp || '',
+          whatsappAlertsEnabled: Boolean(tenant.whatsappAlertsEnabled),
+        });
+      })
+      .catch(() => { /* the card still works; it just starts empty */ });
+    return () => { cancelled = true; };
+  }, [role]);
+
+  async function handleSaveWhatsApp(event) {
+    event.preventDefault();
+    setWhatsappError('');
+    setIsSavingWhatsapp(true);
+    try {
+      const tenant = await tenantApi.updateWhatsApp(whatsappForm);
+      setWhatsappForm({
+        ownerWhatsapp: tenant.ownerWhatsapp || '',
+        whatsappAlertsEnabled: Boolean(tenant.whatsappAlertsEnabled),
+      });
+      // Only after the server has confirmed it.
+      toast.success('تم حفظ إعدادات واتساب');
+    } catch (err) {
+      setWhatsappError(err.message || 'تعذر حفظ الإعدادات');
+    } finally {
+      setIsSavingWhatsapp(false);
+    }
+  }
 
   // Execute Background Removal Algorithm
   const runBackgroundRemoval = useCallback(async (sourceImg, mode, tol, feat, flood, trim) => {
@@ -1006,31 +1052,46 @@ export default function SettingsPage() {
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               قم بتفعيل استلام التنبيهات والتقارير الهامة مباشرة على رقم واتساب الخاص بالمالك أو المشرف.
             </p>
-            <form onSubmit={(e) => { e.preventDefault(); toast.success('تم حفظ إعدادات واتساب بنجاح'); }} className="form-grid">
+            <form onSubmit={handleSaveWhatsApp} className="form-grid">
               <Input
-                label="رقم هاتف المالك (مع رمز الدولة)"
+                label="رقم واتساب المالك (مع رمز الدولة)"
                 placeholder="مثال: +201112633164"
-                defaultValue={user?.phone || ''}
+                value={whatsappForm.ownerWhatsapp}
+                onChange={(e) => setWhatsappForm((f) => ({ ...f, ownerWhatsapp: e.target.value }))}
               />
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                  <input type="checkbox" defaultChecked style={{ accentColor: '#25d366', width: '16px', height: '16px' }} />
-                  تقرير إغلاق الوردية والملخص المالي
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                  <input type="checkbox" defaultChecked style={{ accentColor: '#25d366', width: '16px', height: '16px' }} />
-                  تنبيه عند نفاذ المنتجات من المخزن
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                  <input type="checkbox" style={{ accentColor: '#25d366', width: '16px', height: '16px' }} />
-                  تنبيه الفواتير المرتجعة أو الملغاة
-                </label>
-              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', marginTop: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={whatsappForm.whatsappAlertsEnabled}
+                  onChange={(e) => setWhatsappForm((f) => ({ ...f, whatsappAlertsEnabled: e.target.checked }))}
+                  style={{ accentColor: '#25d366', width: '16px', height: '16px' }}
+                />
+                تفعيل تنبيهات واتساب
+              </label>
+
+              {/* Say what is actually sent. Three toggles used to sit here - shift close, low stock,
+                  voided invoices - and none of those notifications exist anywhere in the backend. */}
+              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '10px 0 0', lineHeight: 1.7 }}>
+                المُفعّل حالياً: <strong>تنبيهات قرب انتهاء الاشتراك</strong>.
+                <br />
+                تقارير الورديات وتنبيهات المخزون قيد التطوير وهتظهر هنا أول ما تشتغل.
+              </p>
+
+              {whatsappError && (
+                <p style={{ fontSize: '13px', color: 'var(--danger, #ef4444)', margin: '10px 0 0' }}>
+                  {whatsappError}
+                </p>
+              )}
 
               <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                <Button type="submit" variant="primary" style={{ background: '#25d366', color: '#fff', border: 'none' }}>
-                  حفظ إعدادات واتساب
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isSavingWhatsapp}
+                  style={{ background: '#25d366', color: '#fff', border: 'none' }}
+                >
+                  {isSavingWhatsapp ? 'جاري الحفظ...' : 'حفظ إعدادات واتساب'}
                 </Button>
               </div>
             </form>

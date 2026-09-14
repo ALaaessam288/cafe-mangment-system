@@ -213,6 +213,42 @@ public class TenantService {
         return TenantResponse.from(saved, currentSubscription(tenantId));
     }
 
+    /**
+     * The café owner setting their own WhatsApp alert preferences.
+     *
+     * <p>Separate from {@link #updateSettings} on purpose: that one is the platform admin's, and it
+     * also carries the service charge — a commercial setting the café must not be able to change for
+     * itself. Only the two WhatsApp fields are writable here.
+     *
+     * <p>A blank number stores null rather than an empty string, so
+     * {@code SubscriptionExpiryJob}'s {@code isBlank()} guard and a plain null check agree about
+     * what "no number" means.
+     */
+    public TenantResponse updateWhatsAppSettings(Long tenantId, String ownerWhatsapp,
+                                                 Boolean whatsappAlertsEnabled) {
+        Tenant tenant = requireTenant(tenantId);
+
+        if (ownerWhatsapp != null) {
+            tenant.setOwnerWhatsapp(ownerWhatsapp.isBlank() ? null : ownerWhatsapp.trim());
+        }
+        if (whatsappAlertsEnabled != null) {
+            tenant.setWhatsappAlertsEnabled(whatsappAlertsEnabled);
+        }
+
+        // Turning alerts on with no number to send to is the one combination that silently does
+        // nothing, which is exactly the failure this whole change exists to remove.
+        if (Boolean.TRUE.equals(tenant.getWhatsappAlertsEnabled())
+                && (tenant.getOwnerWhatsapp() == null || tenant.getOwnerWhatsapp().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "لتفعيل تنبيهات واتساب لازم تدخل رقم الواتساب الأول.");
+        }
+
+        Tenant saved = tenantRepository.save(tenant);
+        audit(tenantId, "WHATSAPP_SETTINGS_UPDATED",
+                "تنبيهات واتساب: " + (Boolean.TRUE.equals(saved.getWhatsappAlertsEnabled()) ? "مفعّلة" : "متوقفة"));
+        return TenantResponse.from(saved, currentSubscription(tenantId));
+    }
+
     // ── Self-service plan selection ─────────────────────────────────────────
 
     /**
