@@ -16,7 +16,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Sends WhatsApp messages through whichever gateway is configured.
@@ -62,14 +64,36 @@ public class WhatsAppService {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    /** What a dispatch attempt actually did, for a caller that needs to know. */
+    public record DispatchResult(boolean dispatched, String detail) {
+        static DispatchResult ok(String detail) { return new DispatchResult(true, detail); }
+        static DispatchResult no(String detail) { return new DispatchResult(false, detail); }
+    }
+
     /**
-     * Sends a WhatsApp message in the background immediately without requiring user interaction.
+     * Sends a WhatsApp message in the background. Fire-and-forget: the caller's request returns
+     * immediately and never waits on the gateway.
      */
     @Async
     public void sendInstantMessage(String recipientPhone, String messageText) {
-        if (!enabled || recipientPhone == null || recipientPhone.isBlank()) {
-            log.debug("[WhatsApp] Skipping dispatch: gateway disabled or empty recipient.");
-            return;
+        sendNow(recipientPhone, messageText);
+    }
+
+    /**
+     * The same dispatch, synchronously, returning what happened.
+     *
+     * <p>The async version above swallows its own outcome by design — nothing sensible can be done
+     * with a failure hours after a notification was queued. But that left the integration
+     * unverifiable: the only way to discover whether the gateway was reachable at all was to wait
+     * for a subscription to expire and then go reading logs. This method exists so
+     * {@code /api/platform/whatsapp/test} can answer the question directly.
+     */
+    public DispatchResult sendNow(String recipientPhone, String messageText) {
+        if (!enabled) {
+            return DispatchResult.no("gateway disabled (whatsapp.gateway.enabled=false)");
+        }
+        if (recipientPhone == null || recipientPhone.isBlank()) {
+            return DispatchResult.no("no recipient");
         }
 
         String normalizedPhone = normalizePhone(recipientPhone);
@@ -77,7 +101,7 @@ public class WhatsAppService {
         if (apiUrl == null || apiUrl.isBlank() || token == null || token.isBlank()) {
             log.warn("[WhatsApp] Dispatch skipped for {} because gateway credentials are not configured",
                     maskPhone(normalizedPhone));
-            return;
+            return DispatchResult.no("gateway url or token is not configured");
         }
 
         try {
@@ -86,15 +110,34 @@ public class WhatsAppService {
 
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 log.info("[WhatsApp] Accepted by {} for {}", resolvedProvider(), maskPhone(normalizedPhone));
-            } else {
-                // The body is the only place a gateway explains itself, and a bare status code has
-                // repeatedly turned a one-line misconfiguration into a debugging session.
-                log.warn("[WhatsApp] {} returned status {} for {}: {}", resolvedProvider(), response.statusCode(),
-                        maskPhone(normalizedPhone), abbreviate(response.body()));
+                return DispatchResult.ok(resolvedProvider() + " accepted with " + response.statusCode());
             }
+
+            // The body is the only place a gateway explains itself, and a bare status code has
+            // repeatedly turned a one-line misconfiguration into a debugging session.
+            log.warn("[WhatsApp] {} returned status {} for {}: {}", resolvedProvider(), response.statusCode(),
+                    maskPhone(normalizedPhone), abbreviate(response.body()));
+            return DispatchResult.no(resolvedProvider() + " returned " + response.statusCode()
+                    + ": " + abbreviate(response.body()));
+
         } catch (Exception ex) {
             log.error("[WhatsApp] Failed to dispatch message to {}: {}", maskPhone(normalizedPhone), ex.getMessage());
+            return DispatchResult.no("could not reach the gateway: " + ex.getMessage());
         }
+    }
+
+    /**
+     * The gateway configuration as the running application sees it, with the token replaced by
+     * whether one is present. Reading this back from the deployment is the only way to tell a
+     * variable that was never set from one that was set to the wrong thing.
+     */
+    public Map<String, Object> describeConfiguration() {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("enabled", enabled);
+        view.put("provider", resolvedProvider());
+        view.put("endpoint", endpointUrl());
+        view.put("tokenConfigured", token != null && !token.isBlank());
+        return view;
     }
 
     /**
