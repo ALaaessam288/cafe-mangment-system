@@ -191,6 +191,31 @@ public class OrderService {
         return toResponse(getOrThrow(id));
     }
 
+    /**
+     * Adds several lines in one transaction.
+     *
+     * <p>The POS used to fire one request per tap. Nothing sequenced them, so on a slow connection
+     * the replies raced and an earlier one could overwrite a later one — and a mid-order failure
+     * left some lines added and some not, with no single place to report it.
+     *
+     * <p>All-or-nothing here is the better semantics, not just the faster one: if the fourth line
+     * has no stock, the cashier gets one clear refusal and an order that still matches what is on
+     * the screen, instead of three lines silently committed against a fourth that failed.
+     *
+     * <p>Calling {@link #addItem} in the loop is deliberate. The class is {@code @Transactional},
+     * so this method already holds the transaction and the self-invocation joins it rather than
+     * starting its own — which is exactly the atomicity this needs. Each call re-reads the order,
+     * which is what makes the running totals and the existing-line merge correct as the batch
+     * progresses.
+     */
+    public OrderResponse addItems(Long orderId, Long userId, List<AddOrderItemRequest> items) {
+        OrderResponse latest = null;
+        for (AddOrderItemRequest item : items) {
+            latest = addItem(orderId, userId, item);
+        }
+        return latest;
+    }
+
     public OrderResponse addItem(Long orderId, Long userId, AddOrderItemRequest request) {
         Order order = getOrThrow(orderId);
         requireOpenForModification(order);

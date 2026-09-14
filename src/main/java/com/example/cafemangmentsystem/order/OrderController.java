@@ -51,6 +51,25 @@ public class OrderController {
         return orderService.findById(id);
     }
 
+    /**
+
+     * Several lines in one request. See {@code OrderService#addItems} for why this is one
+
+     * transaction rather than a convenience wrapper over repeated calls.
+
+     */
+
+    @PostMapping("/{id}/items/bulk")
+
+    public OrderResponse addItems(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal,
+
+                                  @Valid @RequestBody com.example.cafemangmentsystem.order.dto.AddOrderItemsRequest request) {
+
+        return orderService.addItems(id, principal.getId(), request.items());
+
+    }
+
+
     @PostMapping("/{id}/items")
     public OrderResponse addItem(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal,
                                   @Valid @RequestBody AddOrderItemRequest request) {

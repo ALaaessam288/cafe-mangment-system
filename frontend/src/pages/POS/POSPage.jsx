@@ -142,7 +142,23 @@ function reducer(state, action) {
     }
     case 'SELECT_TABLE': return { ...state, activeTable: action.payload, activeOrder: null };
     case 'SELECT_ORDER': return { ...state, activeOrder: action.payload, activeTable: null };
-    case 'SET_ORDER':    return { ...state, activeOrder: action.payload };
+    /* A response that left the server before one already applied must not overwrite it.
+     *
+     * Adding an item fires its own request and replaces the whole order with the reply. Nothing
+     * serialised those requests, so three quick taps on a slow connection are three concurrent
+     * POSTs whose replies can arrive in any order - and the reply carrying one item would happily
+     * overwrite the reply carrying three. The optimistic rows have already been reconciled away by
+     * then, so the cashier watches items disappear from a cart they just filled. The slower the
+     * connection, the wider that window.
+     *
+     * Callers that are applying the result of a mutation pass a monotonic `seq`; anything older
+     * than the newest already applied is dropped. Calls with no seq (a plain load) behave exactly
+     * as before and do not move the counter. */
+    case 'SET_ORDER': {
+      const seq = action.seq ?? 0;
+      if (seq && seq < (state.orderSeq ?? 0)) return state;
+      return { ...state, activeOrder: action.payload, orderSeq: seq || (state.orderSeq ?? 0) };
+    }
     case 'SET_SHIFT':    return { ...state, activeShift: action.payload };
     case 'CLEAR_TABLE':  return { ...state, activeTable: null, activeOrder: null };
     case 'LOADING_TABLES': return { ...state, isLoadingTables: action.payload };
@@ -158,6 +174,18 @@ export default function POSPage() {
   const { role, user } = useAuth();
 
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  /* Monotonic per-order-mutation counter. A ref, not state: it must advance the instant a
+
+     request is fired, without waiting for a render. */
+
+  const orderSeqRef = useRef(0);
+
+  /* Lines tapped but not yet sent, and the single-flight latch that drains them.
+     Refs rather than state: a tap must be recorded and the drain decision made immediately,
+     not one render later - two taps in the same tick would otherwise both see an empty queue. */
+  const pendingItemsRef = useRef([]);
+  const flushingRef = useRef(false);
   const [showPayment, setShowPayment] = useState(false);
   const [openTableModal, setOpenTableModal] = useState(false);
   const [openTakeawayModal, setOpenTakeawayModal] = useState(false);
@@ -725,29 +753,73 @@ export default function POSPage() {
       payload: { productId: product.id, quantity },
     });
 
-    try {
-      const updated = await ordersApi.addItem(order.id, {
+    // Queue it rather than sending it. A cashier adding five things taps five times in about a
+    // second; five separate requests cost five transactions, each reserving stock and validating a
+    // recipe, and on a slow line they overlap and race. One batched request is one transaction and
+    // one reply to apply.
+    pendingItemsRef.current.push({
+      orderId: order.id,
+      tempId,
+      productId: product.id,
+      quantity,
+      payload: {
         productId: product.id,
         quantity,
         note: note?.trim() ? note.trim() : undefined,
         optionIds: optionIds.length > 0 ? optionIds : undefined,
-      });
-      dispatch({ type: 'SET_ORDER', payload: updated });
+      },
+    });
 
-      // Newest server row = the one to undo, and one more tally for this
-      // cashier's quick-access strip.
+    flushPendingItems();
+  }
+
+  /**
+   * Sends the queued lines, one batch at a time.
+   *
+   * <p>Single-flight on purpose: while a batch is in the air, further taps accumulate and go out
+   * together behind it. Exactly one request per order is ever outstanding, so replies cannot arrive
+   * out of order at all — the sequence guard in the reducer stays as the second line of defence.
+   */
+  async function flushPendingItems() {
+    if (flushingRef.current) return;
+    if (pendingItemsRef.current.length === 0) return;
+
+    // Only ever batch lines belonging to the same order. Switching tables mid-queue must not send
+    // one table's items to another's bill.
+    const orderId = pendingItemsRef.current[0].orderId;
+    const batch = [];
+    while (pendingItemsRef.current.length > 0 && pendingItemsRef.current[0].orderId === orderId) {
+      batch.push(pendingItemsRef.current.shift());
+    }
+
+    flushingRef.current = true;
+    const seq = ++orderSeqRef.current;
+
+    try {
+      const updated = await ordersApi.addItems(orderId, batch.map((entry) => entry.payload));
+      dispatch({ type: 'SET_ORDER', payload: updated, seq });
+
+      // Newest server row = the one to undo, and one more tally per line for this cashier's
+      // quick-access strip.
       const newest = (updated.items ?? []).reduce((max, i) => (i.id > max ? i.id : max), 0);
       setLastAddedItemId(newest || null);
-      recordProductUse(user?.id, product.id, quantity);
+      batch.forEach((entry) => recordProductUse(user?.id, entry.productId, entry.quantity));
       setQuickVersion((v) => v + 1);
     } catch (err) {
-      dispatch({ type: 'REMOVE_TEMP_ITEM', payload: tempId });
-      // Rollback stock on error
-      dispatch({
-        type: 'RESTORE_PRODUCT_STOCK',
-        payload: { productId: product.id, quantity },
+      // The batch is all-or-nothing on the server, so every optimistic row in it is rolled back —
+      // not just the line that happened to be refused.
+      batch.forEach((entry) => {
+        dispatch({ type: 'REMOVE_TEMP_ITEM', payload: entry.tempId });
+        dispatch({
+          type: 'RESTORE_PRODUCT_STOCK',
+          payload: { productId: entry.productId, quantity: entry.quantity },
+        });
       });
-      toast.error(err.message, 'فشل في إضافة الصنف');
+      toast.error(err.message, 'فشل في إضافة الأصناف');
+    } finally {
+      flushingRef.current = false;
+      // Anything that arrived while this batch was in flight goes out now.
+      if (pendingItemsRef.current.length > 0) flushPendingItems();
     }
   }
 

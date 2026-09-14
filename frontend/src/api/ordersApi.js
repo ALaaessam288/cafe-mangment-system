@@ -21,6 +21,9 @@ export const ordersApi = {
   /* Order Items */
   addItem:    (orderId, payload) =>
     client.post(`/orders/${orderId}/items`, payload).then((r) => r.data),
+  /* One request, one transaction, all-or-nothing. */
+  addItems:   (orderId, items) =>
+    client.post(`/orders/${orderId}/items/bulk`, { items }).then((r) => r.data),
   cancelItem: (orderId, itemId, payload) =>
     client.put(`/orders/${orderId}/items/${itemId}/cancel`, payload).then((r) => r.data),
   /* Deletes a line the kitchen has never seen. Only valid while the item is still NEW - a sent
