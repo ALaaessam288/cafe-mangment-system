@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ShieldAlert, X, CheckCircle2, KeyRound } from 'lucide-react';
 import { managerOverrideApi } from '../../api/managerOverrideApi';
 import { useToast } from '../../context/ToastContext';
 import Spinner from '../Spinner/Spinner';
 import './SupervisorApprovalModal.css';
+
+/* The server accepts 4 to 8 digits; every supervisor chooses their own length. */
+const MIN_PIN_LENGTH = 4;
+const MAX_PIN_LENGTH = 8;
 
 const DEFAULT_REASONS = [
   'خطأ في إدخال الطلب',
@@ -31,6 +35,41 @@ export default function SupervisorApprovalModal({
   const [customReason, setCustomReason] = useState('');
   const [loading, setLoading] = useState(false);
 
+  /* Refs, not dependencies: re-subscribing the key listener on every digit would tear down and
+     rebuild it eight times while someone types their PIN. */
+  const handleNumpadRef = useRef(null);
+  const handleVerifyRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  /* There is no text input in this dialog - the numpad is the only way in - so without this a
+     till with a keyboard, or a laptop, had no way to type the PIN or press Enter. Digits, Backspace
+     and Escape do what the on-screen keys do; Enter submits. */
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    function onKeyDown(e) {
+      // Leave the custom-reason textarea alone.
+      const el = e.target;
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+        if (e.key === 'Escape') onCloseRef.current?.();
+        return;
+      }
+      /* Claimed keys are stopped here, in the capture phase, before they reach the till's own
+         window listener. Otherwise typing a PIN would also be setting the POS quantity
+         multiplier behind the dialog - "3" means the third digit of a PIN here and "×3" out
+         there, and both were firing. */
+      const claim = () => { e.preventDefault(); e.stopPropagation(); };
+
+      if (/^[0-9]$/.test(e.key)) { claim(); handleNumpadRef.current(e.key); }
+      else if (e.key === 'Backspace') { claim(); handleNumpadRef.current('⌫'); }
+      else if (e.key === 'Enter') { claim(); handleVerifyRef.current(); }
+      else if (e.key === 'Escape') { claim(); onCloseRef.current?.(); }
+    }
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   function handleNumpad(key) {
@@ -38,7 +77,7 @@ export default function SupervisorApprovalModal({
       setPin('');
     } else if (key === '⌫') {
       setPin((prev) => prev.slice(0, -1));
-    } else if (pin.length < 8) {
+    } else if (pin.length < MAX_PIN_LENGTH) {
       setPin((prev) => prev + key);
     }
   }
@@ -47,7 +86,7 @@ export default function SupervisorApprovalModal({
 
   async function handleVerify(e) {
     if (e) e.preventDefault();
-    if (!pin || pin.length < 4) {
+    if (!pin || pin.length < MIN_PIN_LENGTH) {
       toast.warning('يرجى إدخال رمز PIN للمشرف المكون من 4 إلى 8 أرقام');
       return;
     }
@@ -79,6 +118,10 @@ export default function SupervisorApprovalModal({
       setLoading(false);
     }
   }
+
+  handleNumpadRef.current = handleNumpad;
+  handleVerifyRef.current = handleVerify;
+  onCloseRef.current = onClose;
 
   return (
     <div className="supervisor-overlay" onClick={onClose} dir="rtl">
@@ -132,8 +175,13 @@ export default function SupervisorApprovalModal({
               رمز المشرف السري (Supervisor PIN):
             </label>
 
+            {/* One dot per digit typed, with four empty ones waiting.
+                It used to draw exactly six, always. A PIN here is 4 to 8 digits and each
+                supervisor picks their own, so six dots told a five-digit supervisor their code
+                was one short - and a seven-digit one that they had overrun. The dots should
+                report what was typed, not assert a length the system does not have. */}
             <div className="supervisor-pin-display">
-              {[0, 1, 2, 3, 4, 5].map((idx) => (
+              {Array.from({ length: Math.max(pin.length, MIN_PIN_LENGTH) }).map((_, idx) => (
                 <div
                   key={idx}
                   className={`supervisor-pin-dot ${idx < pin.length ? 'supervisor-pin-dot--filled' : ''}`}
@@ -171,7 +219,7 @@ export default function SupervisorApprovalModal({
             type="button"
             className="btn btn--primary supervisor-submit-btn"
             onClick={handleVerify}
-            disabled={loading || pin.length < 4}
+            disabled={loading || pin.length < MIN_PIN_LENGTH}
           >
             {loading ? <Spinner size="sm" /> : <CheckCircle2 size={18} />}
             <span>تأكيد واعتماد المشرف</span>
