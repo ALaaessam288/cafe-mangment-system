@@ -19,6 +19,7 @@ import {
  * the desired category before viewing its products, with seamless 1-tap back navigation.
  */
 export default function MenuPanel({
+  orderContext = null,
   categories,
   products,
   topProducts,
@@ -71,6 +72,9 @@ export default function MenuPanel({
     function onGlobalKeyDown(e) {
       const el = e.target;
       const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      // F2 works even from an input, because "focus the search box" is exactly what a cashier
+      // who is already typing somewhere else means by it. "/" only outside one, or it would be
+      // impossible to type a slash.
       if (e.key === 'F2' || (e.key === '/' && !typing)) {
         e.preventDefault();
         searchRef.current?.focus();
@@ -122,11 +126,10 @@ export default function MenuPanel({
   return (
     <section className="pos__menu">
       <div className="pos__menu-header">
-        <div className="pos__menu-title">
-          <span>02</span>
-          <strong>المنيو</strong>
-          <small>اختار الصنف — ضغطة واحدة تضيفه للأوردر</small>
-        </div>
+        {/* What we are ringing up, then what we are ringing it up from. The big "02" heading and
+            its subtitle were the two least useful lines on the screen once the flow itself makes
+            the step obvious - the context badge says more in less space. */}
+        {orderContext}
         <SearchBar
           ref={searchRef}
           value={searchQuery}
@@ -207,10 +210,10 @@ export default function MenuPanel({
           cardRefs={cardRefs}
           emptyText={
             isSearching
-              ? 'مفيش صنف بالاسم ده.'
+              ? 'مفيش صنف بالاسم ده — جرب اسم تاني.'
               : activeGroupId === TOP_SELLERS_ID
                 ? 'لسه مفيش مبيعات كفاية — اختار قسم من فوق.'
-                : 'مفيش أصناف متاحة في القسم ده.'
+                : 'القسم ده لسه فاضي — اختار قسم تاني من فوق.'
           }
         />
       )}

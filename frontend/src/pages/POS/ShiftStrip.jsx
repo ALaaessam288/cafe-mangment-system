@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, Printer, CheckCircle, Vault } from 'lucide-react';
+import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, CheckCircle, Vault, Settings2, ChevronDown } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { expensesApi } from '../../api/expensesApi';
 import { menuApi } from '../../api/menuApi';
@@ -53,6 +53,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   // Pending Advances List & Settle Modal State inside POS
   const [expenses, setExpenses] = useState([]);
   const [showPendingModal, setShowPendingModal] = useState(false);
+  const [shiftMenuOpen, setShiftMenuOpen] = useState(false);
   const [selectedAdvance, setSelectedAdvance] = useState(null);
   const [settleActualAmount, setSettleActualAmount] = useState('');
   const [settleNotes, setSettleNotes] = useState('');
@@ -331,9 +332,16 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           </div>
         )}
 
+        {/* Everything that is not part of ringing up an order now lives behind one menu.
+            Five permanently-open tool buttons sat in the same strip as the cashier's own work,
+            and one of them closed the shift - so the most destructive action on the screen was a
+            neighbour of the most frequent ones, at the same size, in the same colour. A menu
+            costs one extra tap for something used a handful of times a shift, and buys back the
+            room and the distance. */}
         <div className="shift-strip__tools">
 
-        {/* Quick Pending Advances Badge in POS */}
+        {/* The exception stays outside: a pending float is a thing that BLOCKS closing the
+            shift, so burying it in the menu that closes the shift would be exactly backwards. */}
         {pendingAdvances.length > 0 && (
           <button
             type="button"
@@ -345,53 +353,56 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           </button>
         )}
 
-        {/* Quick Cash Drawer & Safe Drop Controls */}
-        <button
-          type="button"
-          className="shift-tool shift-tool--drawer pos-quick-drawer-btn"
-          style={{ background: 'rgba(169, 156, 255, 0.12)', borderColor: 'rgba(169, 156, 255, 0.3)', color: '#c9c1ff' }}
-          onClick={() => setShowCashDrawerModal(true)}
-          title="الرقابة على الخزينة: إيداعات وسحوبات وترحيل للخزنة الرئيسية (Safe Drop)"
-        >
-          <Vault size={14} /><span><strong>حركات الدرج</strong><small>إيداع وترحيل خزنة</small></span>
-        </button>
-
-        {/* Quick Add Expense Payout Button */}
-        <button
-          type="button"
-          className="shift-tool shift-tool--expense pos-quick-exp-btn"
-          onClick={() => handleOpenQuickExpense('ADVANCE')}
-          title="إضافة مصروف عاجل أو سحب عُهدة وطباعة البون"
-        >
-          <Plus size={14} /><span><strong>مصروف سريع</strong><small>سحب من الدرج</small></span>
-        </button>
-
-        {/* Quick Stock Refill Button */}
-        <button
-          type="button"
-          className="shift-tool shift-tool--stock pos-quick-stock-btn"
-          onClick={() => setShowStockModal(true)}
-          title="تغذية وجرد سريع للمخزون والخامات"
-        >
-          <Plus size={14} /><span><strong>تغذية المخزون</strong><small>إضافة وجرد</small></span>
-        </button>
-
-        {/* Only ADMIN and SUPERVISOR can view/print full Daily Report */}
-        {canViewFinancialTotals && (
+        <div className="shift-menu">
           <button
             type="button"
-            className="shift-tool shift-tool--report"
-            onClick={() => setShowReportModal(true)}
-            title="عرض وطباعة تقرير اليومية الشامل"
+            className="shift-tool shift-menu__trigger"
+            onClick={() => setShiftMenuOpen((v) => !v)}
+            aria-expanded={shiftMenuOpen}
+            aria-haspopup="menu"
+            title="تغذية المخزون، مصروف سريع، حركات الدرج، وقفل الشيفت"
           >
-            <FileText size={14} /><span><strong>تقرير اليومية</strong><small>عرض وطباعة</small></span>
+            <Settings2 size={14} /><span><strong>إدارة الشيفت</strong><small>مخزون ومصاريف ودرج</small></span>
+            <ChevronDown size={13} className={shiftMenuOpen ? 'shift-menu__caret shift-menu__caret--open' : 'shift-menu__caret'} />
           </button>
-        )}
-        </div>
 
-        <button type="button" className="shift-strip__close" onClick={onCloseShift}>
-          <Lock size={14} /><span>قفل الشيفت</span>
-        </button>
+          {shiftMenuOpen && (
+            <>
+              <div className="shift-menu__scrim" onClick={() => setShiftMenuOpen(false)} />
+              <div className="shift-menu__panel" role="menu">
+                <button type="button" role="menuitem" className="shift-menu__item"
+                  onClick={() => { setShiftMenuOpen(false); setShowStockModal(true); }}>
+                  <Plus size={15} /><span><strong>تغذية المخزون</strong><small>إضافة وجرد</small></span>
+                </button>
+
+                <button type="button" role="menuitem" className="shift-menu__item"
+                  onClick={() => { setShiftMenuOpen(false); handleOpenQuickExpense('ADVANCE'); }}>
+                  <Plus size={15} /><span><strong>مصروف سريع</strong><small>سحب من الدرج</small></span>
+                </button>
+
+                <button type="button" role="menuitem" className="shift-menu__item"
+                  onClick={() => { setShiftMenuOpen(false); setShowCashDrawerModal(true); }}>
+                  <Vault size={15} /><span><strong>حركات الدرج</strong><small>إيداع وترحيل خزنة</small></span>
+                </button>
+
+                {canViewFinancialTotals && (
+                  <button type="button" role="menuitem" className="shift-menu__item"
+                    onClick={() => { setShiftMenuOpen(false); setShowReportModal(true); }}>
+                    <FileText size={15} /><span><strong>تقرير اليومية</strong><small>عرض وطباعة</small></span>
+                  </button>
+                )}
+
+                {/* Last, separated, and red. Same confirmation flow as before - only its
+                    neighbours changed. */}
+                <button type="button" role="menuitem" className="shift-menu__item shift-menu__item--danger"
+                  onClick={() => { setShiftMenuOpen(false); onCloseShift(); }}>
+                  <Lock size={15} /><span><strong>قفل الشيفت</strong><small>تسليم الدرج وإنهاء الوردية</small></span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* POS Quick Add Expense Modal */}

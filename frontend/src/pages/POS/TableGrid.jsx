@@ -1,23 +1,19 @@
 import { useState, useMemo } from 'react';
-import { Lock, PanelLeftClose, PanelLeftOpen, ShoppingBag, Bike, MapPin } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, ShoppingBag, Bike } from 'lucide-react';
 import Spinner from '../../components/Spinner/Spinner';
+import { TABLE_STATUS, orderForTable, statusKey, statusWithAge } from './tableStatus';
 
-function getTableStatus(table, allOrders) {
-  const order = allOrders?.find(
-    (o) => o.tableId === table.id && (o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED')
-  );
-  if (!order) return 'free';
-  if (order.status === 'SERVED') return 'served';
-  if (order.status === 'SENT') return 'sent';
-  return 'open';
-}
-
+/* Status, its wording and its timing all come from tableStatus.js now. This file used to carry
+   its own three-line version of the same mapping, and the legend below carried a fourth set of
+   words again ("نزلها طلب" for what the tiles called SERVED) - so the filter a cashier pressed
+   and the tile they were looking for did not read as the same thing. */
 const FILTERS = [
-  { id: 'ALL',    label: 'الكل' },
-  { id: 'free',   label: 'متاحة' },
-  { id: 'open',   label: 'مفتوحة' },
-  { id: 'sent',   label: 'في المطبخ' },
-  { id: 'served', label: 'نزلها طلب' },
+  { id: 'ALL',              label: 'الكل' },
+  { id: 'free',             label: TABLE_STATUS.free },
+  { id: 'open',             label: TABLE_STATUS.open },
+  { id: 'sent',             label: TABLE_STATUS.sent },
+  { id: 'served',           label: TABLE_STATUS.served },
+  { id: 'awaiting_payment', label: TABLE_STATUS.awaiting_payment },
 ];
 
 /**
@@ -37,7 +33,6 @@ export default function TableGrid({
   onTableClick,
   onTakeawayClick,
   onNewTakeawayClick,
-  onCloseShift,
 }) {
   const [activeTab, setActiveTab] = useState('DINE_IN');
   const [filter, setFilter] = useState('ALL');
@@ -65,8 +60,8 @@ export default function TableGrid({
   );
 
   const counts = useMemo(() => {
-    const c = { ALL: sortedTables.length, free: 0, open: 0, sent: 0, served: 0 };
-    sortedTables.forEach((t) => { c[getTableStatus(t, orders)] += 1; });
+    const c = { ALL: sortedTables.length, free: 0, open: 0, sent: 0, served: 0, awaiting_payment: 0 };
+    sortedTables.forEach((t) => { c[statusKey(orderForTable(t.id, orders))] += 1; });
     return c;
   }, [sortedTables, orders]);
 
@@ -85,15 +80,6 @@ export default function TableGrid({
         <span className="pos__tables-collapsed-label">
           {activeTable ? `ترابيزة ${activeTable.number}` : 'الترابيزات'}
         </span>
-        <button
-          type="button"
-          className="pos__tables-toggle"
-          onClick={onCloseShift}
-          title="قفل الشيفت"
-          aria-label="قفل الشيفت"
-        >
-          <Lock size={15} />
-        </button>
       </aside>
     );
   }
@@ -181,23 +167,28 @@ export default function TableGrid({
               <p className="pos__empty">مفيش ترابيزات.</p>
             ) : (
               sortedTables.map((table) => {
-                const tableOrder = orders?.find(
-                  (o) => o.tableId === table.id && (o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED')
-                );
-                const status = !tableOrder ? 'free' : tableOrder.status === 'SERVED' ? 'served' : tableOrder.status === 'SENT' ? 'sent' : 'open';
+                const tableOrder = orderForTable(table.id, orders);
+                const status = statusKey(tableOrder);
                 if (filter !== 'ALL' && status !== filter) return null;
                 if (jump && !String(table.number).startsWith(jump)) return null;
                 const isActive = activeTable?.id === table.id;
+                const spoken = statusWithAge(tableOrder);
                 return (
                   <button
                     key={table.id}
                     type="button"
                     className={`table-btn table-btn--${status} ${isActive ? 'table-btn--active' : ''}`}
                     onClick={() => onTableClick(table)}
-                    title={`ترابيزة ${table.number} ${tableOrder ? `(إجمالي: ${tableOrder.total} ج.م)` : '(فاضية)'}`}
+                    title={`ترابيزة ${table.number} — ${spoken}${
+                      tableOrder && parseFloat(tableOrder.total) > 0 ? ` (${Math.round(tableOrder.total)} ج.م)` : ''
+                    }`}
+                    aria-label={`ترابيزة ${table.number}، ${spoken}`}
                   >
                     <span className={`table-btn__status-dot table-btn__status-dot--${status}`} />
                     <span className="table-btn__title">{table.number}</span>
+                    {/* The dot is decoration; this line is the status. Colour never carries it
+                        alone - a legend the cashier has to remember is a legend they will not. */}
+                    <span className="table-btn__state">{spoken}</span>
                     {tableOrder && parseFloat(tableOrder.total) > 0 ? (
                       <span className="table-btn__total">{Math.round(tableOrder.total)}ج</span>
                     ) : table.capacity ? (
@@ -234,10 +225,12 @@ export default function TableGrid({
             visibleTakeaway.map((order) => {
               const isActive = activeOrder?.id === order.id;
               const isDelivery = Boolean(order.customerAddress || order.deliveryFee > 0);
-              let statusText = 'مفتوح';
-              let statusColor = 'var(--text-secondary)';
-              if (order.status === 'SENT') { statusText = 'في المطبخ'; statusColor = 'var(--warning)'; }
-              if (order.status === 'READY_FOR_PICKUP') { statusText = 'جاهز'; statusColor = 'var(--success)'; }
+              const statusText = statusWithAge(order);
+              const key = statusKey(order);
+              const statusColor = key === 'sent' ? 'var(--warning)'
+                : key === 'served' ? 'var(--success)'
+                : key === 'awaiting_payment' ? 'var(--accent-hover)'
+                : 'var(--text-secondary)';
 
               return (
                 <button
@@ -274,9 +267,6 @@ export default function TableGrid({
         </div>
       )}
 
-      <button type="button" className="pos__tables-shift-btn" onClick={onCloseShift}>
-        <Lock size={14} /> قفل الشيفت
-      </button>
     </aside>
   );
 }

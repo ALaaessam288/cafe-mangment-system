@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ShoppingBag, Bike, Search, UserCheck, MapPin, Phone, Sparkles, UserPlus, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Bike, Search, UserCheck, MapPin, Phone, UserPlus, AlertCircle } from 'lucide-react';
 import { tablesApi } from '../../api/tablesApi';
 import { ordersApi } from '../../api/ordersApi';
 import { menuApi }   from '../../api/menuApi';
@@ -12,6 +12,7 @@ import MenuPanel     from './MenuPanel';
 import OrderPanel    from './OrderPanel';
 import PaymentModal  from './PaymentModal';
 import ModifierDialog from './ModifierDialog';
+import OrderContextBar from './OrderContextBar';
 import SugarModal from './SugarModal';
 import ShiftStrip    from './ShiftStrip';
 import ShiftAuditModal from '../../components/ShiftAuditModal/ShiftAuditModal';
@@ -19,7 +20,7 @@ import { fallbackTopSellers } from './menuGroups';
 import { getQuickAccessProducts, recordProductUse } from './recentProducts';
 import './POSPage.css';
 import { printReceipt, buildReceiptHtml, buildKitchenTicketHtml } from '../../utils/printUtils';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
 import { printOptionsFor } from '../../utils/printerSettings';
 import { ROLES } from '../../utils/constants';
 import { DONE, serveDone } from '../../utils/labels';
@@ -312,6 +313,22 @@ export default function POSPage() {
     !!state.activeOrder &&
     !['CLOSED', 'VOIDED'].includes(state.activeOrder.status) &&
     (state.activeOrder.items ?? []).some((i) => i.id === lastAddedItemId && i.status !== 'CANCELLED');
+
+  /* The line +/- act on. "Selected" on this screen means "the one you just added" - there is no
+     other selection model, and inventing one would be a bigger change than this task calls for. */
+  const lastAddedItem = !state.activeOrder ? null
+    : (state.activeOrder.items ?? []).find((i) => i.id === lastAddedItemId) ?? null;
+
+  const canIncreaseLast = Boolean(
+    lastAddedItem
+    && !['CLOSED', 'VOIDED'].includes(state.activeOrder?.status)
+    && lastAddedItem.status !== 'CANCELLED'
+  );
+
+  /* Minus only ever takes back a line the kitchen has not seen. handleUndoLastItem will happily
+     cancel a SENT line - that is correct when a cashier presses the labelled undo button and
+     confirms, and quite wrong as the result of a stray keypress on a keyboard someone leaned on. */
+  const canDecreaseLast = canUndo && lastAddedItem?.status !== 'SENT';
 
   const anyModalOpen =
     showPayment || openTableModal || openTakeawayModal || showMoveModal ||
@@ -661,6 +678,11 @@ export default function POSPage() {
   /* ── Click table ── */
   async function handleTableClick(table) {
     dispatch({ type: 'SELECT_TABLE', payload: table });
+    /* The picker has done its job; the menu needs the space.
+       A table grid that stays open after the choice is made is a list of forty answers to a
+       question already answered, sitting next to the one panel the cashier actually works in.
+       The selection does not disappear - OrderContextBar keeps it in view with a way back. */
+    setTablesCollapsed(true);
     await loadOrderForTable(table.id);
   }
 
@@ -726,6 +748,7 @@ export default function POSPage() {
       });
 
       dispatch({ type: 'SELECT_ORDER', payload: order });
+      setTablesCollapsed(true);
       setOpenTakeawayModal(false);
       setCustomerName('');
       setCustomerPhone('');
@@ -887,26 +910,6 @@ export default function POSPage() {
       // Anything that arrived while this batch was in flight goes out now.
       if (pendingItemsRef.current.length > 0) flushPendingItems();
     }
-  }
-
-  /* Helper to detect if a product is a beverage/drink that should prompt for sugar */
-  function isDrinkProduct(prod) {
-    if (!prod) return false;
-    if (prod.revenueLine === 'BEVERAGE') return true;
-    if (prod.stationCode === 'BAR') return true;
-
-    const catObj = (state.categories || []).find((c) => c.id === prod.categoryId);
-    const c = (prod.categoryNameAr || prod.categoryName || catObj?.name || catObj?.nameAr || '').toLowerCase();
-    const n = (prod.name || prod.nameAr || '').toLowerCase();
-
-    const drinkKeywords = [
-      'شاي', 'قهوة', 'اسبريسو', 'إسبريسو', 'لاتيه', 'كابتشينو', 'موكا', 'كركديه', 
-      'ينسون', 'نعناع', 'قرفة', 'زنجبيل', 'سحلب', 'شوكليت', 'كاكاو', 'أمريكانو', 
-      'فلات وايت', 'ماتشا', 'مشروب', 'مشروبات', 'عصير', 'سموذي', 'موهيتو', 'ميلك شيك',
-      'حلبة', 'كراوية', 'ليمون', 'برتقال', 'مانجو', 'فراولة', 'جوافة', 'موز', 'كوكتيل',
-      'tea', 'coffee', 'espresso', 'latte', 'cappuccino', 'mocha', 'drink', 'beverage', 'juice'
-    ];
-    return drinkKeywords.some((k) => n.includes(k) || c.includes(k));
   }
 
   /* Reads a product's options, cached - the second tap on the same drink
@@ -1523,12 +1526,31 @@ export default function POSPage() {
         return;
       }
       if (e.key === 'Escape') { setMultiplier(1); return; }
-      if (e.key === 'F4') {
+
+      /* +/- act on the line the cashier just added, which is the only line the screen has any
+         claim to call "selected". Minus is deliberately timid: it removes an unsent line, and
+         does nothing at all to one the kitchen has already seen, because that one is a void with
+         its own confirmation and must never happen from a stray keypress. */
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        if (canIncreaseLast) handleIncreaseItem(lastAddedItem);
+        return;
+      }
+      if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        if (canDecreaseLast) handleUndoLastItem();
+        return;
+      }
+
+      // F9 sends to the kitchen, F4 collects. F4 used to send; the payment key is the one a
+      // cashier reaches for dozens of times a shift, so it takes the nearer function key, and
+      // both on-screen kbd chips were relabelled with it.
+      if (e.key === 'F9') {
         e.preventDefault();
         if (state.activeOrder) handleSend();
         return;
       }
-      if (e.key === 'F8') {
+      if (e.key === 'F4' || e.key === 'F8') {
         e.preventDefault();
         if (state.activeOrder && num(state.activeOrder.balanceDue) > 0) setShowPayment(true);
       }
@@ -1684,13 +1706,22 @@ export default function POSPage() {
         collapsed={tablesCollapsed}
         onToggleCollapse={() => setTablesCollapsed((v) => !v)}
         onTableClick={handleTableClick}
-        onTakeawayClick={(order) => dispatch({ type: 'SELECT_ORDER', payload: order })}
+        onTakeawayClick={(order) => {
+          dispatch({ type: 'SELECT_ORDER', payload: order });
+          setTablesCollapsed(true);
+        }}
         onNewTakeawayClick={() => setOpenTakeawayModal(true)}
-        onCloseShift={() => setShowCloseShift(true)}
       />
 
       {/* CENTER — Menu */}
       <MenuPanel
+        orderContext={
+          <OrderContextBar
+            table={state.activeTable}
+            order={state.activeOrder}
+            onChangeTable={() => setTablesCollapsed(false)}
+          />
+        }
         categories={state.categories}
         products={state.products}
         topProducts={state.topProducts}

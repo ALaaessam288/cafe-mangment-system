@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus, Minus, Undo2, Printer, Tag, Sparkles, Trash2, Edit3, ShoppingBag, MapPin, Phone, ReceiptText } from 'lucide-react';
+import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus, Minus, Undo2, Printer, Tag, Sparkles, Trash2, ShoppingBag, MapPin, Phone, ReceiptText } from 'lucide-react';
 import Spinner from '../../components/Spinner/Spinner';
 import Badge from '../../components/Badge/Badge';
 import DiscountServiceModal from '../../components/DiscountServiceModal/DiscountServiceModal';
@@ -73,6 +73,33 @@ export default function OrderPanel({
     setCancelItemId(null);
   }
 
+  /* Cancelled lines are still on the ticket, struck through, and they are not part of what the
+     customer is buying - counting them would make the summary disagree with the total beside it. */
+  const sellableItemCount = useMemo(
+    () => (order?.items ?? []).filter((i) => i.status !== 'CANCELLED')
+      .reduce((sum, i) => sum + (i.quantity ?? 1), 0),
+    [order?.items]
+  );
+
+  /* Whether payment can be collected, and - when it cannot - the sentence that says so.
+     The rule itself is unchanged: the same statuses and the same balance-due test the action
+     stack already used. What is new is that "no" is now spoken instead of the button vanishing,
+     because a button that disappears teaches a cashier nothing about what to do next. */
+  const checkout = useMemo(() => {
+    if (!order) return { blockedReason: 'الأوردر لسه فاضي' };
+    if (order.status === 'VOIDED') return { blockedReason: 'الأوردر ده اتلغي' };
+    if (order.status === 'CLOSED') return { blockedReason: 'الأوردر اتقفل واتحصّل' };
+    if (!(order.items ?? []).some((i) => i.status !== 'CANCELLED')) {
+      return { blockedReason: 'ضيف أول صنف للأوردر' };
+    }
+    if (!['OPEN', 'SENT', 'SERVED', 'READY_FOR_PICKUP'].includes(order.status)) {
+      return { blockedReason: 'مش هينفع تحصّل دلوقتي' };
+    }
+    if (!(parseFloat(order.balanceDue) > 0)) return { blockedReason: 'محصّل بالكامل ✓' };
+    if (syncing) return { blockedReason: 'لسه في صنف بيتسجل…' };
+    return { blockedReason: null };
+  }, [order, syncing]);
+
   /* Name the line in the dialog. "Cancel this item?" next to a number the cashier can check is a
      decision; the same question with nothing in it is a reflex. */
   const cancelItemLabel = useMemo(() => {
@@ -117,8 +144,14 @@ export default function OrderPanel({
   ) || 0;
   const ticketNumber = order?.orderNumber ?? (order?.id ? String(order.id).slice(-6) : '---');
 
+  /* An empty ticket does not need 290px of column.
+     Before the first item there is nothing in this panel but a sentence, and it was holding a
+     fifth of the screen away from the menu - which is the panel the cashier is about to use. It
+     takes its full width back the moment there is something on the bill. */
+  const hasLines = sellableItemCount > 0;
+
   return (
-    <aside className="pos__order">
+    <aside className={`pos__order ${hasLines ? '' : 'pos__order--compact'}`}>
       <div className={`pos__panel-header pos-ticket-header ${order ? 'pos-ticket-header--active' : ''}`}>
         {order ? (
           <>
@@ -571,7 +604,7 @@ export default function OrderPanel({
                       title={disableSendBtn ? 'مفيش أصناف جديدة لإرسالها' : syncing ? 'لسه في صنف بيتسجل…' : ''}
                     >
                       <Send size={primary === 'SEND' ? 18 : 14} /> {ACTIONS.SEND}
-                      <kbd className="order-actions__kbd">F4</kbd>
+                      <kbd className="order-actions__kbd">F9</kbd>
                     </button>
                   )}
 
@@ -585,16 +618,8 @@ export default function OrderPanel({
                     </button>
                   )}
 
-                  {canPay && (
-                    <button
-                      className={`btn order-actions__btn ${primary === 'PAY' ? 'btn--success btn--lg order-actions__btn--primary' : 'btn--ghost btn--sm'}`}
-                      onClick={onPayClick}
-                      disabled={syncing}
-                    >
-                      <CreditCard size={primary === 'PAY' ? 18 : 14} /> {ACTIONS.PAY}
-                      <kbd className="order-actions__kbd">F8</kbd>
-                    </button>
-                  )}
+                  {/* No pay button here any more - the sticky checkout bar below owns it, and two
+                      of them meant the cashier had to notice which one was the live one. */}
                 </>
               );
             })()}
@@ -627,6 +652,40 @@ export default function OrderPanel({
             )}
             {(order.status === 'VOIDED') && (
               <div className="order-void-badge">الأوردر ملغي</div>
+            )}
+          </div>
+
+          {/* The one line that must never scroll away.
+              Above it, the totals block can run to eight rows and the action stack to five
+              buttons; on a full order the cashier was scrolling to find out what they owed and
+              scrolling again to collect it. Count, total, and the button - pinned.
+
+              Every number here is read straight off the order the server returned. Nothing on
+              this screen adds anything up: the frontend has no business holding a second opinion
+              about what a customer owes. */}
+          <div className="order-checkout">
+            <div className="order-checkout__figures">
+              <span className="order-checkout__count">{sellableItemCount} أصناف</span>
+              <span className="order-checkout__total">
+                الإجمالي <strong>{formatCurrency(order.total)}</strong>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn--success order-checkout__btn"
+              onClick={onPayClick}
+              disabled={Boolean(checkout.blockedReason) || syncing}
+              title={checkout.blockedReason || 'تحصيل ودفع (F4)'}
+            >
+              <CreditCard size={18} />
+              <span>تحصيل ودفع</span>
+              <kbd className="order-actions__kbd">F4</kbd>
+            </button>
+
+            {/* A disabled button that will not say why is a dead end. */}
+            {checkout.blockedReason && (
+              <p className="order-checkout__why">{checkout.blockedReason}</p>
             )}
           </div>
 
