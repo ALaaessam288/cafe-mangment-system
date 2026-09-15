@@ -33,6 +33,14 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
   const [method, setMethod] = useState('CASH');
   const [amount, setAmount] = useState('');
   const [guestCount, setGuestCount] = useState(2);
+
+  /* Splitting by what each guest actually ate.
+     `settledItemIds` is local to this modal: the server records the money, not which line it was
+     for, so this stops the cashier collecting for the same dish twice in one sitting. It cannot
+     stop them over-collecting overall — balanceDue already does that, and it is the guard that
+     matters for the drawer. */
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [settledItemIds, setSettledItemIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [paymentsHistory, setPaymentsHistory] = useState([]);
   const [activeGuestIndex, setActiveGuestIndex] = useState(0);
@@ -44,6 +52,27 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
   // Per-person share for split equal
   const perPersonShare = guestCount > 0 ? +(currentBalanceDue / guestCount).toFixed(2) : currentBalanceDue;
 
+  // Cancelled lines are not owed, so they are not offered.
+  const payableItems = (order?.items ?? []).filter((i) => i.status !== 'CANCELLED');
+
+  const selectedItemsTotal = +payableItems
+    .filter((i) => selectedItemIds.includes(i.id))
+    .reduce((sum, i) => sum + (parseFloat(i.lineTotal ?? 0) || 0), 0)
+    .toFixed(2);
+
+  function toggleItem(itemId) {
+    if (settledItemIds.includes(itemId)) return;
+    setSelectedItemIds((prev) => {
+      const next = prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId];
+      const sum = +payableItems
+        .filter((i) => next.includes(i.id))
+        .reduce((acc, i) => acc + (parseFloat(i.lineTotal ?? 0) || 0), 0)
+        .toFixed(2);
+      setAmount(String(sum));
+      return next;
+    });
+  }
+
   /*
    * Seed the amount once, and again only when the mode changes.
    *
@@ -53,6 +82,13 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
    * cashier noticed.
    */
   useEffect(() => {
+    // SPLIT_ITEMS drives the amount from the ticked lines, so seeding it here would wipe the
+    // cashier's selection the moment they switched to the tab.
+    if (checkoutMode === 'SPLIT_ITEMS') {
+      setAmount('0');
+      setSelectedItemIds([]);
+      return;
+    }
     setAmount(checkoutMode === 'SPLIT_EQUAL' ? String(perPersonShare) : String(currentBalanceDue));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutMode, guestCount]);
@@ -76,10 +112,23 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
     setLoading(true);
     try {
       const isFullPayment = payAmt >= currentBalanceDue;
+      // The server stores an amount, not a basket. Naming the lines in the note is what makes a
+      // split bill auditable afterwards — otherwise the payment history is a column of numbers
+      // nobody can reconcile against the order.
+      let autoNote;
+      if (checkoutMode === 'SPLIT_ITEMS') {
+        const names = payableItems
+          .filter((i) => selectedItemIds.includes(i.id))
+          .map((i) => `${i.productNameSnapshot}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`);
+        autoNote = `تقسيم أصناف: ${names.join('، ')}`;
+      } else if (checkoutMode === 'SPLIT_EQUAL') {
+        autoNote = `تقسيم ضيف (${activeGuestIndex + 1}/${guestCount})`;
+      }
+
       const payload = {
         method,
         amount: payAmt,
-        note: noteLabel || (checkoutMode === 'SPLIT_EQUAL' ? `تقسيم ضيف (${activeGuestIndex + 1}/${guestCount})` : undefined)
+        note: noteLabel || autoNote
       };
 
       if (method === 'CASH') {
@@ -118,7 +167,12 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
         onSuccess(updatedOrder, true);
       } else {
         toast.success(`تم تسجيل دفعة بمقدار ${formatCurrency(payAmt)}. المتبقي: ${formatCurrency(remaining)}`, 'دفعة مسجلة');
-        if (checkoutMode === 'SPLIT_EQUAL') {
+        if (checkoutMode === 'SPLIT_ITEMS') {
+          // Those lines are paid for. Retire them so the next guest cannot be charged for them.
+          setSettledItemIds((prev) => [...prev, ...selectedItemIds]);
+          setSelectedItemIds([]);
+          setAmount('0');
+        } else if (checkoutMode === 'SPLIT_EQUAL') {
           setActiveGuestIndex((prev) => Math.min(guestCount - 1, prev + 1));
           // The next guest owes their own share, never the whole remainder.
           setAmount(String(Math.min(perPersonShare, remaining)));
@@ -232,6 +286,15 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
             <Users size={15} />
             <span>تقسيم الشيك بالتساوي (Split)</span>
           </button>
+
+          <button
+            type="button"
+            className={`checkout-mode-tab ${checkoutMode === 'SPLIT_ITEMS' ? 'checkout-mode-tab--active' : ''}`}
+            onClick={() => setCheckoutMode('SPLIT_ITEMS')}
+          >
+            <Users size={15} />
+            <span>تقسيم حسب الأصناف</span>
+          </button>
         </div>
 
         <div className="payment-modal__body">
@@ -286,6 +349,60 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
                 </div>
                 <div className="split-progress-hint">
                   سداد الضيف ({activeGuestIndex + 1} من {guestCount})
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SPLIT BY ITEM UI */}
+          {checkoutMode === 'SPLIT_ITEMS' && (
+            <div className="split-equal-container">
+              <div className="split-guests-selector">
+                <span className="split-label">اختر الأصناف اللي الضيف ده هيدفعها:</span>
+              </div>
+
+              <div className="split-items-list">
+                {payableItems.map((item) => {
+                  const settled = settledItemIds.includes(item.id);
+                  const checked = selectedItemIds.includes(item.id);
+                  return (
+                    <label
+                      key={item.id}
+                      className={`split-item-row ${settled ? 'split-item-row--settled' : ''}`}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '9px 12px', borderRadius: '10px', marginBottom: '6px',
+                        cursor: settled ? 'not-allowed' : 'pointer',
+                        opacity: settled ? 0.45 : 1,
+                        background: checked ? 'rgba(52,211,153,.13)' : 'rgba(255,255,255,.04)',
+                        border: `1px solid ${checked ? 'rgba(52,211,153,.5)' : 'transparent'}`,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={settled}
+                        onChange={() => toggleItem(item.id)}
+                        style={{ accentColor: '#34d399', width: '17px', height: '17px' }}
+                      />
+                      <span style={{ flex: 1 }}>
+                        {item.productNameSnapshot}
+                        {item.quantity > 1 && <strong> ×{item.quantity}</strong>}
+                      </span>
+                      <strong>{formatCurrency(item.lineTotal)}</strong>
+                      {settled && <span style={{ fontSize: '12px' }}>مدفوع ✓</span>}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="split-share-card">
+                <div className="split-share-info">
+                  <span>إجمالي المحدد:</span>
+                  <strong>{formatCurrency(selectedItemsTotal)}</strong>
+                </div>
+                <div className="split-progress-hint">
+                  {selectedItemIds.length} صنف محدد من {payableItems.length}
                 </div>
               </div>
             </div>

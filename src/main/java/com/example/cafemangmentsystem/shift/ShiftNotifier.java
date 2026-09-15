@@ -1,6 +1,8 @@
 package com.example.cafemangmentsystem.shift;
 
+import com.example.cafemangmentsystem.common.tenant.TenantContext;
 import com.example.cafemangmentsystem.common.whatsapp.WhatsAppService;
+import com.example.cafemangmentsystem.shift.dto.ShiftReportResponse;
 import com.example.cafemangmentsystem.shift.event.ShiftEvents;
 import com.example.cafemangmentsystem.tenant.entity.Tenant;
 import com.example.cafemangmentsystem.tenant.repository.TenantRepository;
@@ -17,6 +19,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Tells the owner, on WhatsApp, when a shift opens and when it closes.
@@ -40,6 +46,7 @@ public class ShiftNotifier {
 
     private final TenantRepository tenantRepository;
     private final WhatsAppService whatsAppService;
+    private final ShiftService shiftService;
 
     /** Used to link the owner to the full report. Left blank, the message simply omits the line. */
     @Value("${app.public-url:}")
@@ -47,57 +54,194 @@ public class ShiftNotifier {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onShiftOpened(ShiftEvents.ShiftOpened event) {
-        send(event.tenantId(), """
-                🟢 *فتح شيفت*
-
-                👤 الكاشير: %s
-                🖥 نقطة البيع: %s
-                💰 العهدة الافتتاحية: %s
-                🕐 وقت الفتح: %s"""
-                .formatted(event.cashierName(), event.registerName(),
-                        money(event.openingFloat()), time(event.openedAt())));
+        send(event.tenantId(), "%s فتح شيفت على %s دلوقتي، والعهدة في الدرج %s. ☕"
+                .formatted(event.cashierName(), event.registerName(), money(event.openingFloat())));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onShiftClosed(ShiftEvents.ShiftClosed event) {
-        BigDecimal variance = event.variance() != null ? event.variance() : BigDecimal.ZERO;
+        send(event.tenantId(), buildCloseMessage(event));
+    }
 
-        // The line an owner actually opens the message for. A shortfall and a surplus are different
-        // problems and should not read the same.
-        String varianceLine;
-        if (variance.compareTo(BigDecimal.ZERO) == 0) {
-            varianceLine = "✅ الدرج مظبوط";
-        } else if (variance.compareTo(BigDecimal.ZERO) < 0) {
-            varianceLine = "🔴 *عجز: " + money(variance.abs()) + "*";
-        } else {
-            varianceLine = "🟡 *زيادة: " + money(variance) + "*";
+    /**
+     * Writes the close-up the way a supervisor would text it, not the way a system would print it.
+     *
+     * <p>The first version of this was headed sections separated by box-drawing rules, every figure
+     * on its own labelled line. It was complete and nobody would read it: it announced itself as
+     * machine output, so the owner skims for the variance and ignores the rest — which defeats the
+     * point of sending the rest.
+     *
+     * <p>So: sentences, numbers inside them, and nothing said at all about a part of the shift where
+     * nothing happened. An empty section is silence here, never a row of zeros.
+     */
+    private String buildCloseMessage(ShiftEvents.ShiftClosed event) {
+        StringBuilder body = new StringBuilder();
+
+        body.append("قفلنا الشيفت 🌙\n\n")
+            .append(event.cashierName()).append(" كان على ").append(event.registerName())
+            .append("، من ").append(time(event.openedAt()))
+            .append(" لحد ").append(time(event.closedAt()))
+            .append(" (").append(duration(event)).append(").");
+
+        ShiftReportResponse report = null;
+        Long previous = TenantContext.get();
+        try {
+            TenantContext.set(event.tenantId());
+            report = shiftService.getShiftReport(event.shiftId());
+        } catch (RuntimeException failure) {
+            // A report that cannot be built must not cost the owner the cash summary as well.
+            log.warn("Could not build the full report for shift {}", event.shiftId(), failure);
+        } finally {
+            if (previous != null) TenantContext.set(previous); else TenantContext.clear();
         }
 
-        String body = """
-                🔴 *قفل شيفت*
+        if (report != null) {
+            appendSales(body, report);
+            appendExpenses(body, report);
+            appendEmployeeMovements(body, report);
+            appendDebts(body, report);
+            appendTopProducts(body, report);
+        }
 
-                👤 الكاشير: %s
-                🖥 نقطة البيع: %s
-                🕐 من %s إلى %s (%s)
-
-                💰 العهدة الافتتاحية: %s
-                💵 مبيعات كاش: %s
-                🧾 المفروض في الدرج: %s
-                🔢 المعدود فعلياً: %s
-
-                %s"""
-                .formatted(event.cashierName(), event.registerName(),
-                        time(event.openedAt()), time(event.closedAt()), duration(event),
-                        money(event.openingFloat()), money(event.cashSales()),
-                        money(event.expectedCash()), money(event.countedCash()),
-                        varianceLine);
+        appendDrawer(body, event);
 
         if (publicUrl != null && !publicUrl.isBlank()) {
-            body += "\n\n📄 التفاصيل الكاملة:\n"
-                    + publicUrl.replaceAll("/+$", "") + "/shifts/" + event.shiftId();
+            body.append("\n\nالتفاصيل كلها هنا:\n")
+                .append(publicUrl.replaceAll("/+$", "")).append("/shifts/").append(event.shiftId());
         }
 
-        send(event.tenantId(), body);
+        return body.toString();
+    }
+
+    private void appendSales(StringBuilder body, ShiftReportResponse report) {
+        body.append("\n\nبعنا ").append(money(report.totalRevenue()));
+
+        // Only name the methods that were actually used - listing a zero for a wallet nobody paid
+        // with is noise dressed as completeness.
+        List<String> methods = new ArrayList<>();
+        if (isPositive(report.totalCash())) methods.add(money(report.totalCash()) + " كاش");
+        if (isPositive(report.totalInstapay())) methods.add(money(report.totalInstapay()) + " انستاباي");
+        if (isPositive(report.totalWallet())) methods.add(money(report.totalWallet()) + " محفظة");
+        if (methods.size() > 1) {
+            body.append(" — ").append(String.join(" و", methods));
+        }
+
+        if (report.totalItemsSold() != null && report.totalItemsSold() > 0) {
+            body.append("، ").append(report.totalItemsSold()).append(" صنف");
+        }
+        body.append(".");
+
+        if (isPositive(report.totalDiscounts())) {
+            body.append(" وفيه خصومات بـ").append(money(report.totalDiscounts())).append(".");
+        }
+    }
+
+    private void appendExpenses(StringBuilder body, ShiftReportResponse report) {
+        if (!isPositive(report.totalExpenses())) return;
+
+        body.append("\n\nصرفنا ").append(money(report.totalExpenses()));
+        if (!isEmpty(report.expenses())) {
+            body.append(": ").append(report.expenses().stream()
+                    .map(expense -> expense.description() + " " + money(expense.amount()))
+                    .collect(Collectors.joining(" · ")));
+        }
+        body.append(".");
+    }
+
+    private void appendEmployeeMovements(StringBuilder body, ShiftReportResponse report) {
+        if (isEmpty(report.employeeMovements())) return;
+
+        body.append("\n\nومن الموظفين: ").append(report.employeeMovements().stream()
+                .map(this::phrase)
+                .collect(Collectors.joining("، و")))
+            .append(".");
+    }
+
+    /**
+     * "سلفة 200 لمحمود" reads; "ADVANCE | محمود | 200.00" does not.
+     *
+     * <p>The reason is appended whenever one was recorded. It is the first thing an owner asks
+     * about a deduction, and a message that reports the amount but withholds the why just produces
+     * a phone call — which is the thing this notification exists to save.
+     */
+    private String phrase(ShiftReportResponse.EmployeeMovementSummaryItem movement) {
+        String amount = money(movement.amount());
+        String name = movement.employeeName();
+
+        String head = movement.type() == null ? amount + " لـ" + name : switch (movement.type()) {
+            case "ADVANCE" -> "سلفة " + amount + " لـ" + name;
+            case "DEDUCTION" -> "خصم " + amount + " على " + name;
+            case "BONUS" -> "مكافأة " + amount + " لـ" + name;
+            case "SALARY_PAYOUT" -> "راتب " + amount + " لـ" + name;
+            default -> amount + " لـ" + name;
+        };
+
+        String reason = movement.notes();
+        return (reason == null || reason.isBlank()) ? head : head + " (" + reason.trim() + ")";
+    }
+
+    private void appendDebts(StringBuilder body, ShiftReportResponse report) {
+        boolean anyNew = isPositive(report.totalNewDebts());
+        boolean anyCollected = isPositive(report.totalCollectedDebts());
+        if (!anyNew && !anyCollected) return;
+
+        body.append("\n\n");
+        if (anyNew && anyCollected) {
+            body.append("فتحنا آجل بـ").append(money(report.totalNewDebts()))
+                .append(" وحصّلنا ").append(money(report.totalCollectedDebts())).append(" من آجل قديم.");
+        } else if (anyNew) {
+            body.append("فتحنا آجل بـ").append(money(report.totalNewDebts())).append(".");
+        } else {
+            body.append("حصّلنا ").append(money(report.totalCollectedDebts())).append(" من الآجل.");
+        }
+    }
+
+    /**
+     * Three, not ten. A best-seller line is a flavour of how the shift went, not a stock report —
+     * and the link carries the full breakdown for anyone who actually wants to study it.
+     */
+    private void appendTopProducts(StringBuilder body, ShiftReportResponse report) {
+        if (isEmpty(report.productSales())) return;
+
+        String top = report.productSales().stream()
+                .sorted(Comparator.comparing(
+                        (ShiftReportResponse.ProductSalesSummaryItem item) ->
+                                item.quantitySold() == null ? 0 : item.quantitySold())
+                        .reversed())
+                .limit(3)
+                .map(item -> item.productName() + " (" + item.quantitySold() + ")")
+                .collect(Collectors.joining("، "));
+
+        if (!top.isBlank()) {
+            body.append("\n\nأكتر حاجة اتباعت: ").append(top).append(".");
+        }
+    }
+
+    /**
+     * The part the owner opens the message for, so it goes last and says the number plainly.
+     * A shortfall and a surplus must not read the same sentence.
+     */
+    private void appendDrawer(StringBuilder body, ShiftEvents.ShiftClosed event) {
+        body.append("\n\nالدرج: العهدة كانت ").append(money(event.openingFloat()))
+            .append("، المفروض يكون فيه ").append(money(event.expectedCash()))
+            .append("، وعدّينا ").append(money(event.countedCash())).append(".");
+
+        BigDecimal variance = event.variance() != null ? event.variance() : BigDecimal.ZERO;
+        if (variance.compareTo(BigDecimal.ZERO) == 0) {
+            body.append("\nمظبوط ✅");
+        } else if (variance.compareTo(BigDecimal.ZERO) < 0) {
+            body.append("\n*ناقص ").append(money(variance.abs())).append("* 🔴");
+        } else {
+            body.append("\n*زيادة ").append(money(variance)).append("* 🟡");
+        }
+    }
+
+    private boolean isPositive(BigDecimal amount) {
+        return amount != null && amount.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean isEmpty(List<?> list) {
+        return list == null || list.isEmpty();
     }
 
     /**
