@@ -13,9 +13,6 @@ import com.example.cafemangmentsystem.inventory.ShiftAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -34,21 +31,43 @@ public class ProductService {
     private final ShiftAuditService shiftAuditService;
     private final com.example.cafemangmentsystem.menu.repository.ProductOptionRepository productOptionRepository;
     private final com.example.cafemangmentsystem.inventory.repository.ProductRecipeRepository productRecipeRepository;
+    private final com.example.cafemangmentsystem.order.repository.OrderItemRepository orderItemRepository;
+    private final com.example.cafemangmentsystem.inventory.repository.StockAdjustmentRepository stockAdjustmentRepository;
 
+    /**
+     * Deletes a product outright, or refuses and says why.
+     *
+     * <p>This used to try the delete and, on any exception, quietly deactivate instead - reporting
+     * success either way. Two things wrong with that. The owner pressed "delete", was told it was
+     * done, and then found the product still sitting in the list; and the rescue could not work
+     * anyway, because a constraint violation inside a transaction marks it rollback-only, so the
+     * save() that followed was doomed and the whole call ended as a 500.
+     *
+     * <p>So it asks first. order_items and stock_adjustments both point at products with no
+     * cascade - deliberately: a sold item's line must keep resolving, and a stock movement that
+     * forgot its product is not an audit trail. If either exists, deleting is genuinely the wrong
+     * operation and the caller is told to deactivate, which hides the product everywhere while
+     * leaving the history intact.
+     */
     public void delete(Long id) {
         Product product = getOrThrow(id);
-        try {
-            productOptionRepository.deleteAll(productOptionRepository.findAllByProductId(id));
-        } catch (Exception ignored) {}
-        try {
-            productRecipeRepository.deleteAll(productRecipeRepository.findAllByProductId(id));
-        } catch (Exception ignored) {}
-        try {
-            productRepository.delete(product);
-        } catch (Exception e) {
-            product.deactivate(null);
-            productRepository.save(product);
+
+        if (orderItemRepository.existsByProductId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "الصنف ده اتباع قبل كده، فمينفعش يتمسح - تاريخ الأوردرات محتاجه. "
+                    + "عطّله بدل ما تمسحه وهيختفي من الكاشير.");
         }
+        if (stockAdjustmentRepository.existsByProductId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "الصنف ده عليه حركات مخزون مسجلة، فمينفعش يتمسح. "
+                    + "عطّله بدل ما تمسحه وهيختفي من الكاشير.");
+        }
+
+        // These two DO cascade, but deleting them here keeps the order explicit rather than
+        // relying on a schema detail that a future migration could quietly change.
+        productOptionRepository.deleteAll(productOptionRepository.findAllByProductId(id));
+        productRecipeRepository.deleteAll(productRecipeRepository.findAllByProductId(id));
+        productRepository.delete(product);
     }
 
     public ProductResponse create(ProductRequest request) {

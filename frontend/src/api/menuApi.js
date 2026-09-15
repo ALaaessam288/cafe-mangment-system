@@ -47,7 +47,10 @@ export const menuApi = {
   getProductById:  (id)      => client.get(`/products/${id}`).then((r) => { const p = r.data; return {...p, name: p.nameAr || p.nameEn}; }),
   createProduct:   (payload) => client.post('/products', toProductRequest(payload)).then((r) => r.data),
   updateProduct:   (id, payload) => client.put(`/products/${id}`, toProductRequest(payload)).then((r) => r.data),
-  deleteProduct:   (id)          => client.delete(`/products/${id}/permanent`).catch(() => client.delete(`/products/${id}`)).then((r) => r.data),
+  /* No .catch(() => deactivate) here any more. Falling back turned a refusal into a silent,
+     different operation: the caller saw success, the owner saw the product still in the list.
+     A 409 now reaches the screen with the server's explanation of why. */
+  deleteProduct:   (id)          => client.delete(`/products/${id}/permanent`).then((r) => r.data),
   deactivateProduct: (id)    => client.delete(`/products/${id}`).then((r) => r.data),
   activateProduct:   (id)    => client.put(`/products/${id}/activate`).then((r) => r.data),
   setAvailability: (id, available) =>

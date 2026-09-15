@@ -7,5 +7,8 @@ import java.util.List;
 
 public interface StockAdjustmentRepository extends JpaRepository<StockAdjustment, Long> {
 
+    /** Stock movements also pin a product down: the FK has no cascade, by design. */
+    boolean existsByProductId(Long productId);
+
     List<StockAdjustment> findAllByProductIdOrderByAdjustedAtDesc(Long productId);
 }

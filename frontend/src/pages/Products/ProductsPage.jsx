@@ -452,6 +452,37 @@ export default function ProductsPage() {
     }
   }
 
+  /* Delete asks first, and it says what it is about to destroy.
+     A menu item carries options and a recipe with it, and there is no undo - so the confirmation
+     names the product rather than asking the generic "are you sure?" that everyone clicks through.
+     Deactivate stays the right answer for a product that has ever been sold; the server refuses
+     the delete in that case and says so, and this dialog offers that as the way out. */
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await menuApi.deleteProduct(deleteTarget.id);
+      toast.success(`اتمسح "${deleteTarget.name}" خالص`);
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err) {
+      // A 409 is the server saying "this one has history" - not a failure to report as one.
+      if (err.status === 409) toast.info(err.message, 'مينفعش يتمسح');
+      else toast.error(err.message, 'فشل مسح الصنف');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  async function handleDeactivateFromDialog() {
+    const product = deleteTarget;
+    setDeleteTarget(null);
+    if (product?.active) await handleDeactivate(product);
+  }
+
   async function handleDeactivate(product) {
     if (role !== ROLES.SUPERVISOR) return;
     try {
@@ -731,6 +762,15 @@ export default function ProductsPage() {
                       >
                         {prod.active ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
                       </button>
+                      <button
+                        type="button"
+                        className="product-action-btn"
+                        onClick={() => setDeleteTarget(prod)}
+                        title="مسح الصنف نهائياً"
+                        style={{ color: 'var(--danger)' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -797,6 +837,16 @@ export default function ProductsPage() {
                           >
                             {prod.active ? 'تعطيل' : 'تفعيل'}
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteTarget(prod)}
+                            style={{ color: 'var(--danger)' }}
+                            title="مسح الصنف نهائياً"
+                          >
+                            <Trash2 size={14} />
+                            <span>مسح</span>
+                          </Button>
                         </div>
                       </td>
                     )}
@@ -817,6 +867,44 @@ export default function ProductsPage() {
         maxLimit={currentUser?.maxProducts}
         customMessage={quotaModal.message}
       />
+
+      {/* Delete confirmation */}
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => (isDeleting ? null : setDeleteTarget(null))}
+        title="مسح الصنف نهائياً"
+        icon="🗑️"
+        subtitle={deleteTarget ? deleteTarget.name : ''}
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" type="button" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              إلغاء
+            </Button>
+            {deleteTarget?.active && (
+              <Button variant="secondary" type="button" onClick={handleDeactivateFromDialog} disabled={isDeleting}>
+                عطّله بس
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={handleConfirmDelete}
+              loading={isDeleting}
+              style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
+            >
+              امسح نهائياً
+            </Button>
+          </div>
+        }
+      >
+        <p style={{ margin: 0, lineHeight: 1.8 }}>
+          هيتمسح <strong>{deleteTarget?.name}</strong> ومعاه كل الاختيارات والوصفة بتاعته، ومفيش رجوع.
+        </p>
+        <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', lineHeight: 1.8 }}>
+          لو الصنف ده اتباع قبل كده، المسح هيترفض عشان تاريخ الأوردرات محتاجه — وقتها
+          «عطّله بس» هي اللي هتخفيه من الكاشير من غير ما تضيع أي حاجة.
+        </p>
+      </Modal>
 
       {role === ROLES.SUPERVISOR && (
         <Modal

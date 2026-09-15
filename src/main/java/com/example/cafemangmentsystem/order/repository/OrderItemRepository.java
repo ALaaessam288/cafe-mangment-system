@@ -15,6 +15,9 @@ import org.springframework.data.domain.Pageable;
 
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
+    /** Has this product ever been put on a ticket? Decides whether it can be deleted outright. */
+    boolean existsByProductId(Long productId);
+
     List<OrderItem> findByOrder(Order order);
 
     List<OrderItem> findByOrderId(Long orderId);
