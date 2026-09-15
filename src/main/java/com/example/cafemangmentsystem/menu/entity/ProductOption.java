@@ -38,6 +38,15 @@ public class ProductOption extends TenantScopedEntity {
     @Builder.Default
     private boolean isDefault = false;
 
+    /**
+     * Which question this option answers: SIZE, SUGAR, SPICE, or ADDON.
+     *
+     * <p>Single-select applies within a group and not across them, so a drink can carry both a size
+     * and a sugar level without the two fighting. ADDON is the open case - extras, multi-select.
+     */
+    @Column(name = "option_group", length = 32)
+    private String optionGroup = "ADDON";
+
     public Product getProduct() { return product; }
     public void setProduct(Product product) { this.product = product; }
 

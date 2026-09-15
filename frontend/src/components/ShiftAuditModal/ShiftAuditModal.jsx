@@ -64,7 +64,7 @@ export default function ShiftAuditModal({ isOpen, onClose, shiftId, mode = 'OPEN
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [isOpen, mode, toast]);
+  }, [isOpen, mode, shiftId, toast]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();

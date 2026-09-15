@@ -100,13 +100,36 @@ export default function ModifierDialog({
    */
   function handleOptionSelect(optionId) {
     const alreadySelected = selectedIds.includes(optionId);
+    const option = customOptions.find((o) => o.id === optionId);
+    const group = option?.optionGroup || 'ADDON';
 
-    customOptions
-      .filter((o) => o.id !== optionId && selectedIds.includes(o.id))
-      .forEach((o) => onToggle(o.id));
+    /* Extras are a list; a size is a question.
+     *
+     * This used to clear every other selected option regardless, because options were a flat bag
+     * with nothing distinguishing a size from a sugar level from a shot of vanilla. That made
+     * "large, مظبوط" impossible to order: picking the sugar unpicked the size. Now the exclusion
+     * is scoped to the group, so the two questions stop fighting and extras stack freely. */
+    if (group !== 'ADDON') {
+      customOptions
+        .filter((o) => o.id !== optionId
+                    && (o.optionGroup || 'ADDON') === group
+                    && selectedIds.includes(o.id))
+        .forEach((o) => onToggle(o.id));
+    }
 
     if (!alreadySelected) onToggle(optionId);
   }
+
+  const GROUP_LABELS = { SIZE: 'الحجم', SUGAR: 'السكر', SPICE: 'التتبيلة', ADDON: 'إضافات' };
+
+  // Grouped for display, in a fixed order, so the cashier always finds size where size was last time.
+  const groupedOptions = ['SIZE', 'SUGAR', 'SPICE', 'ADDON']
+    .map((group) => ({
+      group,
+      label: GROUP_LABELS[group],
+      items: customOptions.filter((o) => (o.optionGroup || 'ADDON') === group),
+    }))
+    .filter((section) => section.items.length > 0);
 
   const extra = options
     .filter((o) => selectedIds.includes(o.id))
@@ -120,14 +143,14 @@ export default function ModifierDialog({
         <h3 className="modifier-dialog__title">{product.name}</h3>
         <p className="modifier-dialog__subtitle">اختار الحجم ومستوى السكر المطلوب</p>
 
-        {/* Section 1: Custom Addons / Sizes (if any exist) */}
-        {customOptions.length > 0 && (
-          <div style={{ marginBottom: '14px' }}>
+        {/* Section 1: one block per question, so a size and a sugar level stop competing. */}
+        {groupedOptions.map((section) => (
+          <div key={section.group} style={{ marginBottom: '14px' }}>
             <span style={{ fontSize: '12px', fontWeight: 800, color: '#d2cfdd', display: 'block', marginBottom: '8px' }}>
-              الحجم / الإضافات (اختيار واحد):
+              {section.label} {section.group === 'ADDON' ? '(اختيار متعدد):' : '(اختيار واحد):'}
             </span>
             <div className="modifier-dialog__options">
-              {customOptions.map((option) => {
+              {section.items.map((option) => {
                 const selected = selectedIds.includes(option.id);
                 const delta = parseFloat(option.priceDelta ?? 0);
                 return (
@@ -149,7 +172,7 @@ export default function ModifierDialog({
               })}
             </div>
           </div>
-        )}
+        ))}
 
         {/* Section 2: Sugar Selector (Single Choice) */}
         <div style={{ marginBottom: '14px' }}>

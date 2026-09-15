@@ -29,6 +29,7 @@ public class ProductOptionService {
         option.setNameAr(request.nameAr());
         option.setPriceDelta(request.priceDelta());
         option.setDefault(request.isDefault());
+        option.setOptionGroup(normaliseGroup(request.optionGroup()));
 
         return ProductOptionResponse.from(productOptionRepository.save(option));
     }
@@ -46,12 +47,29 @@ public class ProductOptionService {
         option.setNameAr(request.nameAr());
         option.setPriceDelta(request.priceDelta());
         option.setDefault(request.isDefault());
+        option.setOptionGroup(normaliseGroup(request.optionGroup()));
         return ProductOptionResponse.from(option);
     }
 
     public void delete(Long productId, Long optionId) {
         ProductOption option = getOrThrow(productId, optionId);
         productOptionRepository.delete(option);
+    }
+
+    /**
+     * An unrecognised or absent group becomes ADDON rather than being rejected.
+     *
+     * <p>A bad group name is a cosmetic problem - the option shows under extras instead of under
+     * sizes - and refusing to save a menu item over it would be a much worse outcome than putting
+     * it in the obvious bucket.
+     */
+    private String normaliseGroup(String requested) {
+        if (requested == null || requested.isBlank()) return "ADDON";
+        String upper = requested.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (upper) {
+            case "SIZE", "SUGAR", "SPICE", "ADDON" -> upper;
+            default -> "ADDON";
+        };
     }
 
     private ProductOption getOrThrow(Long productId, Long optionId) {

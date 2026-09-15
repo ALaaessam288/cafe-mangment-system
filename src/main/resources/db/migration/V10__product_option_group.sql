@@ -1,0 +1,14 @@
+-- product_options.option_group
+--
+-- Options were a flat list per product: a size, a sugar level and an extra all sat in one bag with
+-- nothing saying which was which. The POS modifier dialog therefore had to choose between letting a
+-- cashier tick several sizes at once, or - as it does now - allowing exactly one selection for the
+-- whole product, which makes "large, medium sugar" unexpressible. Neither is right, and no amount of
+-- UI work fixes it while the data cannot say that size and sugar are different questions.
+--
+-- The group is what makes one-choice-per-question possible: single-select WITHIN a group,
+-- independent BETWEEN groups, and free multi-select for extras.
+--
+-- ADDON as the default is the behaviour every existing row already has - an unrelated extra the
+-- cashier may or may not add - so nothing in a live menu changes meaning when this lands.
+ALTER TABLE product_options ADD COLUMN ${add_col_if_not_exists}option_group VARCHAR(32) DEFAULT 'ADDON';

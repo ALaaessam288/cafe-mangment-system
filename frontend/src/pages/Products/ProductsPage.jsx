@@ -27,6 +27,48 @@ const stationNames = {
   'OTHER': 'أخرى'
 };
 
+
+/* Ready-made option sets.
+ *
+ * Every one of these is a question with one answer — a drink has one size and one sugar level —
+ * which is why they carry a group. Single-select applies inside a group and not across them, so a
+ * latte can be large AND مظبوط; before the group existed the modifier dialog had to allow exactly
+ * one selection for the whole product and that combination could not be expressed at all.
+ *
+ * Price deltas start at zero deliberately. What a large costs over a medium differs per café and
+ * per drink, and a number invented here would be wrong everywhere; the owner edits them after.
+ */
+const OPTION_PRESETS = [
+  {
+    key: 'DRINK_SIZE',
+    label: 'أحجام المشروبات',
+    group: 'SIZE',
+    options: ['صغير', 'وسط', 'كبير', 'كبير جداً'],
+    defaultIndex: 1,
+  },
+  {
+    key: 'FOOD_SIZE',
+    label: 'أحجام المأكولات',
+    group: 'SIZE',
+    options: ['صغير', 'وسط', 'كبير', 'سنجل', 'دوبل', 'تريبل'],
+    defaultIndex: 1,
+  },
+  {
+    key: 'SUGAR',
+    label: 'مستوى السكر',
+    group: 'SUGAR',
+    options: ['سادة', 'ع الريحة', 'مظبوط', 'مانو', 'زيادة', 'فوق الزيادة'],
+    defaultIndex: 2,
+  },
+  {
+    key: 'SPICE',
+    label: 'درجة الحرارة/التتبيلة',
+    group: 'SPICE',
+    options: ['عادي', 'سبايسي', 'اكسترا سبايسي'],
+    defaultIndex: 0,
+  },
+];
+
 export default function ProductsPage() {
   const toast = useToast();
   const { role, user: currentUser } = useAuth();
@@ -64,7 +106,8 @@ export default function ProductsPage() {
   const [optionsProduct, setOptionsProduct] = useState(null);
   const [productOptions, setProductOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
-  const [newOptionForm, setNewOptionForm] = useState({ nameAr: '', priceDelta: '0', isDefault: false });
+  const [newOptionForm, setNewOptionForm] = useState({ nameAr: '', priceDelta: '0', isDefault: false, optionGroup: 'ADDON' });
+  const [applyingPreset, setApplyingPreset] = useState(null);
   const [isSavingOption, setIsSavingOption] = useState(false);
 
   // Recipes State
@@ -93,7 +136,8 @@ export default function ProductsPage() {
     const optionPayload = {
       nameAr: newOptionForm.nameAr.trim(),
       priceDelta: isNaN(parsedPrice) ? 0 : parsedPrice,
-      isDefault: newOptionForm.isDefault
+      isDefault: newOptionForm.isDefault,
+      optionGroup: newOptionForm.optionGroup || 'ADDON'
     };
 
     if (editingProduct) {
@@ -101,7 +145,7 @@ export default function ProductsPage() {
       try {
         await menuApi.createOption(editingProduct.id, optionPayload);
         toast.success('تمت إضافة الاختيار بنجاح');
-        setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false });
+        setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false, optionGroup: newOptionForm.optionGroup });
         await loadProductOptions(editingProduct.id);
       } catch (err) {
         toast.error(err.message, 'فشل إضافة الاختيار');
@@ -113,8 +157,60 @@ export default function ProductsPage() {
         id: Date.now(),
         ...optionPayload
       }]);
-      setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false });
+      setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false, optionGroup: newOptionForm.optionGroup });
       toast.success('تمت إضافة الاختيار لقائمة الحفظ');
+    }
+  }
+
+  /**
+   * Adds a whole preset in one click.
+   *
+   * Existing names in the same group are skipped rather than duplicated, so pressing the button
+   * twice — or adding "كبير" by hand first — cannot leave the cashier choosing between two
+   * identical chips.
+   */
+  async function handleApplyPreset(preset) {
+    const existing = new Set(
+      productOptions
+        .filter((o) => (o.optionGroup || 'ADDON') === preset.group)
+        .map((o) => (o.nameAr || '').trim())
+    );
+    const toAdd = preset.options.filter((name) => !existing.has(name));
+
+    if (toAdd.length === 0) {
+      toast.info('كل اختيارات المجموعة دي مضافة بالفعل');
+      return;
+    }
+
+    const rows = toAdd.map((name) => ({
+      nameAr: name,
+      priceDelta: 0,
+      // Only mark a default when the group does not already have one.
+      isDefault: existing.size === 0 && preset.options[preset.defaultIndex] === name,
+      optionGroup: preset.group,
+    }));
+
+    if (!editingProduct) {
+      // New product: the options are held locally and saved with it.
+      setProductOptions((prev) => [...prev, ...rows.map((r) => ({ id: Date.now() + Math.random(), ...r }))]);
+      toast.success(`تمت إضافة ${rows.length} اختيار لقائمة الحفظ`);
+      return;
+    }
+
+    setApplyingPreset(preset.key);
+    try {
+      // Sequentially, not Promise.all: the server assigns display order by insertion, and a
+      // parallel burst would scramble سادة/مظبوط/زيادة into an arbitrary sequence on the till.
+      for (const row of rows) {
+        await menuApi.createOption(editingProduct.id, row);
+      }
+      await loadProductOptions(editingProduct.id);
+      toast.success(`تمت إضافة ${rows.length} اختيار`);
+    } catch (err) {
+      toast.error(err.message, 'فشل إضافة المجموعة');
+      await loadProductOptions(editingProduct.id);
+    } finally {
+      setApplyingPreset(null);
     }
   }
 
@@ -284,7 +380,7 @@ export default function ProductsPage() {
       setProductOptions([]);
       setProductRecipes([]);
     }
-    setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false });
+    setNewOptionForm({ nameAr: '', priceDelta: '0', isDefault: false, optionGroup: newOptionForm.optionGroup });
     setNewRecipeForm({ auditItemId: '', deductionQuantity: '' });
     setIsModalOpen(true);
   }
@@ -815,8 +911,24 @@ export default function ProductsPage() {
             <div style={{ gridColumn: '1/-1', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
               <h3 style={{ fontSize: 'var(--text-md)', marginBottom: '12px', fontWeight: 600 }}>الاختيارات المتاحة للمنتج (الأحجام والإضافات مثل: كبير، وسط، شيكولاتة زيادة)</h3>
               
+              {/* One-click option sets */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                {OPTION_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.key}
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={applyingPreset !== null}
+                    onClick={() => handleApplyPreset(preset)}
+                  >
+                    {applyingPreset === preset.key ? '...' : `+ ${preset.label}`}
+                  </Button>
+                ))}
+              </div>
+
               {/* Add new option inline */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto auto', gap: '12px', alignItems: 'flex-end', background: 'var(--bg-surface-hover)', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto auto', gap: '12px', alignItems: 'flex-end', background: 'var(--bg-surface-hover)', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
                 <Input
                   label="اسم الاختيار"
                   placeholder="مثال: كبير"
@@ -829,6 +941,19 @@ export default function ProductsPage() {
                     }
                   }}
                 />
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>المجموعة</span>
+                  <select
+                    className="input"
+                    value={newOptionForm.optionGroup}
+                    onChange={(e) => setNewOptionForm({ ...newOptionForm, optionGroup: e.target.value })}
+                  >
+                    <option value="ADDON">إضافة (اختيار متعدد)</option>
+                    <option value="SIZE">الحجم</option>
+                    <option value="SUGAR">السكر</option>
+                    <option value="SPICE">التتبيلة</option>
+                  </select>
+                </label>
                 <Input
                   label="فارق السعر (+/-)"
                   type="number"
@@ -870,6 +995,7 @@ export default function ProductsPage() {
                     <thead>
                       <tr>
                         <th>الاسم</th>
+                        <th>المجموعة</th>
                         <th>فارق السعر</th>
                         <th>الافتراضي</th>
                         <th style={{ textAlign: 'left' }}>إزالة</th>
@@ -879,6 +1005,9 @@ export default function ProductsPage() {
                       {productOptions.map((opt) => (
                         <tr key={opt.id}>
                           <td style={{ fontWeight: 500 }}>{opt.nameAr}</td>
+                          <td style={{ color: 'var(--text-muted)' }}>
+                            {{ SIZE: 'الحجم', SUGAR: 'السكر', SPICE: 'التتبيلة' }[opt.optionGroup] || 'إضافة'}
+                          </td>
                           <td>{opt.priceDelta > 0 ? `+${formatCurrency(opt.priceDelta)}` : opt.priceDelta < 0 ? `-${formatCurrency(Math.abs(opt.priceDelta))}` : '0.00 ج.م'}</td>
                           <td>
                             {opt.isDefault ? (

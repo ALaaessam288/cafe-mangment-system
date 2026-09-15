@@ -9,10 +9,12 @@ public record ProductOptionResponse(
         Long productId,
         String nameAr,
         BigDecimal priceDelta,
-        boolean isDefault
+        boolean isDefault,
+        String optionGroup
 ) {
     public static ProductOptionResponse from(ProductOption option) {
         return new ProductOptionResponse(option.getId(), option.getProduct().getId(),
-                option.getNameAr(), option.getPriceDelta(), option.isDefault());
+                option.getNameAr(), option.getPriceDelta(), option.isDefault(),
+                option.getOptionGroup());
     }
 }

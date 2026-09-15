@@ -241,7 +241,14 @@ export default function POSPage() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [targetTableId, setTargetTableId] = useState('');
   const [showOpeningAudit, setShowOpeningAudit] = useState(false);
-  const [showClosingAudit, setShowClosingAudit] = useState(false);
+  /* The shift whose closing stocktake is on screen, or null.
+     This was a boolean plus `state.activeShift?.id || 1`, which is two bugs in one expression:
+     closing a shift nulls activeShift, so the audit was filed against shift 1 — an arbitrary,
+     probably long-finished shift belonging to another day — and the boolean stayed true after the
+     modal was dismissed, so the CLOSING dialog reappeared on top of the OPENING one the next time
+     a cashier started a shift. An id that is null unless a specific shift is being counted cannot
+     do either. */
+  const [closingAuditShiftId, setClosingAuditShiftId] = useState(null);
 
   // Quick Refill Modal states inside POS
   const [refillProduct, setRefillProduct] = useState(null);
@@ -547,6 +554,9 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_SHIFT', payload: shift });
       toast.success('تم فتح الشيفت بنجاح!');
+      // Belt and braces: a closing count from the previous shift has no business being on screen
+      // while a new one is being opened.
+      setClosingAuditShiftId(null);
       setShowOpeningAudit(true);
     } catch (err) {
       setOpenShiftError(err.message || 'يوجد شيفت مفتوح بالفعل على نقطة البيع (الكاشير) المحددة. يرجى إغلاقه أولاً.');
@@ -601,7 +611,8 @@ export default function POSPage() {
       setShowCloseShift(false);
       setCloseShiftForm({ countedCash: '', snacksNet: '' });
       dispatch({ type: 'SET_SHIFT', payload: null });
-      setShowClosingAudit(true);
+      // Captured before activeShift is cleared, because it is about to be.
+      setClosingAuditShiftId(closedShiftId);
       // Reset active orders/tables
       dispatch({ type: 'CLEAR_TABLE' });
     } catch (err) {
@@ -2062,11 +2073,11 @@ export default function POSPage() {
       )}
 
       {/* Closing Shift Inventory Audit & Waste Analysis Modal */}
-      {showClosingAudit && (
+      {closingAuditShiftId && (
         <ShiftAuditModal
-          isOpen={showClosingAudit}
-          onClose={() => setShowClosingAudit(false)}
-          shiftId={state.activeShift?.id || 1}
+          isOpen
+          onClose={() => setClosingAuditShiftId(null)}
+          shiftId={closingAuditShiftId}
           mode="CLOSING"
         />
       )}
