@@ -51,6 +51,10 @@ _to_delete/
 /Claude outputs/
 /entity_cols.tsv
 
+# Frontend build output — Docker builds this fresh (see Dockerfile); committing it just goes stale.
+/src/main/resources/static/assets/
+/src/main/resources/static/index.html
+
 ### WhatsApp bridge ###
 whatsapp-bridge/node_modules/
 # Linked-device credentials. These ARE the WhatsApp session - anyone holding them can send as
