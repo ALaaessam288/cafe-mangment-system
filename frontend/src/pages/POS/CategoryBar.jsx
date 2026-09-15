@@ -41,7 +41,10 @@ export default function CategoryBar({
               <span className="menu-group__icon">{group.icon}</span>
             )}
             <span>{group.label}</span>
-            <span className="menu-group__badge">{group.categories?.length || 0}</span>
+            {/* Products, not categories. The badge used to count the group's categories, so
+                مشروبات showed "1" while the grid drew two drinks - the one number a cashier reads
+                as "how many drinks are in here" was the one number it never meant. */}
+            <span className="menu-group__badge">{group.productCount || 0}</span>
           </button>
         ))}
       </div>
