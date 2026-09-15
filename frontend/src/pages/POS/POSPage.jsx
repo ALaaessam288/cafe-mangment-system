@@ -1397,7 +1397,19 @@ export default function POSPage() {
 
     if (fullyPaid) {
       toast.success(DONE.PAY);
-      const html = buildReceiptHtml({ order: updatedOrder || state.activeOrder });
+      // Some deployed API versions return a compact order after close. Preserve the live
+      // adjustment values so the receipt never loses a discount or service fee at the exact
+      // moment the bill is printed.
+      const closedOrder = updatedOrder || state.activeOrder;
+      const printableOrder = {
+        ...state.activeOrder,
+        ...closedOrder,
+        discount: closedOrder?.discount ?? state.activeOrder?.discount ?? 0,
+        service: closedOrder?.service ?? state.activeOrder?.service ?? 0,
+        deliveryFee: closedOrder?.deliveryFee ?? state.activeOrder?.deliveryFee ?? 0,
+        items: closedOrder?.items?.length ? closedOrder.items : (state.activeOrder?.items ?? []),
+      };
+      const html = buildReceiptHtml({ order: printableOrder });
       printReceipt(html, printOptionsFor('RECEIPT', { width: 80 }));
       dispatch({ type: 'CLEAR_TABLE' });
     } else {
