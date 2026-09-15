@@ -22,6 +22,22 @@ import { printReceipt, buildReceiptHtml } from '../../utils/printUtils';
 import { printOptionsFor } from '../../utils/printerSettings';
 import { sounds } from '../../utils/soundEffects';
 
+/**
+ * When an order was opened.
+ *
+ * <p>This screen read `orderDateOf(o)` in seven places and OrderResponse has no such field - it
+ * carries `openedAt`. So every date was `new Date(undefined)`, which is why the cards all said
+ * "Invalid Date". That was the visible half. The invisible half is worse: the اليوم / أمس /
+ * آخر 7 أيام filters compared against Invalid Date, and every comparison with it is false, so
+ * those filters silently matched nothing; and NEWEST / OLDEST sorted on NaN, so they did nothing
+ * at all. This screen has been unsorted and unfilterable by date for as long as the code existed.
+ *
+ * <p>createdAt is still read as a fallback, in case some endpoint does send one.
+ */
+function orderDateOf(order) {
+  return order?.openedAt ?? order?.createdAt ?? null;
+}
+
 export default function InvoicesPage() {
   const toast = useToast();
   const { role, user } = useAuth();
@@ -173,7 +189,7 @@ export default function InvoicesPage() {
 
     const text = `🧾 *فاتورة ${user?.tenantName || 'كافيه ونس'}*
 رقم الأوردر: *#${target.orderNumber}*
-التاريخ: ${formatDateTime(target.createdAt)}
+التاريخ: ${formatDateTime(orderDateOf(target))}
 ${target.type === 'TAKEAWAY' ? (target.customerAddress ? '🛵 دليفري وتوصيل' : '🛍️ تيك أواي') : `🪑 صالة - ترابيزة ${target.tableNumber || '-'}`}
 
 *الأصناف المطلوبة:*
@@ -308,7 +324,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
         if (o.shiftId != filterShiftId) return false;
       } else if (filterDate !== 'ALL') {
         // 4. Date Filter (only if no specific shift is selected)
-        const orderDate = new Date(o.createdAt);
+        const orderDate = new Date(orderDateOf(o));
         const today = new Date();
         today.setHours(0,0,0,0);
         
@@ -340,8 +356,8 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
 
     // Sorting
     return result.sort((a, b) => {
-      if (sortOrder === 'NEWEST') return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortOrder === 'OLDEST') return new Date(a.createdAt) - new Date(b.createdAt);
+      if (sortOrder === 'NEWEST') return new Date(orderDateOf(b)) - new Date(orderDateOf(a));
+      if (sortOrder === 'OLDEST') return new Date(orderDateOf(a)) - new Date(orderDateOf(b));
       if (sortOrder === 'TOTAL_DESC') return (b.total || 0) - (a.total || 0);
       if (sortOrder === 'TOTAL_ASC') return (a.total || 0) - (b.total || 0);
       return 0;
@@ -400,7 +416,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
       o.customerAddress || '-',
       o.status,
       o.total || 0,
-      formatDateTime(o.createdAt)
+      formatDateTime(orderDateOf(o))
     ]);
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.map(val => `"${val}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -725,7 +741,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
                       )}
 
                       <span className="order-card__time">
-                        {new Date(o.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                        {orderDateOf(o) ? new Date(orderDateOf(o)).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
                       </span>
                     </div>
 
@@ -868,7 +884,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
                       </td>
                       <td>{renderStatusBadge(o.status)}</td>
                       <td className="fw-bold font-mono text-accent">{formatCurrency(o.total)}</td>
-                      <td className="text-muted text-sm">{formatDateTime(o.createdAt)}</td>
+                      <td className="text-muted text-sm">{formatDateTime(orderDateOf(o))}</td>
                       <td className="text-center no-print" onClick={(e) => e.stopPropagation()}>
                         <div className="quick-actions">
                           {(o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED') && (
@@ -987,7 +1003,7 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
 
                     <div className="receipt-meta-line">
                       <span>التاريخ والوقت:</span>
-                      <span className="font-mono">{formatDateTime(selectedOrder.createdAt)}</span>
+                      <span className="font-mono">{formatDateTime(orderDateOf(selectedOrder))}</span>
                     </div>
                   </div>
 

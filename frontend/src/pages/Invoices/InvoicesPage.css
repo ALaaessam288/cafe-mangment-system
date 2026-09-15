@@ -575,8 +575,14 @@
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 10px;
+  /* Rows size to their content instead of stretching to fill the scroller.
+     A grid's default align-content is `stretch`, and this one is flex:1 inside a full-height
+     column - so with a single row of results that row grew to the whole viewport and each card
+     became a ~650px tower with a void in the middle (the card's own space-between pushing its
+     header and footer apart). The cards were never designed tall; the grid made them tall. */
+  align-content: start;
   padding-bottom: 24px;
   scrollbar-width: thin;
   scrollbar-color: rgba(169, 156, 255, 0.3) transparent;
@@ -595,9 +601,11 @@
 .order-card {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px;
+  /* Not space-between: with the row no longer stretching there is nothing to space apart, and
+     if a card ever is taller than its neighbours the content should stay together at the top. */
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 10px;
   background: linear-gradient(155deg, rgba(25, 32, 50, 0.9) 0%, rgba(15, 19, 31, 0.95) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;

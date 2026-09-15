@@ -120,7 +120,29 @@ changed. vite build succeeds; oxlint exits 0.
   "frontend/src/pages/POS/tableStatus.js"
 )
 
-Write-Host "=== after ==="
+Commit "fix(invoices): every date on this screen was Invalid Date, and the filters knew it" @"
+The page read o.createdAt in eleven places. OrderResponse has no such field -
+it carries openedAt. So every date was new Date(undefined).
+
+The visible half was "Invalid Date" on every card. The invisible half is
+worse: the اليوم / أمس / آخر 7 أيام filters compared against Invalid Date, and
+every comparison with it is false, so those filters silently matched nothing;
+and NEWEST / OLDEST sorted on NaN, so they did nothing at all. This screen has
+been unsorted and unfilterable by date for as long as the code existed.
+
+One orderDateOf() now answers the question, with createdAt kept as a fallback.
+
+Separately, the cards: the grid is flex:1 in a full-height column and a grid's
+default align-content is stretch, so a single row of results grew to the whole
+viewport and each card became a ~650px tower with a void in the middle - the
+card's own space-between pushing header and footer apart. The cards were never
+designed tall; the grid made them tall. align-content: start fixes it.
+"@ @(
+  "frontend/src/pages/Invoices/InvoicesPage.jsx",
+  "frontend/src/pages/Invoices/InvoicesPage.css"
+)
+
+Write-Host "=== after ===""
 git log --oneline -6
 git status --short
 
