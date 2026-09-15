@@ -35,7 +35,8 @@ public class OrderItem extends TenantScopedEntity {
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
+    /** Null when the product has since been deleted; the snapshots below carry the sale. */
+    @JoinColumn(name = "product_id")
     private Product product;
 
     @Column(name = "product_name_snapshot", nullable = false)

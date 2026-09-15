@@ -28,7 +28,10 @@ public record OrderItemResponse(
         BigDecimal grossLineTotal = item.getUnitPriceSnapshot().multiply(BigDecimal.valueOf(item.getQuantity()));
         return new OrderItemResponse(
                 item.getId(),
-                item.getProduct().getId(),
+                // Null once the product has been deleted. Every other field on this line is a
+                // snapshot taken at the time of sale, so the line still renders and still totals
+                // correctly - it just cannot be re-ordered from, which is the point.
+                item.getProduct() == null ? null : item.getProduct().getId(),
                 item.getProductNameSnapshot(),
                 item.getCategoryNameSnapshot(),
                 item.getUnitPriceSnapshot(),

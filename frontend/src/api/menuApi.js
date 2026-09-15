@@ -35,7 +35,11 @@ export const menuApi = {
   getCategoryById:  (id)      => client.get(`/categories/${id}`).then((r) => { const c = r.data; return {...c, name: c.nameAr || c.nameEn}; }),
   createCategory:   (payload) => client.post('/categories', toCategoryRequest(payload)).then((r) => r.data),
   updateCategory:   (id, payload) => client.put(`/categories/${id}`, toCategoryRequest(payload)).then((r) => r.data),
-  deleteCategory:   (id)      => client.delete(`/categories/${id}`).then((r) => r.data),
+  /* Deactivate hides a category; deleteCategory removes it and leaves its products on sale
+     under غير مصنّف. Two different intentions, two different endpoints - the old single call
+     was named delete and did the first. */
+  deactivateCategory: (id)    => client.delete(`/categories/${id}`).then((r) => r.data),
+  deleteCategory:   (id)      => client.delete(`/categories/${id}/permanent`).then((r) => r.data),
   // The server's DELETE is a soft deactivate; this is how a hidden category comes back.
   activateCategory: (id)      => client.put(`/categories/${id}/activate`).then((r) => r.data),
 

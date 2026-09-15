@@ -48,6 +48,18 @@ public class CategoryService {
         return CategoryResponse.from(category);
     }
 
+    /**
+     * Deletes a category outright. Its products survive it.
+     *
+     * <p>Not a cascade, deliberately: deleting a category must never become a way to wipe a menu
+     * by accident. V11 makes products.category_id ON DELETE SET NULL, so the products stay on
+     * sale and surface in the POS under أخرى / غير مصنّف, which the menu grid already groups and
+     * draws. Past order lines are untouched either way - they carry category_name_snapshot.
+     */
+    public void delete(Long id) {
+        categoryRepository.delete(getOrThrow(id));
+    }
+
     public CategoryResponse deactivate(Long id, Long deactivatedByUserId) {
         Category category = getOrThrow(id);
         category.deactivate(deactivatedByUserId);

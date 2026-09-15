@@ -56,6 +56,14 @@ public class CafeTableController {
         return cafeTableService.deactivate(id, principal.getId());
     }
 
+    /** Permanent. See the service for what survives it and what does not. */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePermanent(@PathVariable Long id) {
+        cafeTableService.delete(id);
+    }
+
     @PutMapping("/{id}/activate")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public CafeTableResponse activate(@PathVariable Long id) {

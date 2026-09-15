@@ -133,6 +133,23 @@ export default function TablesPage() {
     }
   }
 
+  /* Permanent, and the confirmation says what happens to the history rather than just asking.
+     A table with a live order on it is refused by the server with a 409 that explains itself. */
+  async function handleDelete(table) {
+    if (!window.confirm(
+      `هتمسح ترابيزة ${table.number} نهائياً ومفيش رجوع.\n\n`
+      + 'الأوردرات القديمة اللي كانت عليها مش هتتمسح — هتفضل في الفواتير والتقارير بنفس الأرقام.'
+    )) return;
+    try {
+      await tablesApi.delete(table.id);
+      toast.success(`اتمسحت ترابيزة ${table.number}`);
+      await loadTables();
+    } catch (err) {
+      if (err.status === 409) toast.info(err.message, 'مينفعش تتمسح دلوقتي');
+      else toast.error(err.message, 'فشل مسح الترابيزة');
+    }
+  }
+
   async function handleToggleActive(table) {
     sounds.playTap();
     try {
@@ -318,6 +335,14 @@ export default function TablesPage() {
                         title={table.active ? 'تعطيل الطاولة' : 'تفعيل الطاولة'}
                       >
                         {table.active ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="table-action-btn table-action-btn--deactivate"
+                        onClick={() => handleDelete(table)}
+                        title="مسح الطاولة نهائياً"
+                      >
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   )}

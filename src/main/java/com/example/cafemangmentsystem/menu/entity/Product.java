@@ -28,7 +28,8 @@ import java.math.BigDecimal;
 public class Product extends SoftDeletableEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "category_id", nullable = false)
+    /** Null when the category has been deleted; the POS groups such products under أخرى. */
+    @JoinColumn(name = "category_id")
     private Category category;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

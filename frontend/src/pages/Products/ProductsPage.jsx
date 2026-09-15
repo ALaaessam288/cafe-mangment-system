@@ -469,9 +469,7 @@ export default function ProductsPage() {
       setDeleteTarget(null);
       await loadData();
     } catch (err) {
-      // A 409 is the server saying "this one has history" - not a failure to report as one.
-      if (err.status === 409) toast.info(err.message, 'مينفعش يتمسح');
-      else toast.error(err.message, 'فشل مسح الصنف');
+      toast.error(err.message, 'فشل مسح الصنف');
     } finally {
       setIsDeleting(false);
     }
@@ -898,11 +896,13 @@ export default function ProductsPage() {
         }
       >
         <p style={{ margin: 0, lineHeight: 1.8 }}>
-          هيتمسح <strong>{deleteTarget?.name}</strong> ومعاه كل الاختيارات والوصفة بتاعته، ومفيش رجوع.
+          هيتمسح <strong>{deleteTarget?.name}</strong> ومعاه الاختيارات والوصفة وحركات المخزون بتاعته،
+          ومفيش رجوع.
         </p>
         <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', lineHeight: 1.8 }}>
-          لو الصنف ده اتباع قبل كده، المسح هيترفض عشان تاريخ الأوردرات محتاجه — وقتها
-          «عطّله بس» هي اللي هتخفيه من الكاشير من غير ما تضيع أي حاجة.
+          المبيعات القديمة مش هتتأثر — الفواتير والتقارير محتفظة بالاسم والسعر وقت البيع،
+          فالأرقام هتفضل زي ما هي. اللي بيضيع بس هو سجل حركات المخزون للصنف ده.
+          «عطّله بس» بتخفيه من الكاشير من غير ما تضيع أي حاجة.
         </p>
       </Modal>
 

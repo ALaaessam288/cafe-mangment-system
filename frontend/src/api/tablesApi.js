@@ -6,5 +6,7 @@ export const tablesApi = {
   create:     (payload)  => client.post('/tables', payload).then((r) => r.data),
   update:     (id, payload) => client.put(`/tables/${id}`, payload).then((r) => r.data),
   deactivate: (id)       => client.delete(`/tables/${id}`).then((r) => r.data),
+  /* Refused with 409 while a live order sits on the table. */
+  delete:     (id)       => client.delete(`/tables/${id}/permanent`).then((r) => r.data),
   activate:   (id)       => client.put(`/tables/${id}/activate`).then((r) => r.data),
 };

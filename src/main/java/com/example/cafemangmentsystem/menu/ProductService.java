@@ -31,40 +31,27 @@ public class ProductService {
     private final ShiftAuditService shiftAuditService;
     private final com.example.cafemangmentsystem.menu.repository.ProductOptionRepository productOptionRepository;
     private final com.example.cafemangmentsystem.inventory.repository.ProductRecipeRepository productRecipeRepository;
-    private final com.example.cafemangmentsystem.order.repository.OrderItemRepository orderItemRepository;
-    private final com.example.cafemangmentsystem.inventory.repository.StockAdjustmentRepository stockAdjustmentRepository;
 
     /**
-     * Deletes a product outright, or refuses and says why.
+     * Deletes a product outright. Nothing refuses it any more.
      *
-     * <p>This used to try the delete and, on any exception, quietly deactivate instead - reporting
-     * success either way. Two things wrong with that. The owner pressed "delete", was told it was
-     * done, and then found the product still sitting in the list; and the rescue could not work
-     * anyway, because a constraint violation inside a transaction marks it rollback-only, so the
-     * save() that followed was doomed and the whole call ended as a 500.
+     * <p>The previous version refused when the product had ever been sold, to protect
+     * order_items. That protection was aimed at the wrong thing: an order line does not need its
+     * product row. It was written with the name, category, unit price, station and revenue line
+     * snapshotted at the moment of sale, exactly so that a later rename, reprice or deletion can
+     * never rewrite what a customer was charged - and every report reads those snapshots. V11
+     * makes the foreign key ON DELETE SET NULL, so the history keeps every figure and simply
+     * stops pointing at a menu entry that is gone.
      *
-     * <p>So it asks first. order_items and stock_adjustments both point at products with no
-     * cascade - deliberately: a sold item's line must keep resolving, and a stock movement that
-     * forgot its product is not an audit trail. If either exists, deleting is genuinely the wrong
-     * operation and the caller is told to deactivate, which hides the product everywhere while
-     * leaving the history intact.
+     * <p>What IS lost, and the caller should have been told before pressing the button: the
+     * product's stock-adjustment rows go with it (they carry no snapshot, so a movement whose
+     * product is gone can say nothing about what moved), along with its options and recipe. The
+     * sales history survives; the inventory audit trail for this one product does not. Deactivate
+     * remains the choice that loses nothing.
      */
     public void delete(Long id) {
         Product product = getOrThrow(id);
 
-        if (orderItemRepository.existsByProductId(id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "الصنف ده اتباع قبل كده، فمينفعش يتمسح - تاريخ الأوردرات محتاجه. "
-                    + "عطّله بدل ما تمسحه وهيختفي من الكاشير.");
-        }
-        if (stockAdjustmentRepository.existsByProductId(id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "الصنف ده عليه حركات مخزون مسجلة، فمينفعش يتمسح. "
-                    + "عطّله بدل ما تمسحه وهيختفي من الكاشير.");
-        }
-
-        // These two DO cascade, but deleting them here keeps the order explicit rather than
-        // relying on a schema detail that a future migration could quietly change.
         productOptionRepository.deleteAll(productOptionRepository.findAllByProductId(id));
         productRecipeRepository.deleteAll(productRecipeRepository.findAllByProductId(id));
         productRepository.delete(product);

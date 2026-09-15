@@ -5,6 +5,8 @@ import com.example.cafemangmentsystem.cafetable.dto.CafeTableResponse;
 import com.example.cafemangmentsystem.cafetable.entity.CafeTable;
 import com.example.cafemangmentsystem.cafetable.repository.CafeTableRepository;
 import com.example.cafemangmentsystem.billing.QuotaService;
+import com.example.cafemangmentsystem.order.entity.OrderStatus;
+import com.example.cafemangmentsystem.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ public class CafeTableService {
 
     private final CafeTableRepository cafeTableRepository;
     private final QuotaService quotaService;
+    private final OrderRepository orderRepository;
 
     public CafeTableResponse create(CafeTableRequest request) {
         if (cafeTableRepository.existsByNumber(request.number())) {
@@ -54,6 +57,24 @@ public class CafeTableService {
         table.setZone(request.zone());
         table.setSeats(request.seats());
         return CafeTableResponse.from(table);
+    }
+
+    /**
+     * Deletes a table outright.
+     *
+     * <p>orders.table_id has been ON DELETE SET NULL since V1, so past orders keep their totals
+     * and simply stop pointing at a table that no longer exists. An OPEN order is a different
+     * matter and is refused below - deleting a table with a live bill on it would strand the
+     * bill where no cashier can find it.
+     */
+    public void delete(Long id) {
+        CafeTable table = getOrThrow(id);
+        if (orderRepository.existsByTableIdAndStatusIn(id,
+                List.of(OrderStatus.OPEN, OrderStatus.SENT, OrderStatus.SERVED))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "الترابيزة دي عليها أوردر شغّال. اقفل الأوردر الأول وبعدين امسحها.");
+        }
+        cafeTableRepository.delete(table);
     }
 
     public CafeTableResponse deactivate(Long id, Long deactivatedByUserId) {

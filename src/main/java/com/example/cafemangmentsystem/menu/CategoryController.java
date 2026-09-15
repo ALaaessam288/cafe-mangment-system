@@ -56,6 +56,14 @@ public class CategoryController {
         return categoryService.deactivate(id, principal.getId());
     }
 
+    /** Permanent. See the service for what survives it and what does not. */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePermanent(@PathVariable Long id) {
+        categoryService.delete(id);
+    }
+
     @PutMapping("/{id}/activate")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public CategoryResponse activate(@PathVariable Long id) {

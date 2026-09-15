@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Edit2, LayoutGrid, Eye, EyeOff, ArrowUpLeft, Layers3 } from 'lucide-react';
+import { Plus, Edit2, LayoutGrid, Eye, EyeOff, ArrowUpLeft, Layers3, Trash2 } from 'lucide-react';
 import { menuApi } from '../../api/menuApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -90,16 +90,32 @@ export default function CategoriesPage() {
     }
   }
 
-  async function handleDelete(id) {
-    /* This endpoint deactivates rather than deletes - the wording used to promise a delete,
-       which is a different and much scarier thing to click on a live menu. */
+  /* Hide. Reversible, and the endpoint that used to be called "delete". */
+  async function handleDeactivate(id) {
     if (!window.confirm('هيتم إخفاء القسم ده من المنيو والكاشير. الأصناف اللي جواه مش هتتمسح، وتقدر ترجّعه في أي وقت. تمام؟')) return;
     try {
-      await menuApi.deleteCategory(id);
+      await menuApi.deactivateCategory(id);
       toast.success('تم إخفاء القسم من المنيو');
       await loadCategories();
     } catch (err) {
       toast.error(err.message, 'تعذّر إخفاء القسم');
+    }
+  }
+
+  /* Delete. Not reversible - and the confirmation says what happens to the products rather than
+     leaving the owner to guess whether their menu is about to go with it. */
+  async function handleDelete(cat) {
+    const count = cat.productCount ?? 0;
+    const fate = count > 0
+      ? `الـ${count} صنف اللي جواه مش هيتمسحوا — هيفضلوا للبيع تحت «غير مصنّف» لحد ما تنقلهم لقسم تاني.`
+      : 'القسم فاضي.';
+    if (!window.confirm(`هيتمسح قسم «${cat.nameAr}» نهائياً ومفيش رجوع.\n\n${fate}`)) return;
+    try {
+      await menuApi.deleteCategory(cat.id);
+      toast.success('اتمسح القسم');
+      await loadCategories();
+    } catch (err) {
+      toast.error(err.message, 'تعذّر مسح القسم');
     }
   }
 
@@ -150,10 +166,13 @@ export default function CategoriesPage() {
                   <div className="category-editorial-card__actions">
                     <button type="button" onClick={() => handleOpenModal(cat)}><Edit2 size={14} /> تعديل</button>
                     {cat.active ? (
-                      <button type="button" className="is-danger" title="إخفاء القسم من المنيو" onClick={() => handleDelete(cat.id)}><EyeOff size={14} /></button>
+                      <button type="button" className="is-danger" title="إخفاء القسم من المنيو" onClick={() => handleDeactivate(cat.id)}><EyeOff size={14} /></button>
                     ) : (
                       <button type="button" title="إرجاع القسم للمنيو" onClick={() => handleRestore(cat.id)}><Eye size={14} /> إرجاع</button>
                     )}
+                    {/* Outside the hide/restore pair on purpose: a hidden category is the one most
+                        likely to be deleted, so the button has to be reachable in that state too. */}
+                    <button type="button" className="is-danger" title="مسح القسم نهائياً" onClick={() => handleDelete(cat)}><Trash2 size={14} /></button>
                   </div>
                 )}
                 <ArrowUpLeft size={17} className="category-editorial-card__arrow" />
