@@ -84,7 +84,18 @@ function reducer(state, action) {
     case 'SET_TABLES':   return { ...state, tables: action.payload };
     case 'SET_ORDERS':   return { ...state, activeOrders: action.payload };
     case 'SET_CUSTOMERS': return { ...state, customers: action.payload };
-    case 'SET_CATS':     return { ...state, categories: action.payload };
+    /* Same reasoning as SET_PRODUCTS_IF_CHANGED: the poll now re-reads the categories too, and a
+       fresh array every 20 seconds would rebuild the menu groups and re-render the whole grid for
+       a list that almost never changes. */
+    case 'SET_CATS': {
+      const next = action.payload;
+      const prev = state.categories ?? [];
+      const same = prev.length === next.length
+        && prev.every((c, i) => c.id === next[i].id
+                             && c.nameAr === next[i].nameAr
+                             && c.displayOrder === next[i].displayOrder);
+      return same ? state : { ...state, categories: next };
+    }
     /* Keep the existing array when the poll returned the same menu, so referential equality holds
        and nothing downstream re-renders. Compared on the fields this screen actually renders -
        a deep compare of everything would cost more than the render it saves. */
@@ -201,7 +212,6 @@ export default function POSPage() {
   const orderSeqRef = useRef(0);
 
   // Read by the background poll so the poll does not have to depend on the value it writes.
-  const categoriesRef = useRef([]);
 
   /* Lines tapped but not yet sent, and the single-flight latch that drains them.
      Refs rather than state: a tap must be recorded and the drain decision made immediately,
@@ -287,7 +297,6 @@ export default function POSPage() {
     [user?.id, state.products, quickVersion]
   );
 
-  categoriesRef.current = state.categories;
 
 
   const isSyncing = (state.activeOrder?.items ?? []).some(isTempItem);
@@ -464,6 +473,20 @@ export default function POSPage() {
     }
   }, [toast]);
 
+  /* Categories and products are read together, always.
+     They were not: boot read the categories once and the 20-second poll refreshed only the
+     products. Since the menu grid buckets products BY category, a drink added to a category that
+     did not exist when the screen loaded had nowhere to be drawn - it sat in state.products,
+     invisible, until someone reloaded the page. Reading both keeps the grid honest, and the
+     change-aware SET_CATS above keeps the extra read from costing a render. */
+  const loadCategoriesAndMenu = useCallback(async ({ silent = false } = {}) => {
+    const cats = await menuApi.getCategories();
+    const active = cats.filter((c) => c.active);
+    dispatch({ type: 'SET_CATS', payload: active });
+    await loadMenu(active, { silent });
+    return active;
+  }, [loadMenu]);
+
   /* ── Boot ── */
   useEffect(() => {
     async function boot() {
@@ -512,31 +535,25 @@ export default function POSPage() {
       await loadTables();
       await loadOrders();
       try {
-        const cats = await menuApi.getCategories();
-        const active = cats.filter((c) => c.active);
-        dispatch({ type: 'SET_CATS', payload: active });
-        await loadMenu(active);
+        await loadCategoriesAndMenu();
       } catch (err) {
         toast.error(err.message, 'فشل في تحميل الأقسام');
       }
     }
     boot();
-  }, [loadTables, loadOrders, loadMenu, toast]);
+  }, [loadTables, loadOrders, loadCategoriesAndMenu, toast]);
 
   useEffect(() => {
     const handleReload = async () => {
       try {
-        const cats = await menuApi.getCategories();
-        const active = cats.filter((c) => c.active);
-        dispatch({ type: 'SET_CATS', payload: active });
-        await loadMenu(active);
+        await loadCategoriesAndMenu();
       } catch (e) {
         console.error('Failed to reload menu', e);
       }
     };
     window.addEventListener('reload-pos-menu', handleReload);
     return () => window.removeEventListener('reload-pos-menu', handleReload);
-  }, [loadMenu]);
+  }, [loadCategoriesAndMenu]);
 
   /* ── Open Shift ── */
   async function handleOpenShift(e) {
@@ -1531,7 +1548,9 @@ export default function POSPage() {
       if (document.hidden || anyModalOpen) return;
       loadOrders({ silent: true });
       loadTables({ silent: true });
-      loadMenu(categoriesRef.current, { silent: true });
+      loadCategoriesAndMenu({ silent: true }).catch(() => {
+        // A failed background poll is not the cashier's problem; the last good menu stays up.
+      });
     }
     const timer = setInterval(refresh, 20000);
     window.addEventListener('focus', refresh);
@@ -1539,12 +1558,11 @@ export default function POSPage() {
       clearInterval(timer);
       window.removeEventListener('focus', refresh);
     };
-    /* state.categories is deliberately NOT a dependency. loadMenu sets the categories, so listing
-       it here meant every poll changed the array identity, tore this effect down and built a new
-       interval - and the 20 seconds started again from zero each time. The ref gives the callback
-       the current value without making the subscription depend on it. */
+    /* state.categories is deliberately NOT a dependency. The loader reads the categories itself, so
+       listing state here would change the array identity on every poll, tear this effect down and
+       build a new interval - restarting the 20 seconds from zero each time, forever. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeShift, anyModalOpen, loadOrders, loadTables, loadMenu]);
+  }, [state.activeShift, anyModalOpen, loadOrders, loadTables, loadCategoriesAndMenu]);
 
   if (isLoadingShift) return <div className="page" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}><div className="spinner"></div></div>;
 

@@ -135,6 +135,9 @@ export const GROUP_DEFS = [
   },
 ];
 
+/** Stand-in category id for products whose real category is missing from the list. */
+export const ORPHAN_CATEGORY_ID = '__ORPHAN__';
+
 const OTHER_GROUP = { id: 'OTHER', label: 'أخرى', icon: '🍽️', photo: '/images/categories/food.jpg', keywords: [] };
 
 function matchGroupByName(name) {
@@ -183,6 +186,28 @@ export function buildMenuGroups(categories = [], products = []) {
     bucket.productCount += catProducts.length;
   });
 
+  /* Anything whose category is not in the list still has to be reachable.
+   *
+   * This function walks the CATEGORIES, so a product pointing at a category the caller did not
+   * pass - one created after the screen loaded, one that was deactivated, or a product saved with
+   * no category at all - was silently absent from every group. On a till that reads as "I added
+   * the drink and it is not there", with nothing on screen to explain it. A cashier cannot sell
+   * what the grid will not draw, so an unclaimed product goes to أخرى rather than nowhere. */
+  const claimed = new Set(categories.map((c) => c.id));
+  const orphans = products.filter((p) => !claimed.has(p.categoryId));
+  if (orphans.length > 0) {
+    const bucket = ensure(OTHER_GROUP);
+    bucket.categories.push({
+      id: ORPHAN_CATEGORY_ID,
+      displayName: 'غير مصنّف',
+      productCount: orphans.length,
+      visual: getCategoryVisual(''),
+      __orphan: true,
+    });
+    bucket.productCount += orphans.length;
+    bucket.__allClaimed = claimed;
+  }
+
   const order = [...GROUP_DEFS.map((g) => g.id), OTHER_GROUP.id];
   return order
     .map((id) => buckets.get(id))
@@ -192,10 +217,19 @@ export function buildMenuGroups(categories = [], products = []) {
 /** Products belonging to a display group (optionally narrowed to one real category). */
 export function productsForGroup(products, group, categoryId) {
   if (!group) return products;
-  const ids = new Set(group.categories.map((c) => c.id));
-  return products.filter(
-    (p) => ids.has(p.categoryId) && (categoryId == null || categoryId === 'ALL' || p.categoryId === categoryId)
-  );
+
+  const hasOrphanChip = group.categories.some((c) => c.id === ORPHAN_CATEGORY_ID);
+  const realIds = new Set(group.categories.filter((c) => c.id !== ORPHAN_CATEGORY_ID).map((c) => c.id));
+  // The orphan chip stands for "every category nobody else claimed", so it is matched by absence
+  // from the whole category list - not by a categoryId that no product actually carries.
+  const allClaimed = group.__allClaimed;
+  const isOrphan = (p) => hasOrphanChip && !(allClaimed ? allClaimed.has(p.categoryId) : realIds.has(p.categoryId));
+
+  return products.filter((p) => {
+    if (categoryId === ORPHAN_CATEGORY_ID) return isOrphan(p);
+    const inGroup = realIds.has(p.categoryId) || isOrphan(p);
+    return inGroup && (categoryId == null || categoryId === 'ALL' || p.categoryId === categoryId);
+  });
 }
 
 /** Fast, forgiving search over Arabic + English names and the category name. */
