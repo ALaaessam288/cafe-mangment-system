@@ -142,7 +142,100 @@ designed tall; the grid made them tall. align-content: start fixes it.
   "frontend/src/pages/Invoices/InvoicesPage.css"
 )
 
-Write-Host "=== after ===""
+Commit "feat(menu): force delete for products, categories and tables" @"
+Deleting a sold product was refused, because order_items.product_id is a
+foreign key with no cascade. That refusal was protecting the wrong thing. An
+order line does not need its product row: it carries product_name_snapshot,
+category_name_snapshot, unit_price_snapshot, station_snapshot and
+revenue_line_snapshot, written at the moment of sale precisely so a later
+rename, reprice or deletion can never rewrite what a customer was charged -
+and every report on this system reads those snapshots.
+
+V11 makes the FK ON DELETE SET NULL and the column nullable, so history keeps
+every figure and stops pointing at a menu entry that is gone. The Java side
+already expected this: OrderService and ShiftAuditService are full of
+`if (item.getProduct() != null)`.
+
+What is actually lost, and the dialog now says so: the product's
+stock_adjustments go with it (they carry no snapshot, so a movement whose
+product is gone can say nothing about what moved), along with its options and
+recipe. Sales history survives; the inventory trail for that one product does
+not. Deactivate remains the choice that loses nothing.
+
+Categories and tables get the same treatment. products.category_id becomes ON
+DELETE SET NULL rather than cascade - deleting a category must never be a way
+to wipe a menu by accident, so the products survive and surface under
+غير مصنّف, which the POS already groups. orders.table_id has been SET NULL
+since V1, so a table needs no schema change; deleting one with a live order on
+it is refused with a 409 that explains itself.
+"@ @(
+  "src/main/resources/db/migration/V11__force_delete_constraints.sql",
+  "src/main/java/com/example/cafemangmentsystem/menu/ProductService.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/CategoryService.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/CategoryController.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/entity/Product.java",
+  "src/main/java/com/example/cafemangmentsystem/cafetable/CafeTableService.java",
+  "src/main/java/com/example/cafemangmentsystem/cafetable/CafeTableController.java",
+  "src/main/java/com/example/cafemangmentsystem/order/entity/OrderItem.java",
+  "src/main/java/com/example/cafemangmentsystem/order/dto/OrderItemResponse.java",
+  "src/test/java/com/example/cafemangmentsystem/menu/ProductDeletionTest.java",
+  "frontend/src/api/menuApi.js",
+  "frontend/src/api/tablesApi.js",
+  "frontend/src/pages/Products/ProductsPage.jsx",
+  "frontend/src/pages/Categories/CategoriesPage.jsx",
+  "frontend/src/pages/Tables/TablesPage.jsx"
+)
+
+Commit "feat(payroll): pay periods compute themselves; the manual reset is gone" @"
+salaryPeriod was stored on every employee and consulted by nothing. The
+summary took a start and an end date from the caller, applied that one window
+to all staff, and handed each of them their full baseSalary regardless of how
+wide it was - so a monthly employee shown in a seven-day view was reported as
+owed a whole month for the week. isSettled was "is there any payout in the
+caller's range", so last week's payout marked this week settled and the row
+went green while the wage was still owed.
+
+And "بدء أسبوع جديد وتصفية الحسابات" set settled = true on every unsettled
+transaction up to a date while recording no payment at all. Pressed a day
+early, it made money the cafe owed its staff disappear from the screen with
+nothing left to say it had ever been owed.
+
+Periods are now computed, not stored and not reset: PayrollPeriod.of(cycle,
+anchor, date) derives the period containing a date from the employee's own
+anchor date (V12; defaults to their hire date) plus their cycle. Nothing to
+reset means nothing that can be reset at the wrong moment; no scheduler means
+no rollover missed while the cafe is closed or the server is down; and asking
+about a date in the past is the same calculation as asking about today, so old
+payouts stay correctly attributed forever.
+
+Weeks run from the anchor's weekday, not the calendar's - someone hired on a
+Tuesday is paid Tuesday to Monday, which is what was agreed with them. Monthly
+cycles clamp into short months without leaving a gap (a test pins that there is
+no unpaid day between 31 Jan and 28 Feb; it also caught my first attempt at
+the expectation being wrong).
+
+Settled now means a payout dated inside that employee's own period - a fact,
+not a flag someone can set by accident. The table shows each row's cycle and
+window under the name, because two people on this screen can now legitimately
+be looking at different periods.
+
+resetWeek is removed from the service, the controller, the API client, the
+handler, the button and its modal.
+"@ @(
+  "src/main/resources/db/migration/V12__payroll_anchor_date.sql",
+  "src/main/java/com/example/cafemangmentsystem/employee/PayrollPeriod.java",
+  "src/main/java/com/example/cafemangmentsystem/employee/EmployeePayrollService.java",
+  "src/main/java/com/example/cafemangmentsystem/employee/EmployeePayrollController.java",
+  "src/main/java/com/example/cafemangmentsystem/employee/entity/Employee.java",
+  "src/main/java/com/example/cafemangmentsystem/employee/dto/WeeklyPayrollSummaryDto.java",
+  "src/test/java/com/example/cafemangmentsystem/employee/PayrollPeriodTest.java",
+  "src/test/java/com/example/cafemangmentsystem/employee/PayrollReceivablesPayablesTest.java",
+  "frontend/src/api/employeesApi.js",
+  "frontend/src/pages/Employees/EmployeesPage.jsx",
+  "frontend/src/pages/Employees/EmployeesPage.css"
+)
+
+Write-Host "=== after ===""""
 git log --oneline -6
 git status --short
 
