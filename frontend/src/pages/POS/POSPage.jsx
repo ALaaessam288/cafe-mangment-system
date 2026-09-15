@@ -85,6 +85,25 @@ function reducer(state, action) {
     case 'SET_ORDERS':   return { ...state, activeOrders: action.payload };
     case 'SET_CUSTOMERS': return { ...state, customers: action.payload };
     case 'SET_CATS':     return { ...state, categories: action.payload };
+    /* Keep the existing array when the poll returned the same menu, so referential equality holds
+       and nothing downstream re-renders. Compared on the fields this screen actually renders -
+       a deep compare of everything would cost more than the render it saves. */
+    case 'SET_PRODUCTS_IF_CHANGED': {
+      const next = action.payload;
+      const prev = state.products ?? [];
+      const same =
+        prev.length === next.length &&
+        prev.every((p, i) => {
+          const n = next[i];
+          return p.id === n.id
+            && p.price === n.price
+            && p.available === n.available
+            && p.active === n.active
+            && p.stockQuantity === n.stockQuantity
+            && p.nameAr === n.nameAr;
+        });
+      return same ? state : { ...state, products: next };
+    }
     case 'SET_PRODUCTS': return { ...state, products: action.payload };
     case 'SET_TOP':      return { ...state, topProducts: action.payload };
     case 'DEDUCT_PRODUCT_STOCK': {
@@ -181,6 +200,9 @@ export default function POSPage() {
 
   const orderSeqRef = useRef(0);
 
+  // Read by the background poll so the poll does not have to depend on the value it writes.
+  const categoriesRef = useRef([]);
+
   /* Lines tapped but not yet sent, and the single-flight latch that drains them.
      Refs rather than state: a tap must be recorded and the drain decision made immediately,
      not one render later - two taps in the same tick would otherwise both see an empty queue. */
@@ -258,6 +280,9 @@ export default function POSPage() {
     [user?.id, state.products, quickVersion]
   );
 
+  categoriesRef.current = state.categories;
+
+
   const isSyncing = (state.activeOrder?.items ?? []).some(isTempItem);
 
   // Undo is available to whoever is running the till, cashiers included.
@@ -277,21 +302,26 @@ export default function POSPage() {
     showPosOptionsModal || showCloseShift;
 
   /* ── Load tables ── */
-  const loadTables = useCallback(async () => {
-    dispatch({ type: 'LOADING_TABLES', payload: true });
+  /* `silent` is for the 20s background refresh.
+     A background poll that raises the panel's loading flag makes the panel show its spinner and
+     then repaint - every 20 seconds, forever. On a slow connection the requests take seconds, so
+     the cashier watches the screen blank and come back while they are trying to work. Only the
+     first load, which genuinely has nothing to show yet, gets to say it is loading. */
+  const loadTables = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) dispatch({ type: 'LOADING_TABLES', payload: true });
     try {
       const data = await tablesApi.findAll();
       dispatch({ type: 'SET_TABLES', payload: data.filter((t) => t.active) });
     } catch (err) {
-      toast.error(err.message, 'فشل في تحميل الترابيزات');
+      if (!silent) toast.error(err.message, 'فشل في تحميل الترابيزات');
     } finally {
-      dispatch({ type: 'LOADING_TABLES', payload: false });
+      if (!silent) dispatch({ type: 'LOADING_TABLES', payload: false });
     }
   }, [toast]);
 
   /* ── Load active orders ── */
-  const loadOrders = useCallback(async () => {
-    dispatch({ type: 'LOADING_ORDERS', payload: true });
+  const loadOrders = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) dispatch({ type: 'LOADING_ORDERS', payload: true });
     try {
       const data = await ordersApi.findAll();
       dispatch({ type: 'SET_ORDERS', payload: data.filter((o) => o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED') });
@@ -333,7 +363,7 @@ export default function POSPage() {
     } catch (err) {
       toast.error(err.message, 'فشل في تحميل الأوردرات');
     } finally {
-      dispatch({ type: 'LOADING_ORDERS', payload: false });
+      if (!silent) dispatch({ type: 'LOADING_ORDERS', payload: false });
     }
   }, [toast]);
 
@@ -395,8 +425,8 @@ export default function POSPage() {
      The whole menu is fetched once instead of one request per category tab.
      Switching a category or typing in search is then pure client-side
      filtering, which is what makes the cashier flow feel instant. */
-  const loadMenu = useCallback(async (categories) => {
-    dispatch({ type: 'LOADING_MENU', payload: true });
+  const loadMenu = useCallback(async (categories, { silent = false } = {}) => {
+    if (!silent) dispatch({ type: 'LOADING_MENU', payload: true });
     try {
       const [all, top] = await Promise.all([
         menuApi.getProducts(),
@@ -404,7 +434,11 @@ export default function POSPage() {
       ]);
 
       const sellable = all.filter((p) => p.active && p.available);
-      dispatch({ type: 'SET_PRODUCTS', payload: sellable });
+
+      /* Replacing the array every 20 seconds re-renders every product card even when not one
+         value changed, which on a full menu is the most expensive thing this screen does. A poll
+         that found nothing new should cost nothing. */
+      dispatch({ type: 'SET_PRODUCTS_IF_CHANGED', payload: sellable });
 
       const sellableIds = new Set(sellable.map((p) => p.id));
       const topSellable = top.filter((p) => sellableIds.has(p.id));
@@ -415,9 +449,11 @@ export default function POSPage() {
         payload: topSellable.length > 0 ? topSellable : fallbackTopSellers(sellable, categories),
       });
     } catch (err) {
-      toast.error(err.message, 'فشل في تحميل المنتجات');
+      // A failed background poll is not the cashier's problem; the screen still shows the last
+      // good menu. Only a load they are waiting on is worth a toast.
+      if (!silent) toast.error(err.message, 'فشل في تحميل المنتجات');
     } finally {
-      dispatch({ type: 'LOADING_MENU', payload: false });
+      if (!silent) dispatch({ type: 'LOADING_MENU', payload: false });
     }
   }, [toast]);
 
@@ -697,9 +733,11 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_ORDER', payload: newOrder });
       toast.success(`اتفتح أوردر لترابيزة ${state.activeTable.number}`);
-      // Not awaited: the cashier shouldn't wait on a table/order refresh.
-      loadTables();
-      loadOrders();
+      // Not awaited, and silent: the cashier should neither wait on this refresh nor watch the
+      // table and order panels flash their spinners because of it. This runs on the first tap of
+      // a product for a table, which is the worst possible moment to repaint the screen.
+      loadTables({ silent: true });
+      loadOrders({ silent: true });
       return newOrder;
     } catch (err) {
       toast.error(err.message, 'فشل في فتح الأوردر تلقائياً');
@@ -1480,9 +1518,9 @@ export default function POSPage() {
 
     function refresh() {
       if (document.hidden || anyModalOpen) return;
-      loadOrders();
-      loadTables();
-      loadMenu(state.categories);
+      loadOrders({ silent: true });
+      loadTables({ silent: true });
+      loadMenu(categoriesRef.current, { silent: true });
     }
     const timer = setInterval(refresh, 20000);
     window.addEventListener('focus', refresh);
@@ -1490,7 +1528,12 @@ export default function POSPage() {
       clearInterval(timer);
       window.removeEventListener('focus', refresh);
     };
-  }, [state.activeShift, anyModalOpen, loadOrders, loadTables, loadMenu, state.categories]);
+    /* state.categories is deliberately NOT a dependency. loadMenu sets the categories, so listing
+       it here meant every poll changed the array identity, tore this effect down and built a new
+       interval - and the 20 seconds started again from zero each time. The ref gives the callback
+       the current value without making the subscription depend on it. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.activeShift, anyModalOpen, loadOrders, loadTables, loadMenu]);
 
   if (isLoadingShift) return <div className="page" style={{display: 'flex', justifyContent: 'center', alignItems: 'center'}}><div className="spinner"></div></div>;
 
