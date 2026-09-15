@@ -81,6 +81,10 @@ export default function OrderPanel({
     [order?.items]
   );
 
+  /* Is there anything between the subtotal and the total? */
+  const hasAdjustments = Boolean(order) && [order.discount, order.service, order.deliveryFee]
+    .some((v) => parseFloat(v) > 0);
+
   /* Arabic does not pluralise the way a template string assumes.
      "1 أصناف" is what "{n} أصناف" produces for one item, and it reads to a cashier the way
      "1 items" would - the very first thing on the very first order anyone will see on this
@@ -419,17 +423,6 @@ export default function OrderPanel({
 
           {/* Totals with Food vs Drink Breakdown */}
           <div className="order-totals">
-            {/* Quick Add Water - always one tap away. Highlighted while the order
-                still has no water line, quieter once it does. */}
-            <button
-              type="button"
-              className={`water-chip ${hasWater ? 'water-chip--muted' : ''}`}
-              onClick={onAddWater}
-              title="إضافة مياه للأوردر"
-            >
-              <Droplet size={12} />
-              <span>{hasWater ? 'مياه زيادة' : 'إضافة مياه'}</span>
-            </button>
 
             {/* Delivery fee - takeaway only.
                 The order type check was missing, so a fee input plus five preset buttons rendered
@@ -476,31 +469,53 @@ export default function OrderPanel({
               </div>
             )}
 
-            {/* Quick Discount and Service Fee Bar */}
+            {/* Water, discount and service on one line.
+                They were three separate full-width rows stacked above the totals - roughly 130px
+                of a column the cashier has to scroll, for three things used occasionally. As
+                chips they cost one line and still say their amount once one is applied. */}
             {!['CLOSED', 'VOIDED'].includes(order.status) && (
-              <div className="order-adjust-actions">
+              <div className="ticket-chips">
                 <button
                   type="button"
-                  className="btn btn--secondary btn--sm order-adjust-actions__btn"
-                  onClick={() => { setDiscountModalInitialTab('discount'); setShowDiscountModal(true); }}
+                  className={`ticket-chip ${hasWater ? '' : 'ticket-chip--accent'}`}
+                  onClick={onAddWater}
+                  title="إضافة مياه للأوردر"
                 >
-                  <Tag size={12} /> {parseFloat(order.discount) > 0 ? `خصم: -${formatCurrency(order.discount)}` : '+ إضافة خصم'}
+                  <Droplet size={13} />
+                  <span>{hasWater ? 'مياه زيادة' : 'مياه'}</span>
                 </button>
 
                 <button
                   type="button"
-                  className="btn btn--secondary btn--sm order-adjust-actions__btn"
-                  onClick={() => { setDiscountModalInitialTab('service'); setShowDiscountModal(true); }}
+                  className={`ticket-chip ${parseFloat(order.discount) > 0 ? 'ticket-chip--on' : ''}`}
+                  onClick={() => { setDiscountModalInitialTab('discount'); setShowDiscountModal(true); }}
+                  title="خصم"
                 >
-                  <Sparkles size={12} /> {parseFloat(order.service) > 0 ? `خدمة: +${formatCurrency(order.service)}` : '+ رسوم خدمة'}
+                  <Tag size={13} />
+                  <span>{parseFloat(order.discount) > 0 ? `-${formatCurrency(order.discount)}` : 'خصم'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`ticket-chip ${parseFloat(order.service) > 0 ? 'ticket-chip--on' : ''}`}
+                  onClick={() => { setDiscountModalInitialTab('service'); setShowDiscountModal(true); }}
+                  title="رسوم خدمة"
+                >
+                  <Sparkles size={13} />
+                  <span>{parseFloat(order.service) > 0 ? `+${formatCurrency(order.service)}` : 'خدمة'}</span>
                 </button>
               </div>
             )}
 
-            <div className="order-totals__row">
-              <span>المجموع الفرعي</span>
-              <span>{formatCurrency(order.subtotal)}</span>
-            </div>
+            {/* Only when something sits between it and the total. On a plain order the subtotal
+                IS the total, and printing the same number twice under two names is a line the
+                cashier has to read to discover it says nothing. */}
+            {hasAdjustments && (
+              <div className="order-totals__row">
+                <span>المجموع الفرعي</span>
+                <span>{formatCurrency(order.subtotal)}</span>
+              </div>
+            )}
             {parseFloat(order.discount) > 0 && (
               <div className="order-totals__row order-totals__row--discount order-totals__row--flex">
                 <span className="order-totals__label">
@@ -543,10 +558,8 @@ export default function OrderPanel({
                 <span>+{formatCurrency(order.deliveryFee)}</span>
               </div>
             )}
-            <div className="order-totals__row order-totals__row--total">
-              <span>الإجمالي الكلي</span>
-              <span>{formatCurrency(order.total)}</span>
-            </div>
+            {/* The sticky checkout bar prints the total in 19px two inches below this. One of
+                them had to go, and it was not going to be the one that never scrolls away. */}
             {parseFloat(order.amountPaid) > 0 && (
               <div className="order-totals__row">
                 <span>المدفوع</span>
@@ -597,16 +610,6 @@ export default function OrderPanel({
                 <>
                   {nextStepLabel && <div className="order-actions__hint">{nextStepLabel}</div>}
 
-                  {canUndo && (
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm order-actions__btn order-actions__undo"
-                      onClick={onUndoLastItem}
-                      title="تراجع عن آخر صنف (Ctrl+Z)"
-                    >
-                      <Undo2 size={14} /> تراجع عن آخر صنف
-                    </button>
-                  )}
 
                   {showSendBtn && (
                     <button
@@ -635,25 +638,48 @@ export default function OrderPanel({
                 </>
               );
             })()}
-            {onReprintTickets && order.items?.some((i) => i.status === 'SENT') && (
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm order-actions__btn"
-                onClick={onReprintTickets}
-                title="إعادة طباعة بون المطبخ / البار"
-              >
-                <Printer size={14} /> إعادة طباعة البون
-              </button>
-            )}
-            {order && !['CLOSED','VOIDED'].includes(order.status) && (
-               <button
-                 type="button"
-                 className="btn btn--sm order-actions__btn order-actions__void"
-                 onClick={() => setShowVoidOrderModal(true)}
-               >
-                 <XCircle size={15} /> إلغاء الأوردر بالكامل
-               </button>
-             )}
+            {/* Secondary actions: one icon row, not three stacked full-width buttons.
+                Undo, reprint and void were each a 40px row of their own directly under the one
+                button the cashier actually wants - so the primary action was being pushed down
+                the column by three things used once in fifty orders. Icons with tooltips keep
+                them one tap away in a fifth of the height, and void stays red and last. */}
+            <div className="order-secondary">
+              {canUndo && (
+                <button
+                  type="button"
+                  className="order-secondary__btn"
+                  onClick={onUndoLastItem}
+                  title="تراجع عن آخر صنف (Ctrl+Z)"
+                  aria-label="تراجع عن آخر صنف"
+                >
+                  <Undo2 size={16} />
+                </button>
+              )}
+
+              {onReprintTickets && order.items?.some((i) => i.status === 'SENT') && (
+                <button
+                  type="button"
+                  className="order-secondary__btn"
+                  onClick={onReprintTickets}
+                  title="إعادة طباعة بون المطبخ / البار"
+                  aria-label="إعادة طباعة البون"
+                >
+                  <Printer size={16} />
+                </button>
+              )}
+
+              {order && !['CLOSED','VOIDED'].includes(order.status) && (
+                <button
+                  type="button"
+                  className="order-secondary__btn order-secondary__btn--danger"
+                  onClick={() => setShowVoidOrderModal(true)}
+                  title="إلغاء الأوردر بالكامل"
+                  aria-label="إلغاء الأوردر بالكامل"
+                >
+                  <XCircle size={16} />
+                </button>
+              )}
+            </div>
             {(order.status === 'SERVED' || order.status === 'READY_FOR_PICKUP') && parseFloat(order.balanceDue) === 0 && (
               <div className="order-closed-badge order-closed-badge--served">
                 ✓ {order.type === 'TAKEAWAY' ? 'العميل استلم' : (order.openedBy?.fullName || 'الكابتن') + ' طلع بالأوردر'}

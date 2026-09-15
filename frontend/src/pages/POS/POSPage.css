@@ -123,6 +123,8 @@
   transition: background var(--transition-fast);
 }
 
+/* Full height on purpose: the whole strip is the target, not just the icon at the top. */
+.pos__tables-rail { flex: 1; justify-content: flex-start; }
 .pos__tables-rail:hover { background: rgba(169, 156, 255, 0.08); }
 .pos__tables-rail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -1878,7 +1880,13 @@
   gap: 6px;
   padding: 6px 12px;
   flex-shrink: 0;
-  overflow-x: auto;
+  /* Was overflow-x: auto, which silently ate the إدارة الشيفت dropdown.
+     An absolutely-positioned panel cannot escape a scrolling ancestor - the menu was opening
+     every time and being clipped to this 48px strip, so the button looked dead. The strip wraps
+     onto a second line on a narrow screen instead of scrolling, which it has room to do. */
+  overflow: visible;
+  flex-wrap: wrap;
+  row-gap: 6px;
   border-bottom: 1px solid var(--border-subtle);
   background: linear-gradient(90deg, rgba(22, 25, 34, 0.95) 0%, rgba(15, 17, 23, 0.95) 100%);
 }
@@ -2080,6 +2088,13 @@
 }
 
 .pos-shell--creative .pos__tables { border-radius: 5px 15px 15px 15px; }
+
+/* The collapsed width has to beat the themed width, which is declared later in this file at the
+   same specificity and was therefore winning. The panel stayed ~226px wide while collapsed - so
+   the collapse gave back none of the space it was supposed to, and the rail's button, sized to
+   its own content at the top, left a tall dead area that swallowed every click aimed at it. */
+.pos-shell--creative .pos__tables.pos__tables--collapsed,
+.pos__tables.pos__tables--collapsed { width: 44px; }
 .pos-shell--creative .pos__menu { background: linear-gradient(155deg, rgba(13,20,32,.96), rgba(8,13,22,.96)); }
 .pos-shell--creative .pos__order { border-radius: 15px 15px 5px 15px; border-color: rgba(149,135,255,.18); }
 
@@ -3720,3 +3735,97 @@
 @media (max-width: 1100px) {
   .pos__order--compact { width: 180px; }
 }
+
+/* ═══════════════════════════════════════
+   TICKET — compacted
+   The column ran to roughly 900px of content on a one-item order: three adjustment rows, eight
+   total rows, four stacked full-width buttons. Everything below is the same set of actions and
+   numbers in about half the height, so the cashier stops scrolling to reach their own work.
+ ═══════════════════════════════════════ */
+.ticket-chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ticket-chip {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  /* 44px: these are finger targets, small is not the same as cramped. */
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.ticket-chip:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+/* Suggested, not yet applied. */
+.ticket-chip--accent {
+  color: var(--pos-cyan, #64d7bd);
+  border-color: rgba(100, 215, 189, 0.32);
+}
+
+/* Applied, and showing its amount. */
+.ticket-chip--on {
+  color: var(--accent-hover);
+  border-color: rgba(169, 156, 255, 0.4);
+  background: rgba(169, 156, 255, 0.1);
+}
+
+.order-secondary {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.order-secondary__btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.order-secondary__btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Destructive, and it keeps saying so even at icon size. */
+.order-secondary__btn--danger { color: var(--danger); border-color: rgba(229, 98, 115, 0.3); }
+.order-secondary__btn--danger:hover {
+  color: #fff;
+  background: rgba(229, 98, 115, 0.85);
+  border-color: transparent;
+}
+
+.ticket-chip:focus-visible,
+.order-secondary__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tighter rows: same information, less column. */
+.order-totals { padding: 8px 10px; }
+.order-totals__row { padding-block: 3px; font-size: 12.5px; }
+.order-actions { padding: 8px 10px; gap: 6px; }
+.order-actions__hint { margin-bottom: 2px; font-size: 11.5px; }
