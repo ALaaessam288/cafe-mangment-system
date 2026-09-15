@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Caffio — Human Login Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08090d;
+      --panel: #11131a;
+      --soft: #171923;
+      --stroke: rgba(218, 211, 255, .12);
+      --text: #f8f6ff;
+      --muted: #9995a8;
+      --purple: #a99cff;
+      --purple-2: #c9c1ff;
+      --mint: #64d7bd;
+      --danger: #ff8797;
+      --shadow: 0 34px 90px rgba(0, 0, 0, .46);
+      font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); }
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .page {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: grid;
+      grid-template-columns: minmax(430px, 1fr) minmax(500px, 1.08fr);
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 15% 8%, rgba(169, 156, 255, .16), transparent 28%),
+        radial-gradient(circle at 92% 90%, rgba(100, 215, 189, .08), transparent 27%),
+        var(--bg);
+    }
+
+    .page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .3;
+      background-image: radial-gradient(rgba(218, 211, 255, .18) .7px, transparent .7px);
+      background-size: 19px 19px;
+      mask-image: linear-gradient(105deg, #000, transparent 78%);
+    }
+
+    .brand-panel, .access-panel { position: relative; z-index: 1; min-height: 100vh; min-height: 100dvh; }
+    .brand-panel {
+      padding: clamp(30px, 5vw, 70px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-left: 1px solid var(--stroke);
+    }
+
+    .brand { display: flex; align-items: center; gap: 14px; width: fit-content; }
+    .brand-mark {
+      width: 43px; height: 43px; border-radius: 14px; display: grid; place-items: center;
+      color: #0e0d18; font-size: 22px; font-weight: 950;
+      background: linear-gradient(145deg, var(--purple-2), #8174e2);
+      box-shadow: 0 10px 35px rgba(169, 156, 255, .22);
+    }
+    .brand-name { direction: ltr; font-weight: 950; font-size: 24px; letter-spacing: -.8px; }
+    .brand-name small { display: block; color: #7d788d; font-size: 9px; letter-spacing: 2.1px; }
+
+    .story { width: min(100%, 650px); margin-block: 34px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px; margin: 0 0 16px;
+      padding: 8px 12px; border: 1px solid rgba(100, 215, 189, .16); border-radius: 999px;
+      color: #b8dfd6; background: rgba(100, 215, 189, .055); font-size: 12px; font-weight: 800;
+    }
+    .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 5px rgba(100,215,189,.08); }
+    h1 { margin: 0; font-size: clamp(42px, 5vw, 70px); line-height: 1.19; letter-spacing: -2.7px; }
+    h1 em { color: var(--purple); font-style: normal; }
+    .lead { max-width: 580px; color: var(--muted); font-size: 15px; line-height: 1.95; margin: 18px 0 27px; }
+
+    .day-card {
+      width: min(100%, 585px); padding: 16px; display: grid; grid-template-columns: auto 1fr auto;
+      align-items: center; gap: 14px; border: 1px solid rgba(218, 211, 255, .1); border-radius: 18px;
+      background: linear-gradient(118deg, rgba(255,255,255,.048), rgba(255,255,255,.014));
+      box-shadow: inset 0 1px rgba(255,255,255,.035);
+    }
+    .cup {
+      width: 50px; height: 50px; display: grid; place-items: center; border-radius: 15px;
+      background: rgba(169,156,255,.09); color: var(--purple-2); font-size: 25px;
+      animation: breathe 3.4s ease-in-out infinite;
+    }
+    .day-card strong { display: block; font-size: 13px; margin-bottom: 4px; }
+    .day-card p { margin: 0; color: #868193; font-size: 11px; line-height: 1.65; }
+    .team { display: flex; direction: ltr; }
+    .avatar {
+      width: 29px; height: 29px; margin-left: -7px; display: grid; place-items: center;
+      border: 2px solid #141620; border-radius: 50%; color: #11121a; font-size: 9px; font-weight: 900;
+      background: var(--purple-2);
+    }
+    .avatar:nth-child(2) { background: var(--mint); }
+    .avatar:nth-child(3) { background: #f2c986; }
+
+    .trust { display: flex; justify-content: space-between; gap: 15px; color: #787484; font-size: 10px; }
+    .trust span { display: flex; align-items: center; gap: 7px; }
+    .trust b { color: var(--mint); font-size: 14px; }
+    .trust code { direction: ltr; letter-spacing: 1.5px; font-size: 9px; }
+
+    .access-panel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 32px clamp(28px, 4.5vw, 68px); background: rgba(8,9,13,.34); backdrop-filter: blur(12px);
+    }
+    .prototype-pill {
+      position: absolute; top: 22px; left: 24px; padding: 6px 10px; border: 1px solid rgba(169,156,255,.15);
+      border-radius: 999px; color: #8f89b8; background: rgba(169,156,255,.04); font-size: 9px; letter-spacing: 1.2px;
+    }
+    .mobile-brand { display: none; }
+
+    .card {
+      width: min(100%, 500px); padding: clamp(26px, 3.4vw, 40px); position: relative;
+      border: 1px solid rgba(187,178,255,.15); border-radius: 28px;
+      background: linear-gradient(150deg, rgba(25,27,39,.985), rgba(13,14,21,.99));
+      box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.035);
+    }
+    .card::before {
+      content: ""; position: absolute; top: -1px; right: 36px; width: 76px; height: 3px;
+      border-radius: 0 0 999px 999px; background: linear-gradient(90deg, #7468d8, var(--purple-2));
+      box-shadow: 0 0 20px rgba(169,156,255,.35);
+    }
+    .hello { display: block; color: var(--purple); font-size: 12px; font-weight: 850; margin-bottom: 7px; }
+    h2 { margin: 0 0 4px; font-size: 31px; letter-spacing: -.8px; }
+    .intro { margin: 0 0 20px; color: #878294; font-size: 12px; line-height: 1.75; }
+    .resume-note {
+      display: flex; align-items: center; gap: 8px; width: fit-content; margin: -10px 0 18px;
+      color: #777389; font-size: 9px;
+    }
+    .resume-note span { color: var(--purple); }
+
+    .workspace {
+      display: flex; align-items: center; gap: 11px; margin-bottom: 15px; padding: 11px 12px;
+      border: 1px solid rgba(100,215,189,.14); border-radius: 14px; background: rgba(100,215,189,.045);
+    }
+    .workspace-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: rgba(100,215,189,.1); color: var(--mint); }
+    .workspace div { flex: 1; min-width: 0; }
+    .workspace small { display: block; color: #7c9b94; font-size: 9px; }
+    .workspace strong { display: block; direction: ltr; text-align: right; color: #d8eee9; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+    .link-btn { border: 0; background: transparent; color: #aaa3d8; font-size: 10px; font-weight: 800; cursor: pointer; }
+    .link-btn:hover { color: var(--purple-2); }
+
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; margin-bottom: 18px; border: 1px solid rgba(218,211,255,.08); border-radius: 13px; background: #0d0f15; }
+    .tabs button { padding: 9px; border: 0; border-radius: 9px; cursor: pointer; color: #777386; background: transparent; font-size: 10px; font-weight: 850; transition: .18s ease; }
+    .tabs button.active { color: #f4f1ff; background: #1a1c27; box-shadow: inset 0 0 0 1px rgba(169,156,255,.1); }
+
+    .form { display: grid; gap: 14px; }
+    .field label { display: block; color: #d2cfdd; font-size: 11px; font-weight: 800; margin: 0 2px 7px; }
+    .control { position: relative; }
+    .control input {
+      width: 100%; height: 48px; padding: 0 43px 0 44px; border: 1px solid #333444; border-radius: 13px;
+      outline: 0; color: var(--text); background: #13151d; transition: .18s ease;
+    }
+    .control input::placeholder { color: #5e5a69; font-size: 11px; }
+    .control input:focus { border-color: #776bd6; background: #171923; box-shadow: 0 0 0 3px rgba(169,156,255,.09); }
+    .input-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #777386; pointer-events: none; font-size: 15px; }
+    .peek { position: absolute; left: 7px; top: 7px; width: 34px; height: 34px; border: 0; border-radius: 9px; cursor: pointer; color: #777386; background: transparent; }
+    .peek:hover { color: var(--purple-2); background: rgba(169,156,255,.06); }
+    .field-head { display: flex; justify-content: space-between; align-items: center; }
+    .hint { margin: 6px 3px 0; color: #686474; font-size: 9px; line-height: 1.6; }
+    .pin { text-align: center; direction: ltr; letter-spacing: 13px; font-size: 20px; font-weight: 900; padding-right: 55px !important; }
+
+    .error { display: none; gap: 10px; padding: 10px 12px; border: 1px solid rgba(255,135,151,.16); border-radius: 12px; color: #efb7bf; background: rgba(255,135,151,.055); font-size: 10px; line-height: 1.65; }
+    .error.show { display: flex; }
+
+    .submit {
+      height: 51px; border: 0; border-radius: 14px; cursor: pointer; color: #111019; font-weight: 950; font-size: 12px;
+      background: linear-gradient(115deg, var(--purple-2), #8e82eb); box-shadow: 0 13px 30px rgba(123,109,220,.21);
+      transition: transform .18s ease, filter .18s ease;
+    }
+    .submit:hover { transform: translateY(-2px); filter: brightness(1.06); }
+    .submit:active { transform: translateY(0); }
+    .submit.loading { pointer-events: none; color: transparent; position: relative; }
+    .submit.loading::after { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; border: 2px solid rgba(17,16,25,.3); border-top-color: #111019; border-radius: 50%; animation: spin .7s linear infinite; }
+
+    .reassure { display: flex; gap: 10px; align-items: center; padding-top: 17px; margin-top: 18px; border-top: 1px solid rgba(218,211,255,.08); }
+    .reassure > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--mint); background: rgba(100,215,189,.07); }
+    .reassure strong, .reassure small { display: block; }
+    .reassure strong { color: #b8d7d0; font-size: 10px; }
+    .reassure small { color: #6f7778; font-size: 8px; margin-top: 2px; }
+    .support { margin: 18px 0 0; color: #777386; font-size: 10px; }
+
+    .toast {
+      position: fixed; z-index: 20; top: 22px; right: 50%; transform: translate(50%, -120px);
+      display: flex; align-items: center; gap: 10px; padding: 11px 16px; border: 1px solid rgba(100,215,189,.18);
+      border-radius: 14px; color: #cce9e2; background: rgba(19,31,31,.94); box-shadow: 0 18px 55px rgba(0,0,0,.38);
+      font-size: 11px; transition: transform .35s cubic-bezier(.2,.8,.2,1);
+    }
+    .toast.show { transform: translate(50%, 0); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes breathe { 50% { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(169,156,255,.1); } }
+
+    @media (max-width: 900px) {
+      .page { display: block; }
+      .brand-panel { display: none; }
+      .access-panel { padding: 78px 20px 32px; }
+      .mobile-brand { display: flex; position: absolute; top: 22px; right: 22px; }
+      .card { max-width: 520px; }
+    }
+    @media (max-width: 520px) {
+      .access-panel { justify-content: flex-start; padding-inline: 12px; }
+      .card { padding: 25px 19px; border-radius: 22px; }
+      h2 { font-size: 27px; }
+      .prototype-pill { top: 27px; left: 15px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="brand-panel" aria-label="رسالة Caffio">
+      <div class="brand">
+        <span class="brand-mark">C</span>
+        <span class="brand-name">Caffio<small>شريك يومك</small></span>
+      </div>
+
+      <div class="story">
+        <p class="eyebrow"><i></i><span id="shiftLabel">صباح جديد في مكانك</span></p>
+        <h1>يومك أخف لما<br><em>كل حاجة في مكانها.</em></h1>
+        <p class="lead">من أول أوردر لحد قفلة الشيفت، Caffio بيخلي فريقك شايف نفس الصورة—بهدوء، ومن غير خطوات زيادة.</p>
+        <article class="day-card">
+          <span class="cup">☕</span>
+          <div><strong id="dayMessage">الفريق جاهز يبدأ</strong><p>الشيفت اتفتح من شوية · وكل حاجة تمام</p></div>
+          <div class="team" aria-label="أعضاء الفريق"><span class="avatar">M</span><span class="avatar">A</span><span class="avatar">S</span></div>
+        </article>
+      </div>
+
+      <footer class="trust"><span><b>✓</b> كل واحد بيدخل على شغله وبس</span><code>يوم أهدى مع CAFFIO</code></footer>
+    </section>
+
+    <section class="access-panel" aria-label="تسجيل الدخول">
+      <span class="prototype-pill">نسخة تفاعلية للتجربة</span>
+      <div class="brand mobile-brand"><span class="brand-mark">C</span><span class="brand-name">Caffio</span></div>
+
+      <section class="card">
+        <header>
+          <span class="hello" id="greeting">أهلاً برجوعك 👋</span>
+          <h2>رجعت تنوّر مكانك</h2>
+          <p class="intro">اكتب بياناتك، وCaffio هيرجّعك لنفس النقطة اللي وقفت عندها.</p>
+          <p class="resume-note"><span>↳</span> مش هتبدأ من الأول كل مرة.</p>
+        </header>
+
+        <div class="workspace" id="workspaceCard">
+          <span class="workspace-icon">⌂</span>
+          <div><small>عرفناك 👋 ده مكانك؟</small><strong id="workspaceName">wanas-cafe</strong></div>
+          <button class="link-btn" type="button" id="changeWorkspace">مش ده؟</button>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="طريقة الدخول">
+          <button type="button" class="active" data-mode="password" role="tab">🔑 باسورد الحساب</button>
+          <button type="button" data-mode="pin" role="tab"># PIN الموظف</button>
+        </div>
+
+        <div class="error" id="error" role="alert"><span>●</span><span id="errorText">راجع البيانات وحاول مرة تانية.</span></div>
+
+        <form class="form" id="loginForm" novalidate>
+          <div class="field" id="workspaceField" hidden>
+            <label for="tenant">كود مكانك</label>
+            <div class="control"><span class="input-icon">⌂</span><input id="tenant" autocomplete="organization" placeholder="مثال: wanas-cafe" /></div>
+            <p class="hint">اكتبه المرة دي بس—هنفتكره على الجهاز ده بعد كده.</p>
+          </div>
+
+          <div class="field" id="usernameField">
+            <label for="username">اسمك على السيستم</label>
+            <div class="control"><span class="input-icon">♙</span><input id="username" autocomplete="username" placeholder="مثال: ahmed" /></div>
+          </div>
+
+          <div class="field" id="passwordField">
+            <div class="field-head"><label for="password">كلمة السر</label><button class="link-btn" type="button" id="help">نسيتها؟</button></div>
+            <div class="control"><span class="input-icon">●</span><input id="password" type="password" autocomplete="current-password" placeholder="اكتب كلمة السر" /><button class="peek" type="button" id="peek" aria-label="إظهار كلمة السر">◉</button></div>
+          </div>
+
+          <div class="field" id="pinField" hidden>
+            <label for="pin">الـPIN بتاعك</label>
+            <div class="control"><span class="input-icon">#</span><input class="pin" id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" /></div>
+            <p class="hint">من 4 إلى 8 أرقام—لو نسيته، مدير المكان يقدر يساعدك.</p>
+          </div>
+
+          <button class="submit" id="submit" type="submit">يلا نبدأ اليوم ←</button>
+        </form>
+
+        <div class="reassure"><span>✓</span><div><strong>اطمّن، حسابك وبيانات المكان في أمان</strong><small>وكل واحد في الفريق بيشوف اللي يخص شغله بس.</small></div></div>
+      </section>
+
+      <p class="support">مش عارف تدخل؟ <button class="link-btn" type="button" id="support">إحنا معاك لحد ما تفتح</button></p>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"><span>✓</span><span id="toastText">تمام يا بطل—مكانك بيتفتح دلوقتي…</span></div>
+
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const hour = new Date().getHours();
+    const timeCopy = hour < 12
+      ? ['صباح الخير، يوم جميل عليك ☀️', 'صباح جديد في مكانك', 'أول أوردر مستني ابتسامتك']
+      : hour < 18
+        ? ['أهلاً بيك، نكمّل اليوم سوا 👋', 'الشيفت ماشي تمام', 'الفريق مكمل اليوم معاك']
+        : ['مساء الخير، نورت تاني 🌙', 'مساء هادي في مكانك', 'آخر اليوم يستاهل قفلة مريحة'];
+    $('#greeting').textContent = timeCopy[0];
+    $('#shiftLabel').textContent = timeCopy[1];
+    $('#dayMessage').textContent = timeCopy[2];
+
+    let mode = 'password';
+    let workspaceVisible = false;
+    const setMode = (next) => {
+      mode = next;
+      document.querySelectorAll('[data-mode]').forEach((tab) => tab.classList.toggle('active', tab.dataset.mode === next));
+      $('#passwordField').hidden = next !== 'password';
+      $('#usernameField').hidden = next !== 'password';
+      $('#pinField').hidden = next !== 'pin';
+      $('#submit').textContent = next === 'pin' ? 'ادخل على الشيفت ←' : 'يلا نبدأ اليوم ←';
+      $('#error').classList.remove('show');
+      setTimeout(() => (next === 'pin' ? $('#pin') : $('#username')).focus(), 40);
+    };
+    document.querySelectorAll('[data-mode]').forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
+
+    $('#changeWorkspace').addEventListener('click', () => {
+      workspaceVisible = !workspaceVisible;
+      $('#workspaceField').hidden = !workspaceVisible;
+      $('#workspaceCard').style.display = workspaceVisible ? 'none' : 'flex';
+      if (workspaceVisible) $('#tenant').focus();
+    });
+
+    $('#peek').addEventListener('click', () => {
+      const field = $('#password');
+      field.type = field.type === 'password' ? 'text' : 'password';
+      $('#peek').textContent = field.type === 'password' ? '◉' : '⊘';
+    });
+
+    $('#pin').addEventListener('input', (event) => { event.target.value = event.target.value.replace(/\D/g, ''); });
+    const toast = (message) => {
+      $('#toastText').textContent = message;
+      $('#toast').classList.add('show');
+      setTimeout(() => $('#toast').classList.remove('show'), 2800);
+    };
+
+    $('#help').addEventListener('click', () => toast('ولا يهمك—مدير المكان يقدر يعمل لك كلمة سر جديدة.'));
+    $('#support').addEventListener('click', () => toast('ولا يهمك، فريق Caffio هيساعدك ترجع لحسابك.'));
+
+    $('#loginForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const required = workspaceVisible && !$('#tenant').value.trim()
+        ? 'قول لنا كود المكان الأول، وإحنا هنفتكره بعد كده.'
+        : mode === 'password' && !$('#username').value.trim()
+          ? 'اكتب اسمك على السيستم علشان نعرف حسابك.'
+          : mode === 'password' && !$('#password').value
+            ? 'فاضل كلمة السر بس ونكمّل.'
+            : mode === 'pin' && $('#pin').value.length < 4
+              ? 'الـPIN محتاج يكون 4 أرقام على الأقل.'
+              : '';
+
+      if (required) {
+        $('#errorText').textContent = required;
+        $('#error').classList.add('show');
+        return;
+      }
+
+      $('#error').classList.remove('show');
+      $('#submit').classList.add('loading');
+      setTimeout(() => {
+        $('#submit').classList.remove('loading');
+        if (workspaceVisible) {
+          $('#workspaceName').textContent = $('#tenant').value.trim().toLowerCase();
+          $('#workspaceField').hidden = true;
+          $('#workspaceCard').style.display = 'flex';
+          workspaceVisible = false;
+        }
+        toast('تمام يا بطل—بنرجّعك لمكانك دلوقتي…');
+      }, 900);
+    });
+  </script>
+</body>
+</html>

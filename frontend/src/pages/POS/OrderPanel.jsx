@@ -3,7 +3,7 @@ import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus
 import Spinner from '../../components/Spinner/Spinner';
 import Badge from '../../components/Badge/Badge';
 import DiscountServiceModal from '../../components/DiscountServiceModal/DiscountServiceModal';
-import SupervisorApprovalModal from '../../components/SupervisorApprovalModal/SupervisorApprovalModal';
+import ConfirmVoidModal from '../../components/ConfirmVoidModal/ConfirmVoidModal';
 import { formatCurrency } from '../../utils/formatters';
 import {
   ACTIONS,
@@ -15,6 +15,12 @@ import {
   serveNextStep,
 } from '../../utils/labels';
 
+
+/* The reason filed against a void now that nobody is asked to type one. It is deliberately
+   honest about what it is: the cashier cancelled it at the register. Who and when are recorded
+   with the order either way. */
+const VOID_ORDER_REASON = 'إلغاء من الكاشير';
+const VOID_ITEM_REASON = 'إلغاء من الكاشير';
 
 export default function OrderPanel({
   table,
@@ -63,9 +69,17 @@ export default function OrderPanel({
   }
 
   async function submitCancel() {
-    await onCancelItem(cancelItemId, 'إلغاء');
+    await onCancelItem(cancelItemId, VOID_ITEM_REASON);
     setCancelItemId(null);
   }
+
+  /* Name the line in the dialog. "Cancel this item?" next to a number the cashier can check is a
+     decision; the same question with nothing in it is a reflex. */
+  const cancelItemLabel = useMemo(() => {
+    const item = (order?.items ?? []).find((i) => i.id === cancelItemId);
+    if (!item) return null;
+    return `${item.productNameSnapshot} × ${item.quantity} — ${formatCurrency(item.lineTotal)}`;
+  }, [order?.items, cancelItemId]);
 
   // Calculate Food vs Drinks/Buffet Totals
   const { foodTotal, buffetTotal } = useMemo(() => {
@@ -616,42 +630,42 @@ export default function OrderPanel({
             )}
           </div>
 
-          {/* Whole-order void.
-              Cancelling a single line already required a supervisor PIN and a recorded reason;
-              voiding the entire ticket - far more money, and the obvious way to make a paid order
-              disappear - asked only for an OK on a browser confirm(), and filed a fixed reason
-              nobody chose. Same gate, same audit trail, for the bigger action. */}
-          {showVoidOrderModal && (
-            <SupervisorApprovalModal
-              isOpen={showVoidOrderModal}
-              actionType="VOID_ORDER"
-              orderId={order?.id}
-              amount={parseFloat(order?.total) || null}
-              title="إلغاء الأوردر بالكامل"
-              description="إلغاء الفاتورة كلها عملية حساسة ولا يمكن التراجع عنها. تتطلب رمز PIN الخاص بمدير الوردية وسبباً مسجلاً."
-              onClose={() => setShowVoidOrderModal(false)}
-              onApproved={(_response, reason) => {
-                setShowVoidOrderModal(false);
-                onCancelOrder(reason);
-              }}
-            />
-          )}
+          {/* Both voids: one tap to confirm, no supervisor PIN.
+              The PIN gate was costing more than it bought. On a real till the cashier is the
+              person who spotted the mistake, and sending them to find a supervisor turned a
+              five-second correction into a queue - so in practice the supervisor's PIN ends up
+              known at the register anyway, which is a worse control than none plus the delay.
+              What is kept is the part a misplaced finger cannot get past: a dialog that states,
+              in numbers, what is about to disappear. */}
+          <ConfirmVoidModal
+            isOpen={showVoidOrderModal}
+            onClose={() => setShowVoidOrderModal(false)}
+            onConfirm={() => {
+              setShowVoidOrderModal(false);
+              onCancelOrder(VOID_ORDER_REASON);
+            }}
+            title="إلغاء الأوردر بالكامل"
+            description="الفاتورة كلها هتتلغي ومفيش رجوع فيها."
+            detail={
+              <>
+                {table ? `ترابيزة ${table.number}` : 'تيك أواي'}
+                {' — '}
+                {formatCurrency(order?.total)}
+                {order?.items?.length ? ` · ${order.items.filter((i) => i.status !== 'CANCELLED').length} صنف` : ''}
+              </>
+            }
+            confirmLabel="أيوه، الغي الأوردر"
+          />
 
-          {/* Cancel item supervisor authorization dialog */}
-          {cancelItemId && (
-            <SupervisorApprovalModal
-              isOpen={Boolean(cancelItemId)}
-              onClose={() => setCancelItemId(null)}
-              onApproved={async (supervisorData, reason) => {
-                await onCancelItem(cancelItemId, reason);
-                setCancelItemId(null);
-              }}
-              actionType="VOID_ITEM"
-              title="اعتماد إلغاء صنف مرسل للمطبخ"
-              description="تم إرسال هذا الصنف للتجهيز مسبقاً. يلزم موافقة المشرف وإدخال سبب الإلغاء للرقابة وحساب الهالك."
-              orderId={order.id}
-            />
-          )}
+          <ConfirmVoidModal
+            isOpen={Boolean(cancelItemId)}
+            onClose={() => setCancelItemId(null)}
+            onConfirm={submitCancel}
+            title="إلغاء صنف اتبعت للمطبخ"
+            description="الصنف ده المطبخ شافه وممكن يكون اتجهز، فإلغاءه بيتسجل كهالك."
+            detail={cancelItemLabel}
+            confirmLabel="أيوه، الغي الصنف"
+          />
 
           {/* Discount & Service Fee Modal */}
           {showDiscountModal && (

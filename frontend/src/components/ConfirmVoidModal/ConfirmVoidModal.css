@@ -1,0 +1,117 @@
+/* ═══════════════════════════════════════════════
+   CONFIRM VOID — one tap, no PIN
+   ═══════════════════════════════════════════════ */
+
+.confirm-void-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 15, 0.82);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  overflow-y: auto;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.confirm-void-modal {
+  width: 100%;
+  max-width: 400px;
+  /* Capped, and the body is the part that scrolls. The dialog this replaced lost its confirm
+     button below the fold for exactly the want of these two rules. */
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(145deg, rgba(22, 27, 44, 0.97) 0%, rgba(13, 17, 28, 0.98) 100%);
+  border: 1px solid rgba(229, 98, 115, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.confirm-void-modal__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.confirm-void-modal__header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.confirm-void-modal__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(229, 98, 115, 0.15);
+  color: #e56273;
+}
+
+.confirm-void-modal__close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+}
+
+.confirm-void-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.85;
+}
+
+.confirm-void-modal__body p {
+  margin: 0;
+}
+
+.confirm-void-modal__detail {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-weight: 700;
+  color: #fff;
+}
+
+.confirm-void-modal__footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 23, 0.4);
+}
+
+.confirm-void-modal__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #e56273 0%, #c04455 100%);
+  color: #fff;
+  font-weight: 800;
+  border: none;
+}
