@@ -66,20 +66,25 @@ export default function TableGrid({
   }, [sortedTables, orders]);
 
   if (collapsed) {
+    /* The whole rail is the button.
+       It used to be a small icon at the top and a vertical label positioned by space-between -
+       which, once the close-shift button left this rail, meant the label sat at the very bottom
+       of a full-height column, a screen away from the only control that reopened the panel. A
+       40px strip with nothing else in it should just be one big target. */
     return (
       <aside className="pos__tables pos__tables--collapsed">
         <button
           type="button"
-          className="pos__tables-toggle"
+          className="pos__tables-rail"
           onClick={onToggleCollapse}
           title="إظهار الترابيزات"
           aria-label="إظهار الترابيزات"
         >
           <PanelLeftOpen size={16} />
+          <span className="pos__tables-collapsed-label">
+            {activeTable ? `ترابيزة ${activeTable.number}` : 'الترابيزات'}
+          </span>
         </button>
-        <span className="pos__tables-collapsed-label">
-          {activeTable ? `ترابيزة ${activeTable.number}` : 'الترابيزات'}
-        </span>
       </aside>
     );
   }

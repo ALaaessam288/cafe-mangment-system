@@ -81,6 +81,18 @@ export default function OrderPanel({
     [order?.items]
   );
 
+  /* Arabic does not pluralise the way a template string assumes.
+     "1 أصناف" is what "{n} أصناف" produces for one item, and it reads to a cashier the way
+     "1 items" would - the very first thing on the very first order anyone will see on this
+     screen. Arabic has a singular, a dual, a plural for 3-10, and a singular again from 11 up. */
+  const itemCountLabel = useMemo(() => {
+    const n = sellableItemCount;
+    if (n === 1) return 'صنف واحد';
+    if (n === 2) return 'صنفين';
+    if (n >= 3 && n <= 10) return `${n} أصناف`;
+    return `${n} صنف`;
+  }, [sellableItemCount]);
+
   /* Whether payment can be collected, and - when it cannot - the sentence that says so.
      The rule itself is unchanged: the same statuses and the same balance-due test the action
      stack already used. What is new is that "no" is now spoken instead of the button vanishing,
@@ -665,7 +677,7 @@ export default function OrderPanel({
               about what a customer owes. */}
           <div className="order-checkout">
             <div className="order-checkout__figures">
-              <span className="order-checkout__count">{sellableItemCount} أصناف</span>
+              <span className="order-checkout__count">{itemCountLabel}</span>
               <span className="order-checkout__total">
                 الإجمالي <strong>{formatCurrency(order.total)}</strong>
               </span>
