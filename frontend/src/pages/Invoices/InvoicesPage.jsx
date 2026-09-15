@@ -133,19 +133,25 @@ export default function InvoicesPage() {
     }
   };
 
-  // Print via Electron IPC path
-  const printOrderReceipt = (order) => {
+  // Always print the full, latest order. Rows in the invoice list can be projections and may not
+  // carry adjustments such as discount/service even though the detail endpoint does.
+  const printOrderReceipt = async (order) => {
     if (!order) return;
-    sounds.playSuccess();
-    const html = buildReceiptHtml({ order });
-    printReceipt(html, printOptionsFor('RECEIPT', { width: 80 }));
+    try {
+      const printableOrder = order.id ? await ordersApi.findById(order.id) : order;
+      sounds.playSuccess();
+      const html = buildReceiptHtml({ order: printableOrder });
+      printReceipt(html, printOptionsFor('RECEIPT', { width: 80 }));
+    } catch (err) {
+      toast.error(err.message || 'تعذر تحميل بيانات الفاتورة الكاملة', 'فشل في طباعة الفاتورة');
+    }
   };
 
-  const handlePrint = (e, order = null) => {
+  const handlePrint = async (e, order = null) => {
     if (e) e.stopPropagation();
     const target = order || selectedOrder;
     if (!target) return;
-    printOrderReceipt(target);
+    await printOrderReceipt(target);
   };
 
   const handleSendWhatsApp = (e, order = null) => {

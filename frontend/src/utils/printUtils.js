@@ -38,6 +38,21 @@ function money(amount) {
   return num.toFixed(2);
 }
 
+/**
+ * Receipt data can come from the live POS response, an invoice-list projection, or an older
+ * cached payload. Keep printing tolerant of the names used by all three instead of silently
+ * dropping an adjustment when one projection calls it `serviceFee` or `discountAmount`.
+ */
+function receiptAmount(order, keys) {
+  const values = keys
+    .map((key) => order?.[key])
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .map((value) => Number(value))
+    .filter(Number.isFinite);
+
+  return values.find((value) => value !== 0) ?? values[0] ?? 0;
+}
+
 /** dd/MM/yyyy HH:mm in ASCII digits. */
 function stamp(value) {
   const date = value ? new Date(value) : new Date();
@@ -124,11 +139,12 @@ export function buildReceiptHtml({ order, cafeName }) {
     )
     .join('');
 
-  const subtotal = aggregatedItems.reduce((sum, i) => sum + i.lineTotal, 0);
-  const discount = Number(order?.discount ?? order?.discountAmount ?? 0);
-  const deliveryFee = Number(order?.deliveryFee ?? 0);
-  const service = Number(order?.service ?? 0);
-  const total = Number(order?.total ?? subtotal - discount + service + deliveryFee);
+  const itemsSubtotal = aggregatedItems.reduce((sum, i) => sum + i.lineTotal, 0);
+  const subtotal = receiptAmount(order, ['subtotal', 'subTotal']) || itemsSubtotal;
+  const discount = receiptAmount(order, ['discount', 'discountAmount', 'totalDiscount', 'orderDiscount']);
+  const deliveryFee = receiptAmount(order, ['deliveryFee', 'deliveryCharge', 'deliveryAmount']);
+  const service = receiptAmount(order, ['service', 'serviceFee', 'serviceCharge', 'serviceAmount']);
+  const total = receiptAmount(order, ['total', 'grandTotal', 'netTotal']) || subtotal - discount + service + deliveryFee;
   const totalQty = aggregatedItems.reduce((sum, i) => sum + i.quantity, 0);
 
   const placeInfo = order?.tableNumber
