@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus, Minus, Undo2, Printer, Tag, Sparkles, Trash2, ShoppingBag, MapPin, Phone, ReceiptText } from 'lucide-react';
+import { Send, CreditCard, XCircle, Users, Utensils, Coffee, Droplet, Bike, Plus, Minus, Undo2, Printer, Tag, Trash2, ShoppingBag, MapPin, Phone, ReceiptText } from 'lucide-react';
 import Spinner from '../../components/Spinner/Spinner';
 import Badge from '../../components/Badge/Badge';
 import DiscountServiceModal from '../../components/DiscountServiceModal/DiscountServiceModal';
@@ -479,30 +479,23 @@ export default function OrderPanel({
                   type="button"
                   className={`ticket-chip ${hasWater ? '' : 'ticket-chip--accent'}`}
                   onClick={onAddWater}
-                  title="إضافة مياه للأوردر"
+                  title={hasWater ? 'إضافة مياه أخرى للأوردر' : 'إضافة مياه للأوردر'}
+                  aria-label={hasWater ? 'إضافة مياه أخرى للأوردر' : 'إضافة مياه للأوردر'}
                 >
-                  <Droplet size={13} />
-                  <span>{hasWater ? 'مياه زيادة' : 'مياه'}</span>
+                  <Droplet size={15} />
                 </button>
 
                 <button
                   type="button"
-                  className={`ticket-chip ${parseFloat(order.discount) > 0 ? 'ticket-chip--on' : ''}`}
-                  onClick={() => { setDiscountModalInitialTab('discount'); setShowDiscountModal(true); }}
-                  title="خصم"
+                  className={`ticket-chip ${parseFloat(order.discount) > 0 || parseFloat(order.service) > 0 ? 'ticket-chip--on' : ''}`}
+                  onClick={() => {
+                    setDiscountModalInitialTab(parseFloat(order.service) > 0 && !(parseFloat(order.discount) > 0) ? 'service' : 'discount');
+                    setShowDiscountModal(true);
+                  }}
+                  title="الخصم والخدمة"
+                  aria-label="فتح إعدادات الخصم والخدمة"
                 >
-                  <Tag size={13} />
-                  <span>{parseFloat(order.discount) > 0 ? `-${formatCurrency(order.discount)}` : 'خصم'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`ticket-chip ${parseFloat(order.service) > 0 ? 'ticket-chip--on' : ''}`}
-                  onClick={() => { setDiscountModalInitialTab('service'); setShowDiscountModal(true); }}
-                  title="رسوم خدمة"
-                >
-                  <Sparkles size={13} />
-                  <span>{parseFloat(order.service) > 0 ? `+${formatCurrency(order.service)}` : 'خدمة'}</span>
+                  <Tag size={15} />
                 </button>
               </div>
             )}
@@ -613,23 +606,25 @@ export default function OrderPanel({
 
                   {showSendBtn && (
                     <button
-                      className={`btn order-actions__btn ${primary === 'SEND' ? 'btn--primary btn--lg order-actions__btn--primary' : 'btn--ghost btn--sm'}`}
+                      className={`btn order-actions__btn order-actions__btn--icon ${primary === 'SEND' ? 'btn--primary order-actions__btn--primary' : 'btn--ghost'}`}
                       onClick={onSend}
                       disabled={disableSendBtn || syncing}
-                      title={disableSendBtn ? 'مفيش أصناف جديدة لإرسالها' : syncing ? 'لسه في صنف بيتسجل…' : ''}
+                      title={disableSendBtn ? 'مفيش أصناف جديدة لإرسالها' : syncing ? 'لسه في صنف بيتسجل…' : `${ACTIONS.SEND} (F9)`}
+                      aria-label={disableSendBtn ? 'مفيش أصناف جديدة لإرسالها' : `${ACTIONS.SEND} — F9`}
                     >
-                      <Send size={primary === 'SEND' ? 18 : 14} /> {ACTIONS.SEND}
-                      <kbd className="order-actions__kbd">F9</kbd>
+                      <Send size={18} />
                     </button>
                   )}
 
                   {canServe && (
                     <button
-                      className={`btn order-actions__btn ${primary === 'SERVE' ? 'btn--success btn--lg order-actions__btn--primary' : 'btn--ghost btn--sm'}`}
+                      className={`btn order-actions__btn order-actions__btn--icon ${primary === 'SERVE' ? 'btn--success order-actions__btn--primary' : 'btn--ghost'}`}
                       onClick={onServe}
                       disabled={syncing}
+                      title={serveAction(order.type)}
+                      aria-label={serveAction(order.type)}
                     >
-                      <Users size={primary === 'SERVE' ? 18 : 14} /> {serveAction(order.type)}
+                      <Users size={18} />
                     </button>
                   )}
 
@@ -715,10 +710,9 @@ export default function OrderPanel({
               onClick={onPayClick}
               disabled={Boolean(checkout.blockedReason) || syncing}
               title={checkout.blockedReason || 'تحصيل ودفع (F4)'}
+              aria-label={checkout.blockedReason || 'تحصيل ودفع — F4'}
             >
-              <CreditCard size={18} />
-              <span>تحصيل ودفع</span>
-              <kbd className="order-actions__kbd">F4</kbd>
+              <CreditCard size={19} />
             </button>
 
             {/* A disabled button that will not say why is a dead end. */}

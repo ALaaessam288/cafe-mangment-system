@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Wallet, TrendingUp, Utensils, Coffee, Lock, FileText, Plus, Clock, CheckCircle, Vault, Settings2, ChevronDown } from 'lucide-react';
 import { shiftsApi } from '../../api/shiftsApi';
 import { expensesApi } from '../../api/expensesApi';
@@ -54,6 +55,33 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   const [expenses, setExpenses] = useState([]);
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [shiftMenuOpen, setShiftMenuOpen] = useState(false);
+  const shiftMenuBtnRef = useRef(null);
+  const [shiftMenuAt, setShiftMenuAt] = useState(null);
+
+  /* The menu is rendered into document.body, not where it is written.
+   *
+   * As a child of the strip it was defeated three different ways at once: the strip scrolled
+   * (overflow clips an absolutely-positioned child), the shell sets `isolation: isolate`, and the
+   * three POS panels carry backdrop-filter, so each is its own stacking context painted after the
+   * strip. Any one of those hides the panel, and no amount of z-index argues with the first two.
+   * A portal with position: fixed has no ancestors to lose to - it is measured from the trigger
+   * and painted last, over everything.
+   */
+  const openShiftMenu = useCallback(() => {
+    const rect = shiftMenuBtnRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setShiftMenuAt({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    setShiftMenuOpen(true);
+  }, []);
+
+  /* Fixed coordinates are a snapshot. Rather than track the trigger through a resize, the menu
+     closes - it is two taps to reopen and never a panel floating away from its button. */
+  useEffect(() => {
+    if (!shiftMenuOpen) return undefined;
+    const close = () => setShiftMenuOpen(false);
+    window.addEventListener('resize', close);
+    return () => window.removeEventListener('resize', close);
+  }, [shiftMenuOpen]);
   const [selectedAdvance, setSelectedAdvance] = useState(null);
   const [settleActualAmount, setSettleActualAmount] = useState('');
   const [settleNotes, setSettleNotes] = useState('');
@@ -357,7 +385,8 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
           <button
             type="button"
             className="shift-tool shift-menu__trigger"
-            onClick={() => setShiftMenuOpen((v) => !v)}
+            ref={shiftMenuBtnRef}
+            onClick={() => (shiftMenuOpen ? setShiftMenuOpen(false) : openShiftMenu())}
             aria-expanded={shiftMenuOpen}
             aria-haspopup="menu"
             title="تغذية المخزون، مصروف سريع، حركات الدرج، وقفل الشيفت"
@@ -366,10 +395,14 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
             <ChevronDown size={13} className={shiftMenuOpen ? 'shift-menu__caret shift-menu__caret--open' : 'shift-menu__caret'} />
           </button>
 
-          {shiftMenuOpen && (
+          {shiftMenuOpen && shiftMenuAt && createPortal(
             <>
               <div className="shift-menu__scrim" onClick={() => setShiftMenuOpen(false)} />
-              <div className="shift-menu__panel" role="menu">
+              <div
+                className="shift-menu__panel"
+                role="menu"
+                style={{ top: shiftMenuAt.top, right: shiftMenuAt.right }}
+              >
                 <button type="button" role="menuitem" className="shift-menu__item"
                   onClick={() => { setShiftMenuOpen(false); setShowStockModal(true); }}>
                   <Plus size={15} /><span><strong>تغذية المخزون</strong><small>إضافة وجرد</small></span>
@@ -399,7 +432,8 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
                   <Lock size={15} /><span><strong>قفل الشيفت</strong><small>تسليم الدرج وإنهاء الوردية</small></span>
                 </button>
               </div>
-            </>
+            </>,
+            document.body
           )}
         </div>
         </div>
