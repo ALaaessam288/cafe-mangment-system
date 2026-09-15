@@ -53,15 +53,19 @@ public class  EmployeePayrollController {
         payrollService.deleteTransaction(id);
     }
 
+    /**
+     * The payroll table. One optional {@code on} date; each employee's period is derived from it.
+     *
+     * <p>startDate/endDate are still accepted so an older frontend does not break, but they no
+     * longer define the window - they never could define a correct one for staff on different
+     * cycles. startDate, if given, is read as "report as of this day".
+     */
     @GetMapping("/payroll/summary")
     @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR')")
-    public List<WeeklyPayrollSummaryDto> getWeeklyPayrollSummary(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        
-        LocalDate start = startDate != null ? startDate : LocalDate.now().minusDays(6);
-        LocalDate end = endDate != null ? endDate : LocalDate.now();
-        return payrollService.getWeeklyPayrollSummary(start, end);
+    public List<WeeklyPayrollSummaryDto> getPayrollSummary(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate on,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate) {
+        return payrollService.getPayrollSummary(on != null ? on : startDate);
     }
 
     @PostMapping("/{employeeId}/payroll/payout")
@@ -77,12 +81,7 @@ public class  EmployeePayrollController {
         return payrollService.payWeeklySalary(principal.getId(), employeeId, amount, date, paidFromDrawer);
     }
 
-    @PostMapping("/payroll/reset-week")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISOR')")
-    public Map<String, Object> resetWeek(@RequestBody(required = false) Map<String, String> body) {
-        LocalDate date = (body != null && body.containsKey("date") && body.get("date") != null && !body.get("date").isBlank())
-                ? LocalDate.parse(body.get("date"))
-                : LocalDate.now();
-        return payrollService.resetWeek(date);
-    }
+    /* The /payroll/reset-week endpoint was removed along with the service method behind it: it
+     * settled unpaid transactions without paying them. Pay periods are computed from each
+     * employee's anchor date now, so nothing needs resetting. */
 }

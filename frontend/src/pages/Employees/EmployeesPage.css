@@ -938,3 +938,13 @@
   line-height: 1.6;
   color: #f8f6ff;
 }
+
+/* The pay period under each name. Quiet - it is context for the row's numbers, not a heading. */
+.emp-period-line {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}

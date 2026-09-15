@@ -122,6 +122,25 @@ public class Employee extends TenantScopedEntity {
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
 
+    /**
+     * The day this employee's pay cycle starts counting from.
+     *
+     * <p>Every period boundary is derived from this plus salaryPeriod, so it is the single thing
+     * that decides when a week or a month rolls over for them. Defaults to the hire date - the
+     * cycle they were actually hired on - and falls back to today for older rows that have
+     * neither, which puts them on a cycle starting now rather than guessing backwards.
+     */
+    @Column(name = "payroll_anchor_date")
+    private java.time.LocalDate payrollAnchorDate;
+
+    public java.time.LocalDate getPayrollAnchorDate() {
+        return payrollAnchorDate != null ? payrollAnchorDate : hireDate;
+    }
+
+    public void setPayrollAnchorDate(java.time.LocalDate payrollAnchorDate) {
+        this.payrollAnchorDate = payrollAnchorDate;
+    }
+
     public java.time.LocalDate getHireDate() { return hireDate; }
     public void setHireDate(java.time.LocalDate hireDate) { this.hireDate = hireDate; }
 }

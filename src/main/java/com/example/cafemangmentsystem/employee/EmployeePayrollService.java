@@ -88,17 +88,37 @@ public class EmployeePayrollService {
         transactionRepository.delete(transaction);
     }
 
+    /**
+     * Each employee's own current pay period, not one window for everybody.
+     *
+     * <p>This used to take a start and an end date from the caller and apply them to all staff,
+     * then hand every one of them their full {@code baseSalary} regardless of how wide that window
+     * was. A monthly employee shown in a seven-day view was reported as owed a whole month for the
+     * week. {@code salaryPeriod} was stored on the employee and consulted by nothing.
+     *
+     * <p>Now the period comes from the employee: their anchor date plus their cycle. A daily
+     * employee's period is today, a weekly employee's is their seven days, a monthly employee's is
+     * their month - all on screen together, each correct. {@code baseSalary} is the wage FOR that
+     * cycle, which is how it is already entered, so no pro-rating is invented here.
+     *
+     * @param on the day to report for; periods are the ones containing it. Defaults to today.
+     */
     @Transactional(readOnly = true)
-    public List<WeeklyPayrollSummaryDto> getWeeklyPayrollSummary(LocalDate startDate, LocalDate endDate) {
+    public List<WeeklyPayrollSummaryDto> getPayrollSummary(LocalDate on) {
+        LocalDate asOf = on != null ? on : LocalDate.now();
+
         List<Employee> activeEmployees = employeeRepository.findAll().stream()
-                .filter(e -> e.isActive())
+                .filter(Employee::isActive)
                 .toList();
 
         List<WeeklyPayrollSummaryDto> summaries = new ArrayList<>();
 
         for (Employee emp : activeEmployees) {
+            LocalDate anchor = emp.getPayrollAnchorDate() != null ? emp.getPayrollAnchorDate() : asOf;
+            PayrollPeriod period = PayrollPeriod.of(emp.getSalaryPeriod(), anchor, asOf);
+
             List<EmployeeTransaction> txs = transactionRepository.findByEmployeeIdAndTransactionDateBetween(
-                    emp.getId(), startDate, endDate
+                    emp.getId(), period.start(), period.end()
             );
 
             BigDecimal deductions = BigDecimal.ZERO;
@@ -107,17 +127,21 @@ public class EmployeePayrollService {
             // Bonuses already paid from the drawer were expensed immediately in
             // createTransaction() - only the still-unpaid ones remain owed at payout time.
             BigDecimal unpaidBonuses = BigDecimal.ZERO;
+            boolean paidThisPeriod = false;
 
             for (EmployeeTransaction tx : txs) {
-                if (tx.getType() == EmployeeTransactionType.DEDUCTION) {
-                    deductions = deductions.add(tx.getAmount());
-                } else if (tx.getType() == EmployeeTransactionType.ADVANCE) {
-                    advances = advances.add(tx.getAmount());
-                } else if (tx.getType() == EmployeeTransactionType.BONUS) {
-                    bonuses = bonuses.add(tx.getAmount());
-                    if (!tx.isPaidFromDrawer()) {
-                        unpaidBonuses = unpaidBonuses.add(tx.getAmount());
+                switch (tx.getType()) {
+                    case DEDUCTION -> deductions = deductions.add(tx.getAmount());
+                    case ADVANCE -> advances = advances.add(tx.getAmount());
+                    case BONUS -> {
+                        bonuses = bonuses.add(tx.getAmount());
+                        if (!tx.isPaidFromDrawer()) unpaidBonuses = unpaidBonuses.add(tx.getAmount());
                     }
+                    // Settled means paid WITHIN THIS PERIOD. The old test was "is there a payout
+                    // anywhere in the caller's date range", so last week's payout marked this week
+                    // settled and the row went green while the wage was still owed.
+                    case SALARY_PAYOUT -> paidThisPeriod = true;
+                    default -> { }
                 }
             }
 
@@ -126,12 +150,6 @@ public class EmployeePayrollService {
             // (Bonuses that were paid immediately from the drawer were already pocketed, so adding
             // them here too would pay them twice.)
             BigDecimal net = base.add(unpaidBonuses).subtract(deductions).subtract(advances);
-
-            List<EmployeeTransactionDto> dtoList = txs.stream()
-                    .map(EmployeeTransactionDto::from)
-                    .toList();
-
-            boolean isSettled = txs.stream().anyMatch(t -> t.getType() == EmployeeTransactionType.SALARY_PAYOUT);
 
             summaries.add(new WeeklyPayrollSummaryDto(
                     emp.getId(),
@@ -142,8 +160,11 @@ public class EmployeePayrollService {
                     advances,
                     bonuses,
                     net,
-                    isSettled,
-                    dtoList
+                    paidThisPeriod,
+                    emp.getSalaryPeriod(),
+                    period.start(),
+                    period.end(),
+                    txs.stream().map(EmployeeTransactionDto::from).toList()
             ));
         }
 
@@ -187,14 +208,16 @@ public class EmployeePayrollService {
         return EmployeeTransactionDto.from(saved);
     }
 
-    @Transactional
-    public java.util.Map<String, Object> resetWeek(LocalDate upToDate) {
-        LocalDate limit = upToDate != null ? upToDate : LocalDate.now();
-        List<EmployeeTransaction> unsettled = transactionRepository.findBySettledFalseAndTransactionDateLessThanEqual(limit);
-        for (EmployeeTransaction tx : unsettled) {
-            tx.setSettled(true);
-        }
-        transactionRepository.saveAll(unsettled);
-        return java.util.Map.of("settledCount", unsettled.size(), "resetDate", limit.toString());
-    }
+    /* resetWeek() was here.
+     *
+     * It set settled = true on every unsettled transaction up to a date and recorded no payment at
+     * all, so pressing it before paying made the advances and deductions owed disappear from the
+     * next summary with nothing to show they had ever been owed. It existed because periods were
+     * not computed and something had to draw a line manually.
+     *
+     * Periods are computed now, from each employee's anchor date, so there is no line to draw and
+     * nothing that could be drawn at the wrong moment. A payout is recorded by payWeeklySalary and
+     * is what marks a period settled - by being dated inside it, which is a fact rather than a
+     * flag someone can set by accident.
+     */
 }

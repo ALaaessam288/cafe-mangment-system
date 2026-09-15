@@ -3,7 +3,7 @@ import {
   Plus, Check, X, Search, Calendar, DollarSign, 
   MinusCircle, PlusCircle, CreditCard, Eye, Trash2, 
   UserCheck, ShieldAlert, Award, FileText, ArrowRight, RefreshCw,
-  Printer, RotateCcw, Users, Briefcase, ChevronRight, AlertTriangle, CheckCircle2,
+  Printer, Users, Briefcase, ChevronRight, CheckCircle2,
   Utensils, Coffee, Shield, Sparkles, User, HelpCircle, CheckSquare, Square
 } from 'lucide-react';
 import { employeesApi } from '../../api/employeesApi';
@@ -32,6 +32,17 @@ const PRESET_ROLES = [
 ];
 
 const DEDUCTION_REASONS = ['أكل ومشروبات', 'سلفة عاجلة', 'تأخير عن الشيفت', 'عدم التزام بالزي', 'عجز كاشير / أوردر', 'أخرى'];
+
+const PERIOD_LABEL = { DAILY: 'يومي', WEEKLY: 'أسبوعي', MONTHLY: 'شهري' };
+
+/** Day and month only - the year is almost never the thing in question on a payroll row. */
+function fmtDay(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+}
 
 export default function EmployeesPage() {
   const toast = useToast();
@@ -64,12 +75,12 @@ export default function EmployeesPage() {
   const [customTitleInput, setCustomTitleInput] = useState('');
 
   // Payroll state
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 6);
-    return d.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  /* One day to report as of, not a range.
+     The range was applied to everybody at once and could not be right for staff on different
+     cycles - a monthly employee shown in a seven-day window was reported as owed a whole month
+     for the week. Each employee's period is now derived from their own anchor date, and this
+     just says which day to ask about. Defaults to today; move it back to look at last period. */
+  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [payrollSummaries, setPayrollSummaries] = useState([]);
   const [loadingPayroll, setLoadingPayroll] = useState(true);
 
@@ -103,8 +114,6 @@ export default function EmployeesPage() {
   const [savingPayout, setSavingPayout] = useState(false);
 
   // Reset Week Modal
-  const [isResetWeekModalOpen, setIsResetWeekModalOpen] = useState(false);
-  const [resettingWeek, setResettingWeek] = useState(false);
 
   // Load Employees List
   const loadEmployees = useCallback(async () => {
@@ -124,14 +133,14 @@ export default function EmployeesPage() {
     if (!canSeePayroll) { setLoadingPayroll(false); return; }
     setLoadingPayroll(true);
     try {
-      const data = await employeesApi.getPayrollSummary(startDate, endDate);
+      const data = await employeesApi.getPayrollSummary(asOfDate);
       setPayrollSummaries(data || []);
     } catch (err) {
       toast.error(err.message, 'فشل تحميل حسابات القبض الأسبوعي');
     } finally {
       setLoadingPayroll(false);
     }
-  }, [startDate, endDate, toast, canSeePayroll]);
+  }, [asOfDate, toast, canSeePayroll]);
 
   useEffect(() => {
     loadEmployees();
@@ -377,8 +386,9 @@ export default function EmployeesPage() {
       baseSalary: emp.baseWeeklySalary,
       summary: emp,
       transactions: emp.transactions || [],
-      startDate,
-      endDate,
+      // The employee's own period, not a window someone typed. The server sends it with the row.
+      startDate: emp.periodStart,
+      endDate: emp.periodEnd,
       cafeName: user?.tenantName,
     });
     printReceipt(html, printOptionsFor('REPORT', { width: 80 }));
@@ -411,7 +421,7 @@ export default function EmployeesPage() {
         <div style="text-align: center; border-bottom: 2px dashed #333; padding-bottom: 12px; margin-bottom: 16px;">
           <h2 style="margin: 0 0 6px;">${esc(user?.tenantName) || 'كافيو POS'}</h2>
           <h3 style="margin: 0 0 4px; color: #444;">كشف مسير رواتب الموظفين</h3>
-          <p style="margin: 0; font-size: 12px; color: #666;">الفترة من: <strong>${startDate}</strong> إلى: <strong>${endDate}</strong></p>
+          <p style="margin: 0; font-size: 12px; color: #666;">الفترة من: <strong>${startDate || '—'}</strong> إلى: <strong>${endDate || '—'}</strong></p>
         </div>
 
         <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;">
@@ -478,20 +488,11 @@ export default function EmployeesPage() {
     }
   }
 
-  // Handle Reset Week
-  const handleResetWeek = async () => {
-    setResettingWeek(true);
-    try {
-      const res = await employeesApi.resetWeek({ date: new Date().toISOString().split('T')[0] });
-      toast.success(res.message || 'تمت تصفية حسابات الأسبوع وبدء دورة أسبوعية جديدة بنجاح 🎉');
-      setIsResetWeekModalOpen(false);
-      loadPayrollSummary();
-    } catch (err) {
-      toast.error(err.message, 'فشل تصفية الأسبوع');
-    } finally {
-      setResettingWeek(false);
-    }
-  };
+  /* handleResetWeek() was here.
+     It called an endpoint that marked every unsettled advance and deduction as settled without
+     paying any of it - so pressing it a day early made money the café owed its staff disappear
+     from the screen with nothing left to say it had been owed. Periods roll over by themselves
+     now, so there is no button to press and no wrong moment to press it at. */
 
   // Total KPIs
   const payrollTotals = useMemo(() => {
@@ -596,17 +597,6 @@ export default function EmployeesPage() {
               طباعة كشف الرواتب
             </Button>
           )}
-          {isSupervisor && canSeePayroll && activeTab === 'PAYROLL' && (
-            <Button
-              variant="danger"
-              leftIcon={<RotateCcw size={16} />}
-              onClick={() => { sounds.playTap(); setIsResetWeekModalOpen(true); }}
-              className="btn-reset-week"
-              title="تصفية مستحقات وحسابات الأسبوع وبدء أسبوع جديد"
-            >
-              بدء أسبوع جديد وتصفية الحسابات 🔄
-            </Button>
-          )}
           {isSupervisor && (
             <Button variant="primary" leftIcon={<Plus size={16} />} onClick={openCreateEmployeeModal}>
               إضافة موظف جديد
@@ -646,21 +636,13 @@ export default function EmployeesPage() {
           <div className="payroll-filter-card">
             <div className="date-picker-group">
               <div className="date-field">
-                <label>من تاريخ:</label>
-                <input 
-                  type="date" 
-                  className="payroll-date-input" 
-                  value={startDate} 
-                  onChange={(e) => setStartDate(e.target.value)} 
-                />
-              </div>
-              <div className="date-field">
-                <label>إلى تاريخ:</label>
-                <input 
-                  type="date" 
-                  className="payroll-date-input" 
-                  value={endDate} 
-                  onChange={(e) => setEndDate(e.target.value)} 
+                <label>الحساب بتاريخ:</label>
+                <input
+                  type="date"
+                  className="payroll-date-input"
+                  value={asOfDate}
+                  onChange={(e) => setAsOfDate(e.target.value)}
+                  title="كل موظف بتظهر فترته اللي التاريخ ده واقع فيها"
                 />
               </div>
               <button 
@@ -734,7 +716,19 @@ export default function EmployeesPage() {
                           <div className="emp-avatar-sm">
                             {emp.employeeName?.[0] || '👤'}
                           </div>
-                          <strong>{emp.employeeName}</strong>
+                          <div>
+                            <strong>{emp.employeeName}</strong>
+                            {/* Which window these figures cover. Two people on this screen can now
+                                be looking at different periods - one daily, one monthly - so the
+                                row has to say which one it is reporting, or the numbers beside it
+                                mean nothing in particular. */}
+                            <small className="emp-period-line">
+                              {PERIOD_LABEL[emp.salaryPeriod] || 'أسبوعي'}
+                              {emp.periodStart && emp.periodEnd
+                                ? ` • ${fmtDay(emp.periodStart)} → ${fmtDay(emp.periodEnd)}`
+                                : ''}
+                            </small>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -1388,39 +1382,6 @@ export default function EmployeesPage() {
         </form>
       </Modal>
 
-      {/* ── Reset Week Modal ── */}
-      <Modal
-        isOpen={isResetWeekModalOpen}
-        onClose={() => !resettingWeek && setIsResetWeekModalOpen(false)}
-        title="تصفية حسابات الأسبوع وبدء أسبوع جديد 🔄"
-        icon="⚠️"
-        subtitle="إغلاق مستحقات وخصومات الأسبوع الحالي وبدء دورة قبض جديدة"
-        size="md"
-      >
-        <div className="reset-week-body">
-          <div className="reset-alert-box">
-            <AlertTriangle size={24} className="text-warning" />
-            <p>
-              هذا الإجراء سيقوم باعتماد كافة الرواتب والخصومات والسُلف المسجلة في الفترة الحالية كـ <strong>"مسددة"</strong> وبدء أسبوع جديد من الصفر لجميع الموظفين.
-            </p>
-          </div>
-
-          <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-            <Button type="button" variant="secondary" onClick={() => setIsResetWeekModalOpen(false)} disabled={resettingWeek}>
-              تراجع
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              loading={resettingWeek}
-              onClick={handleResetWeek}
-              style={{ background: 'linear-gradient(135deg, #e56273 0%, #c45661 100%)', color: '#fff' }}
-            >
-              تأكيد بدء الأسبوع الجديد
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

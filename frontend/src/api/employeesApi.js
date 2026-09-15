@@ -26,7 +26,10 @@ export const employeesApi = {
   createTransaction: (data) => client.post('/employees/transactions', data).then((res) => res.data),
   getTransactions: (employeeId) => client.get(`/employees/${employeeId}/transactions`).then((res) => res.data),
   deleteTransaction: (id) => client.delete(`/employees/transactions/${id}`).then((res) => res.data),
-  getPayrollSummary: (startDate, endDate) => client.get('/employees/payroll/summary', { params: { startDate, endDate } }).then((res) => res.data),
+  /* One date, not a range. Each employee's period is derived from their own anchor and cycle,
+     so a single window for everyone could never be right for staff paid on different ones. */
+  getPayrollSummary: (on) => client.get('/employees/payroll/summary', { params: { on } }).then((res) => res.data),
   payWeeklySalary: (employeeId, data) => client.post(`/employees/${employeeId}/payroll/payout`, data).then((res) => res.data),
-  resetWeek: (data = {}) => client.post('/employees/payroll/reset-week', data).then((res) => res.data),
+  /* resetWeek is gone. It settled unpaid transactions without paying them, and periods are
+     computed now, so there is nothing to reset. */
 };

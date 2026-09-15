@@ -39,7 +39,9 @@ public class PayrollReceivablesPayablesTest {
 
         WeeklyPayrollSummaryDto summary = new WeeklyPayrollSummaryDto(
                 1L, "أحمد علي", "باريستا",
-                base, deductions, advances, bonuses, net, false, List.of()
+                base, deductions, advances, bonuses, net, false,
+                "WEEKLY", java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 9, 7),
+                List.of()
         );
 
         assertEquals(new BigDecimal("950.00"), summary.netPayable());

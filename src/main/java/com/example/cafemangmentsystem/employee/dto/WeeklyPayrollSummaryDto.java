@@ -14,6 +14,12 @@ public record WeeklyPayrollSummaryDto(
         BigDecimal totalBonuses,
         BigDecimal netPayable,
         boolean isSettled,
+        /* Which period these figures cover, and on what cycle. The screen used to show numbers
+           with no statement of the window they belonged to - and the window was whatever the
+           caller happened to pass, the same one for everybody. */
+        String salaryPeriod,
+        LocalDate periodStart,
+        LocalDate periodEnd,
         List<EmployeeTransactionDto> transactions
 ) {
 }
