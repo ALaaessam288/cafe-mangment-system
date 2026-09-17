@@ -11,6 +11,9 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import DailyReportModal from '../../components/DailyReportModal/DailyReportModal';
+
+/* Width lives here because the placement maths needs it before the panel is rendered. */
+const SHIFT_MENU_W = 264;
 import CashDrawerModal from '../../components/CashDrawerModal/CashDrawerModal';
 import Modal from '../../components/Modal/Modal';
 import Input from '../../components/Input/Input';
@@ -70,7 +73,20 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
   const openShiftMenu = useCallback(() => {
     const rect = shiftMenuBtnRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setShiftMenuAt({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+
+    /* Anchored to the trigger, then clamped into the window.
+       The first version pinned the panel's RIGHT edge to the button's right edge, which is the
+       natural RTL reading and quite wrong here: this button sits near the left of the screen, so
+       a 260px panel hung off the left edge and "قفل الشيفت" was sliced in half by the viewport.
+       Aligning the start edge and clamping both axes means it cannot happen at any width. */
+    const MARGIN = 8;
+    const left = Math.min(
+      Math.max(rect.left, MARGIN),
+      Math.max(MARGIN, window.innerWidth - SHIFT_MENU_W - MARGIN)
+    );
+    const top = Math.min(rect.bottom + 6, Math.max(MARGIN, window.innerHeight - 320));
+
+    setShiftMenuAt({ top, left });
     setShiftMenuOpen(true);
   }, []);
 
@@ -401,7 +417,7 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
               <div
                 className="shift-menu__panel"
                 role="menu"
-                style={{ top: shiftMenuAt.top, right: shiftMenuAt.right }}
+                style={{ top: shiftMenuAt.top, left: shiftMenuAt.left, width: SHIFT_MENU_W }}
               >
                 <button type="button" role="menuitem" className="shift-menu__item"
                   onClick={() => { setShiftMenuOpen(false); setShowStockModal(true); }}>
@@ -425,8 +441,9 @@ export default function ShiftStrip({ shift, refreshKey, onCloseShift }) {
                   </button>
                 )}
 
-                {/* Last, separated, and red. Same confirmation flow as before - only its
+                {/* Last, behind a divider, and red. Same confirmation flow as before - only its
                     neighbours changed. */}
+                <div className="shift-menu__sep" aria-hidden="true" />
                 <button type="button" role="menuitem" className="shift-menu__item shift-menu__item--danger"
                   onClick={() => { setShiftMenuOpen(false); onCloseShift(); }}>
                   <Lock size={15} /><span><strong>قفل الشيفت</strong><small>تسليم الدرج وإنهاء الوردية</small></span>

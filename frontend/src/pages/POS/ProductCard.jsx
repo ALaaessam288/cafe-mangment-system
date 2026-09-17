@@ -3,13 +3,17 @@ import { formatCurrency } from '../../utils/formatters';
 import { isFoodProduct } from './menuGroups';
 
 /**
- * One tap = one item on the bill. Name + price only, nothing else competing
- * for the cashier's eye. The coloured edge is the station indicator
- * (kitchen vs bar) that already existed.
+ * One tap = one item on the bill.
+ *
+ * <p>No photograph. Every card used to carry one - the product's own image if it had one, and
+ * otherwise a stock shot of "food" or "a hot drink" shared with every other item in its half of
+ * the menu. On a wall of small tiles that means most cards show a picture that is not of the
+ * thing being sold, which is worse than no picture: the cashier learns to read past the image to
+ * the name, so the image is costing space and bandwidth to be ignored. The name and the price are
+ * what get read. The coloured edge stays as the station indicator (kitchen vs bar).
  */
 function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
   const food = isFoodProduct(product);
-  const photoSrc = product.image || (food ? '/images/categories/food.jpg' : '/images/categories/hot.jpg');
   return (
     <button
       ref={innerRef}
@@ -25,17 +29,13 @@ function ProductCard({ product, highlighted, onClick, onDetails, innerRef }) {
       }}
       title={`${product.name} — ${formatCurrency(product.price)}\n(كليك يمين: كمية / ملاحظة)`}
     >
-      <img
-        src={photoSrc}
-        className="menu-product__visual"
-        alt=""
-        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-      />
-      <span className="menu-product__shade" aria-hidden="true" />
       <span className="menu-product__name">{product.name}</span>
       <span className="menu-product__footer">
         <span className="menu-product__price">{formatCurrency(product.price)}</span>
-        <span className="menu-product__tap">+ إضافة</span>
+        {/* The "+ إضافة" label was here. It said the same thing on every card on the screen, and
+            what it said - that tapping a product adds it - is the one thing a cashier learns in
+            their first minute and then never needs told again. A line of text repeated forty
+            times that nobody reads is just height, and height is what this card is short of. */}
       </span>
 
       {/* Stock Progress Bar Indicator */}
