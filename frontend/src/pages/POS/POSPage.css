@@ -645,9 +645,10 @@
   cursor: pointer;
   text-align: start;
   transition: all var(--transition-fast);
-  /* Name and price only. 56px is still comfortably past the 44px touch minimum, and roughly a
-     third more tiles fit on the screen than at 76px with a photograph. */
-  height: 56px;
+  /* Content decides the height; the grid decides the columns. A fixed height here was the other
+     half of the problem - it disagreed with the themed rule below, and whichever won, it was
+     never the one being edited. Both now say the same thing. */
+  min-height: 62px;
   position: relative;
   overflow: hidden;
   backdrop-filter: var(--glass-blur);
@@ -2240,27 +2241,10 @@
 .pos-shell--creative .quick-access { padding: 7px 10px; background: rgba(5,10,18,.36); }
 .pos-shell--creative .quick-access__chip { border-radius: 8px; background: rgba(169, 156, 255,.055); }
 
-.pos-shell--creative .menu-products {
-  grid-template-columns: repeat(auto-fill,minmax(118px,1fr));
-  gap: 7px;
-  padding: 9px;
-}
-.pos-shell--creative .menu-product {
-  height: 58px;
-  padding: 6px 8px;
-  gap: 2px;
-  border-radius: 11px 4px 11px 11px;
-  border-color: rgba(218, 211, 255,.13);
-  background: linear-gradient(145deg,rgba(28,37,52,.86),rgba(13,20,31,.94));
-  box-shadow: 0 6px 14px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.028);
-}
-.pos-shell--creative .menu-product::before { height: 3px; right: auto; width: 34%; opacity: .52; background: var(--accent); }
-.pos-shell--creative .menu-product--food::before { background: #fb7f2c; }
-.pos-shell--creative .menu-product--drink::before { background: #22c7d9; }
-.pos-shell--creative .menu-product:hover { transform: translateY(-3px); border-color: rgba(169, 156, 255,.5); box-shadow: 0 12px 22px rgba(0,0,0,.25),0 0 0 1px rgba(169, 156, 255,.08); }
-.pos-shell--creative .menu-product:active { transform: translateY(0) scale(.97); }
-.pos-shell--creative .menu-product__name { max-width: calc(100% - 26px); font-size: 12px; line-height: 1.35; }
-.pos-shell--creative .menu-product__price { font-size: 13px; }
+/* The product tile is defined ONCE, further down, under "PRODUCT TILE".
+   Two full sets of rules for it used to live in this file - this one and another 250 lines below -
+   plus four different heights spread across media queries. Whichever happened to be last won, so
+   every attempt to change the card changed nothing and the real values were somewhere else. */
 
 .pos-shell--creative .pos__order > .pos__panel-header {
   color: #cac5ff;
@@ -2377,14 +2361,11 @@
 
 @media (max-width: 1180px) {
   .pos__menu-title > small { display: none; }
-  .pos-shell--creative .menu-products { grid-template-columns: repeat(auto-fill,minmax(105px,1fr)); }
-  .pos-shell--creative .menu-product { height: 70px; }
 }
 
 @media (max-height: 760px) {
   .pos-shell--creative { padding: 4px; gap: 4px; }
   .pos-shell--creative > .shift-strip { min-height: 36px; padding-block: 4px; }
-  .pos-shell--creative .menu-product { height: 66px; }
   .pos-shell--creative .pos__menu-header { padding-block: 6px; gap: 6px; }
   .pos__menu-title { min-height: 20px; }
   .pos-shell--creative .menu-search__input { height: 34px; }
@@ -2488,79 +2469,134 @@
   overscroll-behavior-y: contain;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   PRODUCT TILE — the one definition
+   ═══════════════════════════════════════════════════════════
+   A name, a price, and two thin strips of state. That is the whole card.
+
+   Sized so the grid decides the columns and the CONTENT decides the height: no grid-auto-rows,
+   no fixed height, no per-breakpoint height overrides. The previous version pinned the card to
+   116px and set padding:0 on it, then positioned the name and price absolutely because they were
+   meant to float over a photograph - so once the photograph went, the text sat hard against the
+   edges of a box three times taller than it needed, which is exactly what it looked like.
+   ═══════════════════════════════════════════════════════════ */
+
 .pos-shell--creative .menu-products {
-  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-  grid-auto-rows: 116px;
-  gap: 10px;
-  padding: 11px;
+  /* auto-fill, not auto-fit: with two products on screen auto-fit would stretch them across the
+     whole width into two enormous tiles. auto-fill keeps the column rhythm the menu will have
+     when it is full. */
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
 }
+
 .pos-shell--creative .menu-product {
-  height: 116px;
-  padding: 0;
+  height: auto;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  /* Bottom padding is larger: the stock bar is pinned to the bottom edge and the price should
+     not sit on top of it. */
+  padding: 9px 10px 11px;
   isolation: isolate;
-  border-radius: 18px 5px 18px 18px;
-  border-inline-start-width: 1px !important;
-  background: #111927;
-  box-shadow: 0 12px 24px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.04);
+  border: 1px solid rgba(218, 211, 255, .11);
+  border-radius: 14px 4px 14px 14px;
+  background: #121926;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .22);
+  transition: transform .12s ease, border-color .12s ease, background .12s ease;
 }
+
+/* The station stripe: kitchen or bar, top corner. The only colour on a resting card, and it is
+   carrying information rather than decorating. */
 .pos-shell--creative .menu-product::before {
+  content: '';
+  position: absolute;
   z-index: 4;
   top: 0;
   right: 0;
   left: auto;
-  width: 42%;
+  width: 38%;
   height: 3px;
   opacity: 1;
   border-radius: 0 0 0 999px;
 }
-/* The photo layers (.menu-product__visual / __shade) and the photo badge were removed with the
-   image itself - see ProductCard. What is left is a small text tile, so the name and price go
-   back into normal flow instead of being absolutely positioned over a picture that is gone. */
+
+.pos-shell--creative .menu-product--food::before  { background: #fb7f2c; }
+.pos-shell--creative .menu-product--drink::before { background: #22c7d9; }
+
+.pos-shell--creative .menu-product:hover {
+  transform: translateY(-2px);
+  border-color: rgba(169, 156, 255, .42);
+  background: #172031;
+}
+
+.pos-shell--creative .menu-product:active { transform: translateY(0) scale(.97); }
+
+/* The name is the card. It gets the space, the weight, and both lines if it needs them. */
 .pos-shell--creative .menu-product__name {
   position: static;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.25;
-  /* Two lines, then ellipsis. A long name used to run under the price badge it was layered
-     over; with no picture there is room to let it wrap instead. */
+  width: 100%;
+  max-width: none;
+  color: #f2f3f7;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -.1px;
+  text-shadow: none;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-shadow: none;
+  overflow-wrap: anywhere;
 }
+
 .pos-shell--creative .menu-product__footer {
   position: static;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  width: 100%;
+  justify-content: flex-start;
+  width: auto;
   margin: 0;
 }
+
+/* Quiet. The cashier reads the name to choose and glances at the price to confirm - so the price
+   is legible and unmistakably a number, without competing with the name for the first look. */
 .pos-shell--creative .menu-product__price {
-  padding: 2px 7px;
-  border: 1px solid rgba(255,185,58,.26);
-  border-radius: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
   color: #ffc65c;
-  /* Was a near-opaque plate, needed to stay legible over a photograph. Over a flat card it is
-     just a dark box around a number. */
-  background: rgba(255,185,58,.07);
-  font-size: 10px;
-  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: -.3px;
 }
+
+/* Stock, as a hairline along the bottom edge. Present when it matters, invisible when it does not. */
 .pos-shell--creative .menu-product__stock-track {
   position: absolute !important;
   z-index: 5;
   right: 0;
   left: 0;
   bottom: 0;
+  height: 3px !important;
   margin: 0 !important;
   border-radius: 0 !important;
 }
+
+/* The "باقي N" / "نفذ" pill, positioned inline by ProductCard. */
 .pos-shell--creative .menu-product > span[style] { z-index: 6; }
+
+.menu-product:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Digital ticket: deliberate perforation and a guided empty journey. */
 .pos-shell--creative .pos__order {
@@ -2665,14 +2701,10 @@
 @media (max-width: 1180px) {
   .pos-shell--creative .pos__tables { width: 205px; }
   .pos-shell--creative .pos__order { width: 300px; }
-  .pos-shell--creative .menu-products { grid-template-columns: repeat(auto-fill,minmax(125px,1fr)); grid-auto-rows: 102px; }
-  .pos-shell--creative .menu-product { height: 102px; }
   .pos-shell--creative .menu-group { min-width: 80px; }
 }
 
 @media (max-height: 760px) {
-  .pos-shell--creative .menu-products { grid-auto-rows: 92px; }
-  .pos-shell--creative .menu-product { height: 92px; }
   .pos-shell--creative .menu-group { min-height: 38px; }
   .pos-shell--creative .menu-group__photo { width: 26px; height: 26px; }
   .pos-empty-orbit { width: 92px; height: 92px; }
