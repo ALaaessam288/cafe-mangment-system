@@ -235,7 +235,37 @@ handler, the button and its modal.
   "frontend/src/pages/Employees/EmployeesPage.css"
 )
 
-Write-Host "=== after ===""""
+Commit "fix(pos): the onboarding tour could brick the screen it was explaining" @"
+The tour is an 86%-black overlay across the whole viewport with pointer events
+enabled. Its only exit was a button on a card, and the card placed itself by
+reading each step's requested side literally against the target's own edges.
+
+That works for a small target and fails completely for a big one. Step 1 asks
+for "bottom" of .pos__tables - a FULL-HEIGHT panel - so the card landed twenty
+pixels past the end of the screen. Step 4 asks for "top" of .shift-strip,
+pinned to the top: same thing upwards. Two of the five steps put the only way
+out of a blocking layer outside the window, and there was no Escape and no
+click-to-dismiss. The app was unusable until someone cleared localStorage -
+which is exactly what it looked like from the outside: an unexplained black box.
+
+The card now measures its own height and clamps into the viewport, Escape ends
+the tour, clicking the dim area ends it, and skip sits in the card header where
+it does not move between steps.
+
+While in here: the spotlight is a bordered box with a 9999px outward box-shadow
+rather than a full-screen div wearing a ten-point clip-path polygon. Same
+picture, rounded corners matching the panel, one rectangle instead of a polygon
+string rebuilt every render, and no separate dimming layer that could paint over
+the card. The card is opaque - it was --bg-card, rgba(17,19,26,.82), a
+near-black translucent card over a near-black screen. Added a step counter, a
+back button, titles, spotlight tracking on scroll (capture phase: the POS panels
+scroll internally and never bubble to window), and prefers-reduced-motion.
+"@ @(
+  "frontend/src/components/OnboardingTour/OnboardingTour.jsx",
+  "frontend/src/components/OnboardingTour/OnboardingTour.css"
+)
+
+Write-Host "=== after ==="""""
 git log --oneline -6
 git status --short
 
