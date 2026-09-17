@@ -308,7 +308,38 @@ scroll internally and never bubble to window), and prefers-reduced-motion.
   "frontend/src/components/OnboardingTour/OnboardingTour.css"
 )
 
-Write-Host "=== after ==="""""
+Commit "fix(pos): the modifier dialog was taller than the screen and closed on a stray tap" @"
+Two problems, one of them costing work.
+
+The overlay carried onClick={onCancel}. Closing on an outside click is fine
+for something you only read; this dialog holds a size, a spice level, a list of
+extras, a quantity and a note - a minute of work on a busy till, thrown away by
+one tap beside the box. Escape and the two buttons close it now, all three
+deliberate.
+
+And it was enormous: one scrolling column where every option group was a
+two-column grid of 47px buttons, sugar a second seven-button grid stacked on
+top of that, then quantity, note, total and actions as four more full-width
+blocks. On a product with three groups it ran off the bottom of the screen.
+
+Rebuilt as a fixed header, one scrolling body of wrapping pills, and a footer
+carrying quantity, total and confirm on a single line. The chips size to their
+own text instead of to a grid column, which is most of the saving - سادة does
+not need the same width as اكسترا سبايسي. Roughly a third of the former height.
+
+Also: the hardcoded sugar row now renders only when the product has no SUGAR
+option group of its own. Otherwise the cashier was asked the same question
+twice, through two widgets with two different storage mechanisms behind them -
+the group writes an option id, the row writes into the note - which can
+disagree.
+
+31 dead .modifier-dialog / .modifier-chip rules removed rather than left
+behind.
+"@ @(
+  "frontend/src/pages/POS/ModifierDialog.jsx"
+)
+
+Write-Host "=== after ===""""""
 git log --oneline -6
 git status --short
 

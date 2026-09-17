@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Minus, Plus, EyeOff, Coffee } from 'lucide-react';
+import { useEffect } from 'react';
+import { Minus, Plus, EyeOff, X } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 
 const SUGAR_NAMES = ['سادة', 'ع الريحة', 'مظبوط', 'زيادة', 'فوق الزيادة', 'سكر برة', 'سكر دايت'];
@@ -136,129 +136,118 @@ export default function ModifierDialog({
     .reduce((sum, o) => sum + parseFloat(o.priceDelta ?? 0), 0);
   const lineTotal = (parseFloat(product.price ?? 0) + extra) * quantity;
 
+  /* The hardcoded sugar row only appears when the product has no SUGAR options of its own.
+     Otherwise the cashier is asked the same question twice, in two different widgets, with two
+     different storage mechanisms behind them - the group writes an option id, this row writes
+     into the note - and the two can disagree. */
+  const hasDbSugarGroup = groupedOptions.some((g) => g.group === 'SUGAR');
+
   return (
-    <div className="pos__open-modal-overlay" onClick={onCancel}>
-      <div className="pos__open-modal modifier-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-        <span className="modifier-dialog__kicker">تخصيص الطلب · OPTION</span>
-        <h3 className="modifier-dialog__title">{product.name}</h3>
-        <p className="modifier-dialog__subtitle">اختار الحجم ومستوى السكر المطلوب</p>
+    /* No onClick on the overlay.
+       Closing on an outside click is fine for something you only read. This dialog holds a size,
+       a spice level, a list of extras, a quantity and a note - a minute of work on a busy till,
+       thrown away by one stray tap beside the box. Escape and the two buttons close it, all three
+       of them deliberate. */
+    <div className="mod-overlay">
+      <div className="mod" role="dialog" aria-modal="true" aria-label={product.name}>
 
-        {/* Section 1: one block per question, so a size and a sugar level stop competing. */}
-        {groupedOptions.map((section) => (
-          <div key={section.group} style={{ marginBottom: '14px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 800, color: '#d2cfdd', display: 'block', marginBottom: '8px' }}>
-              {section.label} {section.group === 'ADDON' ? '(اختيار متعدد):' : '(اختيار واحد):'}
-            </span>
-            <div className="modifier-dialog__options">
-              {section.items.map((option) => {
-                const selected = selectedIds.includes(option.id);
-                const delta = parseFloat(option.priceDelta ?? 0);
-                return (
+        <header className="mod__head">
+          <div className="mod__id">
+            <strong>{product.name}</strong>
+            <small>{formatCurrency(product.price)}</small>
+          </div>
+          <button type="button" className="mod__x" onClick={onCancel} aria-label="إلغاء">
+            <X size={16} />
+          </button>
+        </header>
+
+        <div className="mod__body">
+          {groupedOptions.map((section) => (
+            <section key={section.group} className="mod__group">
+              <span className="mod__label">
+                {section.label}
+                <em>{section.group === 'ADDON' ? 'اختار اللي تحبه' : 'اختيار واحد'}</em>
+              </span>
+              <div className="mod__chips">
+                {section.items.map((option) => {
+                  const selected = selectedIds.includes(option.id);
+                  const delta = parseFloat(option.priceDelta ?? 0);
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`mod__chip ${selected ? 'is-on' : ''}`}
+                      onClick={() => handleOptionSelect(option.id)}
+                      aria-pressed={selected}
+                    >
+                      {option.nameAr}
+                      {delta !== 0 && (
+                        <span className="mod__delta">
+                          {delta > 0 ? '+' : '−'}{formatCurrency(Math.abs(delta))}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+
+          {!hasDbSugarGroup && (
+            <section className="mod__group">
+              <span className="mod__label">السكر<em>اختيار واحد</em></span>
+              <div className="mod__chips">
+                {SUGAR_NAMES.map((s) => (
                   <button
-                    key={option.id}
+                    key={s}
                     type="button"
-                    className={`modifier-chip ${selected ? 'modifier-chip--selected' : ''}`}
-                    onClick={() => handleOptionSelect(option.id)}
-                    aria-pressed={selected}
+                    className={`mod__chip ${currentSugar === s ? 'is-on is-sugar' : ''}`}
+                    onClick={() => handleSugarSelect(s)}
+                    aria-pressed={currentSugar === s}
                   >
-                    <span className="modifier-chip__name">{option.nameAr}</span>
-                    {delta !== 0 && (
-                      <span className="modifier-chip__delta">
-                        {delta > 0 ? '+' : '-'}{formatCurrency(Math.abs(delta))}
-                      </span>
-                    )}
+                    {s}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                ))}
+              </div>
+            </section>
+          )}
 
-        {/* Section 2: Sugar Selector (Single Choice) */}
-        <div style={{ marginBottom: '14px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, color: '#d2cfdd', display: 'block', marginBottom: '8px' }}>
-            🍬 مستوى السكر (اختيار واحد):
-          </span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-            {['سادة', 'ع الريحة', 'مظبوط', 'زيادة', 'فوق الزيادة', 'سكر برة', 'سكر دايت'].map((s) => {
-              const isSelected = currentSugar === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  style={{
-                    border: isSelected ? '1.5px solid #64d7bd' : '1px solid rgba(255,255,255,0.09)',
-                    borderRadius: '8px',
-                    padding: '8px 4px',
-                    fontSize: '12px',
-                    background: isSelected ? '#64d7bd' : 'rgba(255,255,255,0.03)',
-                    color: isSelected ? '#0d0e14' : '#dcd1c6',
-                    fontWeight: isSelected ? 900 : 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.14s',
-                    textAlign: 'center',
-                  }}
-                  onClick={() => handleSugarSelect(s)}
-                >
-                  {s}
-                </button>
-              );
-            })}
-          </div>
+          <input
+            className="mod__note"
+            placeholder="ملاحظة للبار أو المطبخ…"
+            value={note}
+            onChange={(e) => onNoteChange(e.target.value)}
+          />
+
+          {onMarkUnavailable && (
+            <button type="button" className="mod__eightysix" onClick={onMarkUnavailable}>
+              <EyeOff size={13} /> الصنف خلص — اخفيه من الكاشير
+            </button>
+          )}
         </div>
 
-        {/* Quantity Controls */}
-        <div className="modifier-dialog__qty" style={{ margin: '10px 0' }}>
-          <span>الكمية</span>
-          <div className="modifier-dialog__qty-controls">
-            <button
-              type="button"
-              className="order-item__qty-btn"
-              onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
-              aria-label="تقليل الكمية"
-            >
+        {/* Quantity, total and the decision on one line. They were four stacked blocks costing
+            about 200px of a dialog that was already taller than the screen. */}
+        <footer className="mod__foot">
+          <div className="mod__qty">
+            <button type="button" onClick={() => onQuantityChange(Math.max(1, quantity - 1))} aria-label="تقليل الكمية">
               <Minus size={14} />
             </button>
-            <span className="modifier-dialog__qty-value">{quantity}</span>
-            <button
-              type="button"
-              className="order-item__qty-btn order-item__qty-btn--add"
-              onClick={() => onQuantityChange(Math.min(99, quantity + 1))}
-              aria-label="زيادة الكمية"
-            >
+            <span>{quantity}</span>
+            <button type="button" onClick={() => onQuantityChange(Math.min(99, quantity + 1))} aria-label="زيادة الكمية">
               <Plus size={14} />
             </button>
           </div>
-        </div>
 
-        {/* Note Textarea */}
-        <textarea
-          className="modifier-dialog__note"
-          placeholder="ملاحظة إضافية للبار أو المطبخ..."
-          rows={2}
-          value={note}
-          onChange={(e) => onNoteChange(e.target.value)}
-        />
+          <div className="mod__total">
+            <small>الإجمالي</small>
+            <strong>{formatCurrency(lineTotal)}</strong>
+          </div>
 
-        <div className="modifier-dialog__total">
-          <span>الإجمالي</span>
-          <span>{formatCurrency(lineTotal)}</span>
-        </div>
-
-        {onMarkUnavailable && (
-          <button type="button" className="modifier-dialog__eightysix" onClick={onMarkUnavailable}>
-            <EyeOff size={14} /> الصنف خلص — إخفاؤه من الكاشير
+          <button type="button" className="btn btn--primary mod__go" onClick={onConfirm} autoFocus>
+            إضافة
           </button>
-        )}
-
-        <div className="pos__open-actions">
-          <button type="button" className="btn btn--secondary btn--md" onClick={onCancel}>
-            إلغاء
-          </button>
-          <button type="button" className="btn btn--primary btn--md" onClick={onConfirm} autoFocus>
-            إضافة للطلب
-          </button>
-        </div>
+        </footer>
       </div>
     </div>
   );
