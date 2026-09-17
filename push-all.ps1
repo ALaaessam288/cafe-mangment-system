@@ -86,6 +86,40 @@ reason is no longer recorded. Who voided what, and when, still is.
   "frontend/src/components/ConfirmVoidModal/ConfirmVoidModal.css"
 )
 
+Commit "refactor(pos): drop the photographs from the product cards" @"
+Every card carried an image: the product's own if it had one, otherwise a
+stock shot of "food" or "a hot drink" shared with every other item in its half
+of the menu. On a wall of small tiles that means most cards showed a picture
+that is not of the thing being sold - which is worse than no picture, because
+the cashier learns to read past the image to the name, and the image is then
+costing space and bandwidth to be ignored.
+
+With the photo gone the name and price go back into normal flow instead of
+being absolutely positioned over it, the name may wrap to two lines instead of
+running under the price badge it used to be layered on, and the price loses the
+opaque plate it needed for contrast against a photograph. The station colour
+stays as the one visual cue that was actually carrying information.
+
+.menu-product__visual, __shade and __photo-badge are removed rather than left
+behind as unreachable CSS.
+
+The tile is then shrunk to fit more menu on one screen: 76px tall with a photo
+becomes 56px with a name and a price, the grid minimum drops from 110px to
+96px, and the type comes down a notch. Roughly a third more products are
+visible without scrolling, which on a long menu is the difference between
+reaching an item and hunting for it.
+
+The "+ إضافة" chip goes too. It said the same thing on every card on screen,
+and what it said - that tapping a product adds it - is the one thing a cashier
+learns in their first minute and never needs told again. Forty repetitions of
+a sentence nobody reads is just height, and height is what this card was short
+of. The price stays: it is small, it costs no extra line beside the name, and a
+till where you cannot see what something costs is a till that sends someone to
+go and look it up.
+"@ @(
+  "frontend/src/pages/POS/ProductCard.jsx"
+)
+
 Commit "refactor(pos): give the menu the screen, and say the status in words" @"
 The table picker collapses once a table is chosen, with a badge above the menu
 keeping the choice visible. Status is spoken, not coloured: tableStatus.js
@@ -101,6 +135,15 @@ Found by looking at the running till: the shift strip was overflow-x: auto, so
 the new dropdown was clipped to a 48px band and looked dead; and the collapsed
 table rail never got narrow, because a themed width later in the stylesheet at
 equal specificity beat it.
+
+The إدارة الشيفت panel is portaled to document.body and positioned from the
+trigger's rect, because as a child of the strip it lost to three separate
+mechanisms at once: the strip's own overflow clip, the shell's isolation:
+isolate, and the backdrop-filter on each POS panel making it a later stacking
+context. Its placement pinned the panel's RIGHT edge to the button's right edge
+- the natural RTL reading, and wrong here, because this button sits near the
+left of the screen, so the panel hung off the left edge and قفل الشيفت was
+sliced in half. It now aligns its start edge and clamps both axes.
 
 The ticket column was compacted - chips instead of three adjustment rows, an
 icon row instead of three full-width buttons, no subtotal line when nothing
