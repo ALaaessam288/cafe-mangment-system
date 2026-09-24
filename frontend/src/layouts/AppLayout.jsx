@@ -213,10 +213,10 @@ export default function AppLayout({ children }) {
             <span className="app-topbar__dot" />
           </button>
 
-          {/* Shortcuts Modal Trigger */}
+          {/* Shortcuts Modal Trigger — a keyboard cheat-sheet has nothing to offer a touch screen */}
           <button
             type="button"
-            className="app-topbar__action-btn"
+            className="app-topbar__action-btn app-topbar__action-btn--shortcuts"
             onClick={() => { sounds.playTap(); setIsShortcutsOpen(true); }}
             title="اختصارات لوحة المفاتيح (F1)"
             aria-label="اختصارات لوحة المفاتيح"
@@ -227,7 +227,7 @@ export default function AppLayout({ children }) {
           {/* Fullscreen Button */}
           <button
             type="button"
-            className="app-topbar__action-btn"
+            className="app-topbar__action-btn app-topbar__action-btn--fullscreen"
             onClick={toggleFullscreen}
             title={isFullscreen ? 'تصغير الشاشة' : 'ملء الشاشة بالكامل (F11)'}
             aria-label="ملء الشاشة"

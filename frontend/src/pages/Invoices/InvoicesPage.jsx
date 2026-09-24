@@ -15,7 +15,7 @@ import {
   CheckCircle2, Clock, Ban, Calendar, Filter, 
   ChevronDown, Layers, FileText, Trash2, Download, 
   Bike, Smartphone, LayoutGrid, Table, Eye, Check,
-  ArrowUpDown, Sparkles
+  ArrowUpDown, Sparkles, X
 } from 'lucide-react';
 import './InvoicesPage.css';
 import { printReceipt, buildReceiptHtml } from '../../utils/printUtils';
@@ -945,10 +945,22 @@ ${parseFloat(target.amountPaid) > 0 ? `💵 *المدفوع:* ${formatCurrency(t
           )}
         </div>
 
-        {/* Right: Authentic Thermal Receipt Inspector */}
-        <div className="invoice-inspector-panel">
+        {/* Right: Authentic Thermal Receipt Inspector.
+            On a phone the two panes cannot sit side by side (see InvoicesPage.css), so this
+            becomes a full-screen sheet that only occupies space once an order is selected -
+            the --open modifier and the close button below exist for that narrow-viewport case. */}
+        <div className={`invoice-inspector-panel ${selectedOrder ? 'invoice-inspector-panel--open' : ''}`}>
           {selectedOrder ? (
             <div className="invoice-inspector-wrapper">
+              <button
+                type="button"
+                className="invoice-inspector-close-mobile"
+                onClick={() => setSelectedOrder(null)}
+                aria-label="إغلاق تفاصيل الفاتورة"
+                title="إغلاق"
+              >
+                <X size={18} />
+              </button>
               <div className="thermal-receipt-paper" id="print-receipt">
                 {/* Paper Header Tear */}
                 <div className="thermal-receipt__tear thermal-receipt__tear--top" />

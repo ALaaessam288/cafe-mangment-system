@@ -918,6 +918,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   background: rgba(18, 23, 36, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
@@ -1486,4 +1488,102 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════
+   RESPONSIVE — this screen was built for a desktop split view
+   (order stream + a docked receipt inspector that never moves), which on a
+   phone leaves no room for either pane. Below the breakpoint the header
+   wraps instead of clipping, the KPI strip drops to two columns instead of
+   squeezing four, and the inspector stops being a permanent 310px-wide
+   column and becomes a full-screen sheet that only exists once an order is
+   actually selected.
+   ═══════════════════════════════════════ */
+.invoice-inspector-close-mobile {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .invoices-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .invoices-workspace {
+    position: relative;
+  }
+
+  .invoice-inspector-panel {
+    position: fixed;
+    inset: 0;
+    max-width: none;
+    min-width: 0;
+    z-index: 60;
+    border-radius: 0;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  }
+
+  .invoice-inspector-panel--open {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .invoice-inspector-close-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: #d2cfdd;
+    cursor: pointer;
+  }
+
+  .invoice-inspector-close-mobile:hover {
+    background: rgba(229, 98, 115, 0.2);
+    color: #e56273;
+  }
+}
+
+@media (max-width: 700px) {
+  .invoices-header {
+    flex-wrap: wrap;
+  }
+
+  .invoices-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .invoices-header__subtitle {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .invoices-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .kpi-glass-card__label {
+    display: none;
+  }
+
+  .filter-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-pill-box {
+    min-width: 0;
+  }
 }
