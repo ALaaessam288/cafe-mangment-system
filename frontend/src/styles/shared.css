@@ -19,6 +19,12 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  /* Every column keeps `white-space: nowrap` below, so a table with enough columns is wider
+     than a phone screen. `overflow:hidden` above stays - it clips to the rounded corners on the
+     axis that never needs to move - and this adds the one that does, instead of the row just
+     getting clipped or the whole page gaining a horizontal scrollbar around everything else. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-md);
 }
 
@@ -413,5 +419,17 @@
   .app-layout--admin .page__header { align-items: flex-start; flex-direction: column; min-height: auto; }
   .app-layout--admin .page__actions { width: 100%; padding-inline-start: 0; }
   .app-layout--admin .page__actions > * { flex: 1; }
+}
+
+/* The stacking above was written for the admin workspace only, but a supervisor or a cashier
+   lands on these exact same shared pages (Expenses, Employees, Invoices, Reports...) without the
+   `.app-layout--admin` class, so it never applied for them - their page headers just clipped
+   instead of wrapping. This is the same fix, unscoped, so every role gets it. */
+@media (max-width: 760px) {
+  .page__header { align-items: flex-start; flex-direction: column; min-height: auto; }
+  .page__actions { width: 100%; padding-inline-start: 0; }
+  .page__actions > * { flex: 1; }
+  .page { padding: 12px; }
+  .page-filters__search { min-width: 0; }
 }
 

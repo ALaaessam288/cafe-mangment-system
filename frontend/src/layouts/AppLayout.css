@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* keeps the topbar/sidebar from fighting a mobile browser's address bar */
   width: 100vw;
   overflow: hidden;
   background: var(--bg-app);
@@ -30,6 +31,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .app-topbar__menu-btn {
@@ -67,6 +69,14 @@
   font-size: 12px;
   font-weight: var(--fw-black);
   color: var(--text-primary);
+  min-width: 0;
+}
+
+.app-topbar__brand-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-topbar__brand-icon {
@@ -228,6 +238,49 @@
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 6px var(--accent);
+}
+
+/* Small-screen topbar: the bar is 100vw with a search pill, a clock, four
+   icon buttons and a user chip in it - room enough on a desktop, nowhere
+   near enough on a phone. Below the breakpoint this drops everything that
+   is a convenience rather than a function (search text, the date, the
+   keyboard-shortcuts sheet, a fullscreen toggle a touch screen has no use
+   for, the user's name) so what is left actually fits in 100vw instead of
+   silently overflowing it. This is unscoped - it applies to every screen a
+   cashier, supervisor or admin opens, not only the POS screen, which has
+   its own separate (and separately overridden) compact topbar above. */
+@media (max-width: 640px) {
+  .app-topbar { padding: 0 6px; }
+  .app-topbar__start { gap: 6px; }
+  .app-topbar__end { gap: 4px; }
+  .app-topbar__menu-label { display: none; }
+  .app-topbar__brand-name { max-width: 84px; }
+
+  .app-topbar__search-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .app-topbar__search-placeholder,
+  .app-topbar__search-kbd { display: none; }
+
+  .app-topbar__clock-chip { padding: 2px 7px; }
+  .app-topbar__date,
+  .app-topbar__clock-divider { display: none; }
+
+  .app-topbar__action-btn--shortcuts,
+  .app-topbar__action-btn--fullscreen { display: none; }
+
+  .app-topbar__user-chip { padding: 2px 5px; }
+  .app-topbar__user-name,
+  .app-topbar__role-badge { display: none; }
+}
+
+@media (max-width: 420px) {
+  .app-topbar__brand-name { display: none; }
+  .app-topbar__clock-chip { display: none; }
 }
 
 /* POS command header: quieter chrome, clearer groups, more room for selling. */
@@ -515,6 +568,7 @@
   flex: 1;
   min-width: 0;
   height: calc(100vh - 38px);
+  height: calc(100dvh - 38px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
