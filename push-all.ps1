@@ -339,7 +339,54 @@ behind.
   "frontend/src/pages/POS/ModifierDialog.jsx"
 )
 
-Write-Host "=== after ===""""""
+Commit "feat(stations): a third station - the fridge - with its own ticket and its own line in the report" @"
+A bottle of water and a can of soft drink are not prepared anywhere. With only
+KITCHEN and BAR to choose from they were filed under the kitchen, so the chef
+was handed a slip asking for two waters he has nothing to do with, and the
+person who actually fetches them - standing at the cooler - got no slip at all.
+
+The backend already prints one ticket per station, so on that side the feature
+is an enum value, a label, a seeded row and a migration that backfills every
+existing tenant (a station only new tenants get is a station the cafe that
+asked for it does not have).
+
+The frontend was the actual bug. printStationTickets read:
+
+    const station = (rawStation === 'BAR' || rawRev === 'BUFFET') ? 'BAR' : 'KITCHEN';
+
+A two-way switch dressed as a lookup: anything that was not the bar became the
+kitchen. The comment directly above it claimed the item's own stationSnapshot
+decided who prepares it. It does now, and an unrecognised station gets its own
+slip under a neutral heading rather than being posted to whoever is left.
+
+Reports: station is not the same question as revenue line. Revenue line says
+which side of the business earned the money; station says who made it. Those
+were the same two-way split while there were only a kitchen and a bar, so
+nobody had to tell them apart - a fridge breaks the coincidence, because its
+water is BUFFET money the bar never touched. ShiftReportResponse gains a
+per-station breakdown, and the WhatsApp close-out names each station and its
+take when there is more than one, which is the number that says what to
+restock before tomorrow.
+
+FRIDGE also gets its own printer slot in the per-terminal settings; an
+unmapped station still falls back to the default printer, so a till configured
+before today cannot silently drop its slips.
+"@ @(
+  "src/main/java/com/example/cafemangmentsystem/station/entity/StationCode.java",
+  "src/main/java/com/example/cafemangmentsystem/printing/PrintJobService.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/MenuTemplateService.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/WanasMenuSeeder.java",
+  "src/main/java/com/example/cafemangmentsystem/order/repository/OrderItemRepository.java",
+  "src/main/java/com/example/cafemangmentsystem/shift/ShiftService.java",
+  "src/main/java/com/example/cafemangmentsystem/shift/ShiftNotifier.java",
+  "src/main/java/com/example/cafemangmentsystem/shift/dto/ShiftReportResponse.java",
+  "src/main/resources/db/migration/V13__fridge_station.sql",
+  "src/test/java/com/example/cafemangmentsystem/station/StationRoutingTest.java",
+  "frontend/src/pages/POS/POSPage.jsx",
+  "frontend/src/utils/printerSettings.js"
+)
+
+Write-Host "=== after ==="
 git log --oneline -6
 git status --short
 
