@@ -1213,13 +1213,18 @@ export default function POSPage() {
       return grouped;
     }
 
-    // Group by station, preserving the order stations were first seen in.
+    /* Group by the station the item actually belongs to.
+       This used to read
+           const station = (rawStation === 'BAR' || rawRev === 'BUFFET') ? 'BAR' : 'KITCHEN';
+       which is a two-way switch dressed as a lookup: anything that was not the bar became the
+       kitchen. So a bottle of water from the fridge printed on the chef's slip, and the person at
+       the cooler got nothing - while the comment above this function claimed the item's own
+       stationSnapshot decided. It does now. A station the client does not recognise gets its own
+       slip under a neutral heading rather than being posted to whoever is left. */
     const byStation = new Map();
     items.forEach((item) => {
       const prod = state.products.find((p) => p.id === item.productId);
-      const rawStation = item.stationSnapshot || prod?.stationCode;
-      const rawRev = item.revenueLineSnapshot || prod?.revenueLine;
-      const station = (rawStation === 'BAR' || rawRev === 'BUFFET') ? 'BAR' : 'KITCHEN';
+      const station = item.stationSnapshot || prod?.stationCode || 'KITCHEN';
       if (!byStation.has(station)) byStation.set(station, []);
       byStation.get(station).push(item);
     });
@@ -1227,6 +1232,7 @@ export default function POSPage() {
     const LABELS = {
       KITCHEN: 'المطبخ  /  المطعم',
       BAR:     'البار  /  البوفيه',
+      FRIDGE:  'الثلاجة  /  مياه وكانز',
     };
 
     const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -1243,7 +1249,7 @@ export default function POSPage() {
         time,
         waiterName: user?.fullName,
         ticketType,
-        label: LABELS[station],
+        label: LABELS[station] || 'تجهيز',
       });
       // Each station's slip goes to that station's printer. Jobs are queued
       // serially in the Electron main process, so two tickets never race.

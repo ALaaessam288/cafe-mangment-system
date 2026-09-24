@@ -36,6 +36,22 @@ public class EmployeePayrollService {
         Employee employee = employeeRepository.findById(request.employeeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
 
+        /* A deduction must say why.
+         *
+         * It is the one transaction here that takes money out of someone's wage, and the person
+         * it is taken from is not in the room when it is recorded. An unexplained deduction is
+         * unanswerable a week later - nobody can confirm it, correct it, or defend it - and it
+         * is the line the shift report reads out to the owner on WhatsApp by name and amount.
+         * Advances and bonuses are not gated: the employee was standing there for both.
+         *
+         * Enforced here rather than only in the form, because the form is not the only caller and
+         * a rule that lives in a screen is a rule that an API call walks straight past. */
+        if (request.type() == EmployeeTransactionType.DEDUCTION
+                && (request.notes() == null || request.notes().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "لازم تكتب سبب الخصم.");
+        }
+
         LocalDate txDate = request.transactionDate() != null ? request.transactionDate() : LocalDate.now();
 
         EmployeeTransaction transaction = new EmployeeTransaction();

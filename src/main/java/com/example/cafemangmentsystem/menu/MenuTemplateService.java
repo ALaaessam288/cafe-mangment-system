@@ -34,6 +34,10 @@ public class MenuTemplateService {
     public void seedTemplate(String templateId) {
         Station barStation = getOrCreateStation(StationCode.BAR, "البوفيه / البار");
         Station kitchenStation = getOrCreateStation(StationCode.KITCHEN, "المطبخ");
+        // Created for every tenant even when the template puts nothing in it, so the choice is
+        // there the first time someone adds a bottle of water rather than after they ask why
+        // the chef keeps getting slips for it.
+        getOrCreateStation(StationCode.FRIDGE, "الثلاجة");
 
         if ("CLASSIC_CAFE".equalsIgnoreCase(templateId)) {
             Category drinks = new Category();

@@ -42,6 +42,25 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
            "AND o.status != com.example.cafemangmentsystem.order.entity.OrderStatus.VOIDED")
     List<OrderItem> findAllActiveByShiftId(@Param("shiftId") Long shiftId);
 
+    /**
+     * Sales for one shift grouped by the station that prepared them.
+     *
+     * <p>Revenue line answers "which side of the business earned this"; station answers "who made
+     * it". They were the same two-way split while there were only a kitchen and a bar, so nobody
+     * had to tell them apart. A fridge breaks the coincidence: its water is BUFFET money that the
+     * bar never touched, so a report built only on revenue line can no longer say how much came
+     * off the cooler - which is the number needed to know what to restock.
+     */
+    @Query("SELECT oi.stationSnapshot, " +
+           "COALESCE(SUM(oi.unitPriceSnapshot * oi.quantity - oi.discountAmount), 0), " +
+           "COALESCE(SUM(oi.quantity), 0) " +
+           "FROM OrderItem oi JOIN oi.order o " +
+           "WHERE o.shift.id = :shiftId " +
+           "AND oi.status != com.example.cafemangmentsystem.order.entity.OrderItemStatus.CANCELLED " +
+           "AND o.status != com.example.cafemangmentsystem.order.entity.OrderStatus.VOIDED " +
+           "GROUP BY oi.stationSnapshot")
+    List<Object[]> sumByShiftIdGroupedByStation(@Param("shiftId") Long shiftId);
+
     @Query("SELECT oi.productNameSnapshot, SUM(oi.quantity), " +
            "COALESCE(SUM(oi.unitPriceSnapshot * oi.quantity - oi.discountAmount), 0) " +
            "FROM OrderItem oi JOIN oi.order o " +

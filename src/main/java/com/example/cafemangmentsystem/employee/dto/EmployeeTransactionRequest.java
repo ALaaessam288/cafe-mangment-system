@@ -11,6 +11,9 @@ public record EmployeeTransactionRequest(
         @NotNull Long employeeId,
         @NotNull EmployeeTransactionType type,
         @NotNull @Positive BigDecimal amount,
+        /* Required for DEDUCTION - see EmployeePayrollService.createTransaction. Not annotated
+           @NotBlank because it is only mandatory for one of the three types, and a bean-validation
+           annotation cannot say "unless this other field is ADVANCE". */
         String notes,
         LocalDate transactionDate,
         Boolean paidFromDrawer

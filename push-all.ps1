@@ -86,6 +86,40 @@ reason is no longer recorded. Who voided what, and when, still is.
   "frontend/src/components/ConfirmVoidModal/ConfirmVoidModal.css"
 )
 
+Commit "refactor(pos): drop the photographs from the product cards" @"
+Every card carried an image: the product's own if it had one, otherwise a
+stock shot of "food" or "a hot drink" shared with every other item in its half
+of the menu. On a wall of small tiles that means most cards showed a picture
+that is not of the thing being sold - which is worse than no picture, because
+the cashier learns to read past the image to the name, and the image is then
+costing space and bandwidth to be ignored.
+
+With the photo gone the name and price go back into normal flow instead of
+being absolutely positioned over it, the name may wrap to two lines instead of
+running under the price badge it used to be layered on, and the price loses the
+opaque plate it needed for contrast against a photograph. The station colour
+stays as the one visual cue that was actually carrying information.
+
+.menu-product__visual, __shade and __photo-badge are removed rather than left
+behind as unreachable CSS.
+
+The tile is then shrunk to fit more menu on one screen: 76px tall with a photo
+becomes 56px with a name and a price, the grid minimum drops from 110px to
+96px, and the type comes down a notch. Roughly a third more products are
+visible without scrolling, which on a long menu is the difference between
+reaching an item and hunting for it.
+
+The "+ إضافة" chip goes too. It said the same thing on every card on screen,
+and what it said - that tapping a product adds it - is the one thing a cashier
+learns in their first minute and never needs told again. Forty repetitions of
+a sentence nobody reads is just height, and height is what this card was short
+of. The price stays: it is small, it costs no extra line beside the name, and a
+till where you cannot see what something costs is a till that sends someone to
+go and look it up.
+"@ @(
+  "frontend/src/pages/POS/ProductCard.jsx"
+)
+
 Commit "refactor(pos): give the menu the screen, and say the status in words" @"
 The table picker collapses once a table is chosen, with a badge above the menu
 keeping the choice visible. Status is spoken, not coloured: tableStatus.js
@@ -101,6 +135,15 @@ Found by looking at the running till: the shift strip was overflow-x: auto, so
 the new dropdown was clipped to a 48px band and looked dead; and the collapsed
 table rail never got narrow, because a themed width later in the stylesheet at
 equal specificity beat it.
+
+The إدارة الشيفت panel is portaled to document.body and positioned from the
+trigger's rect, because as a child of the strip it lost to three separate
+mechanisms at once: the strip's own overflow clip, the shell's isolation:
+isolate, and the backdrop-filter on each POS panel making it a later stacking
+context. Its placement pinned the panel's RIGHT edge to the button's right edge
+- the natural RTL reading, and wrong here, because this button sits near the
+left of the screen, so the panel hung off the left edge and قفل الشيفت was
+sliced in half. It now aligns its start edge and clamps both axes.
 
 The ticket column was compacted - chips instead of three adjustment rows, an
 icon row instead of three full-width buttons, no subtotal line when nothing
@@ -235,7 +278,115 @@ handler, the button and its modal.
   "frontend/src/pages/Employees/EmployeesPage.css"
 )
 
-Write-Host "=== after ===""""
+Commit "fix(pos): the onboarding tour could brick the screen it was explaining" @"
+The tour is an 86%-black overlay across the whole viewport with pointer events
+enabled. Its only exit was a button on a card, and the card placed itself by
+reading each step's requested side literally against the target's own edges.
+
+That works for a small target and fails completely for a big one. Step 1 asks
+for "bottom" of .pos__tables - a FULL-HEIGHT panel - so the card landed twenty
+pixels past the end of the screen. Step 4 asks for "top" of .shift-strip,
+pinned to the top: same thing upwards. Two of the five steps put the only way
+out of a blocking layer outside the window, and there was no Escape and no
+click-to-dismiss. The app was unusable until someone cleared localStorage -
+which is exactly what it looked like from the outside: an unexplained black box.
+
+The card now measures its own height and clamps into the viewport, Escape ends
+the tour, clicking the dim area ends it, and skip sits in the card header where
+it does not move between steps.
+
+While in here: the spotlight is a bordered box with a 9999px outward box-shadow
+rather than a full-screen div wearing a ten-point clip-path polygon. Same
+picture, rounded corners matching the panel, one rectangle instead of a polygon
+string rebuilt every render, and no separate dimming layer that could paint over
+the card. The card is opaque - it was --bg-card, rgba(17,19,26,.82), a
+near-black translucent card over a near-black screen. Added a step counter, a
+back button, titles, spotlight tracking on scroll (capture phase: the POS panels
+scroll internally and never bubble to window), and prefers-reduced-motion.
+"@ @(
+  "frontend/src/components/OnboardingTour/OnboardingTour.jsx",
+  "frontend/src/components/OnboardingTour/OnboardingTour.css"
+)
+
+Commit "fix(pos): the modifier dialog was taller than the screen and closed on a stray tap" @"
+Two problems, one of them costing work.
+
+The overlay carried onClick={onCancel}. Closing on an outside click is fine
+for something you only read; this dialog holds a size, a spice level, a list of
+extras, a quantity and a note - a minute of work on a busy till, thrown away by
+one tap beside the box. Escape and the two buttons close it now, all three
+deliberate.
+
+And it was enormous: one scrolling column where every option group was a
+two-column grid of 47px buttons, sugar a second seven-button grid stacked on
+top of that, then quantity, note, total and actions as four more full-width
+blocks. On a product with three groups it ran off the bottom of the screen.
+
+Rebuilt as a fixed header, one scrolling body of wrapping pills, and a footer
+carrying quantity, total and confirm on a single line. The chips size to their
+own text instead of to a grid column, which is most of the saving - سادة does
+not need the same width as اكسترا سبايسي. Roughly a third of the former height.
+
+Also: the hardcoded sugar row now renders only when the product has no SUGAR
+option group of its own. Otherwise the cashier was asked the same question
+twice, through two widgets with two different storage mechanisms behind them -
+the group writes an option id, the row writes into the note - which can
+disagree.
+
+31 dead .modifier-dialog / .modifier-chip rules removed rather than left
+behind.
+"@ @(
+  "frontend/src/pages/POS/ModifierDialog.jsx"
+)
+
+Commit "feat(stations): a third station - the fridge - with its own ticket and its own line in the report" @"
+A bottle of water and a can of soft drink are not prepared anywhere. With only
+KITCHEN and BAR to choose from they were filed under the kitchen, so the chef
+was handed a slip asking for two waters he has nothing to do with, and the
+person who actually fetches them - standing at the cooler - got no slip at all.
+
+The backend already prints one ticket per station, so on that side the feature
+is an enum value, a label, a seeded row and a migration that backfills every
+existing tenant (a station only new tenants get is a station the cafe that
+asked for it does not have).
+
+The frontend was the actual bug. printStationTickets read:
+
+    const station = (rawStation === 'BAR' || rawRev === 'BUFFET') ? 'BAR' : 'KITCHEN';
+
+A two-way switch dressed as a lookup: anything that was not the bar became the
+kitchen. The comment directly above it claimed the item's own stationSnapshot
+decided who prepares it. It does now, and an unrecognised station gets its own
+slip under a neutral heading rather than being posted to whoever is left.
+
+Reports: station is not the same question as revenue line. Revenue line says
+which side of the business earned the money; station says who made it. Those
+were the same two-way split while there were only a kitchen and a bar, so
+nobody had to tell them apart - a fridge breaks the coincidence, because its
+water is BUFFET money the bar never touched. ShiftReportResponse gains a
+per-station breakdown, and the WhatsApp close-out names each station and its
+take when there is more than one, which is the number that says what to
+restock before tomorrow.
+
+FRIDGE also gets its own printer slot in the per-terminal settings; an
+unmapped station still falls back to the default printer, so a till configured
+before today cannot silently drop its slips.
+"@ @(
+  "src/main/java/com/example/cafemangmentsystem/station/entity/StationCode.java",
+  "src/main/java/com/example/cafemangmentsystem/printing/PrintJobService.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/MenuTemplateService.java",
+  "src/main/java/com/example/cafemangmentsystem/menu/WanasMenuSeeder.java",
+  "src/main/java/com/example/cafemangmentsystem/order/repository/OrderItemRepository.java",
+  "src/main/java/com/example/cafemangmentsystem/shift/ShiftService.java",
+  "src/main/java/com/example/cafemangmentsystem/shift/ShiftNotifier.java",
+  "src/main/java/com/example/cafemangmentsystem/shift/dto/ShiftReportResponse.java",
+  "src/main/resources/db/migration/V13__fridge_station.sql",
+  "src/test/java/com/example/cafemangmentsystem/station/StationRoutingTest.java",
+  "frontend/src/pages/POS/POSPage.jsx",
+  "frontend/src/utils/printerSettings.js"
+)
+
+Write-Host "=== after ==="
 git log --oneline -6
 git status --short
 

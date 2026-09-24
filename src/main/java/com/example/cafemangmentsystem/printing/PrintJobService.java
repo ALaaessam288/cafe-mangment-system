@@ -177,6 +177,7 @@ public class PrintJobService {
         return switch (code) {
             case KITCHEN -> "المطبخ  /  الشيف";
             case BAR -> "المشروبات  /  الباريستا";
+            case FRIDGE -> "الثلاجة  /  مياه وكانز";
         };
     }
 

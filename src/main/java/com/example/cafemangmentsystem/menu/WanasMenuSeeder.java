@@ -69,6 +69,14 @@ public class WanasMenuSeeder {
                     return stationRepository.save(s);
                 });
 
+        stationRepository.findFirstByCode(StationCode.FRIDGE)
+                .orElseGet(() -> {
+                    Station s = new Station();
+                    s.setCode(StationCode.FRIDGE);
+                    s.setNameAr("الثلاجة");
+                    return stationRepository.save(s);
+                });
+
         // ==================== 1. DRINKS (المشروبات) ====================
 
         // Category 1: مشروبات ساخنة

@@ -1,50 +1,81 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Button from '../Button/Button';
 import './OnboardingTour.css';
 
+/* Each step names the panel it is about and which side it would PREFER its card on. Preference,
+   not instruction - see placeCard() for why a literal reading of this put two of the five cards
+   off the edge of the screen. */
 const TOUR_STEPS = [
   {
     target: '.pos__tables',
-    content: 'اضغط على أي طاولة فاضية لفتح أوردر جديد',
-    position: 'bottom',
+    title: 'ابدأ من الترابيزة',
+    content: 'دوس على أي ترابيزة فاضية ويتفتح أوردر جديد عليها على طول.',
+    position: 'left',
   },
   {
     target: '.pos__menu',
-    content: 'اختار المنتجات من القائمة أو ابحث بالاسم',
+    title: 'ضيف الأصناف',
+    content: 'دوسة واحدة على الصنف تضيفه للأوردر. اكتب في خانة البحث أو اضغط F2 لو مستعجل.',
     position: 'left',
   },
   {
     target: '.pos__order',
-    content: 'المنتجات المطلوبة هتظهر هنا',
+    title: 'راجع واحسب',
+    content: 'الأوردر بيتجمع هنا، والإجمالي وزرار «تحصيل ودفع» بيفضلوا تحت قدامك دايماً.',
     position: 'right',
   },
   {
     target: '.shift-strip',
-    content: 'من هنا تتابع حالة الشيفت والمبيعات وحركة الدرج',
-    position: 'top',
+    title: 'الشيفت والدرج',
+    content: 'مبيعات الشيفت والمفروض في الدرج. ومن «إدارة الشيفت» تعمل مصروف أو تغذية مخزون أو تقفل الشيفت.',
+    position: 'bottom',
   },
   {
     target: '.app-topbar__menu-btn',
-    content: 'زر القائمة يوصّلك لكل الشاشات المتاحة لصلاحيتك',
-    position: 'left',
+    title: 'باقي الشاشات',
+    content: 'زرار القائمة بيوصّلك لكل الشاشات المتاحة لصلاحيتك.',
+    position: 'bottom',
   },
 ];
 
+const CARD_W = 320;
+const CARD_MARGIN = 16;
+const SPOTLIGHT_PAD = 8;
+
+/**
+ * First-run walkthrough of the cashier screen.
+ *
+ * <p>The spotlight is a bordered box with an enormous outward box-shadow rather than a polygon
+ * clip-path on a full-screen div. Same picture, and it buys three things the polygon could not:
+ * the hole can have rounded corners that match the panel it is cutting around, the geometry is
+ * one rectangle instead of a ten-point polygon string rebuilt on every render, and the dimmed
+ * area is the shadow itself - so there is no separate layer that can end up painted over the
+ * card meant to sit on top of it.
+ */
 export default function OnboardingTour({ enabled = false }) {
   const [isVisible, setIsVisible] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [targetRect, setTargetRect] = useState(null);
+  const [step, setStep] = useState(0);
+  const [rect, setRect] = useState(null);
+  const [cardPos, setCardPos] = useState(null);
 
+  const cardRef = useRef(null);
+  const finishRef = useRef(null);
+
+  const finish = useCallback(() => {
+    localStorage.setItem('onboardingCompleted', 'true');
+    setIsVisible(false);
+  }, []);
+  finishRef.current = finish;
+
+  /* ── Start, but only once the screen it describes actually exists ── */
   useEffect(() => {
     setIsVisible(false);
-    setCurrentStep(0);
-    setTargetRect(null);
+    setStep(0);
+    setRect(null);
 
     // The tour teaches the POS workflow, so it must never cover unrelated pages.
     if (!enabled) return undefined;
-
-    const isCompleted = localStorage.getItem('onboardingCompleted');
-    if (isCompleted) return undefined;
+    if (localStorage.getItem('onboardingCompleted')) return undefined;
 
     let timer;
     const startWhenReady = () => {
@@ -68,94 +99,136 @@ export default function OnboardingTour({ enabled = false }) {
     };
   }, [enabled]);
 
+  /* ── Measure the current target, and keep measuring while things move ── */
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible) return undefined;
 
-    const updateTarget = () => {
-      const step = TOUR_STEPS[currentStep];
-      // Note: Since these elements might not exist on all pages, 
-      // we only highlight them if found, otherwise we just show the tooltip centrally.
-      const el = document.querySelector(step.target);
-      if (el) {
-        setTargetRect(el.getBoundingClientRect());
-      } else {
-        setTargetRect(null);
-      }
+    const measure = () => {
+      const el = document.querySelector(TOUR_STEPS[step].target);
+      setRect(el ? el.getBoundingClientRect() : null);
     };
 
-    updateTarget();
-    window.addEventListener('resize', updateTarget);
-    return () => window.removeEventListener('resize', updateTarget);
-  }, [currentStep, isVisible]);
+    measure();
+    window.addEventListener('resize', measure);
+    // Capture phase: the panels scroll internally, and a scroll inside one of them does not
+    // bubble to window. Without this the spotlight drifts off its target as the page moves.
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [step, isVisible]);
+
+  /* ── Escape ends it ──
+     This is 85% black across the whole screen with pointer events enabled. Until now the only
+     way out was a card button, and that card could be positioned off the edge of the window -
+     so the app could be left unusable. Escape is what everyone reaches for first anyway. */
+  useEffect(() => {
+    if (!isVisible) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); finishRef.current(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isVisible]);
+
+  /**
+   * Place the card near its target, then refuse to let it leave the screen.
+   *
+   * <p>The old version took the requested side literally against the target's own edges. That
+   * works for a small target and fails completely for a big one: step 1 asked for "bottom" of
+   * .pos__tables, a FULL-HEIGHT panel, so the card landed twenty pixels past the end of the
+   * screen - and with it the only button that could dismiss a blocking black overlay. Measuring
+   * the card's real height and clamping into the viewport makes that impossible to reproduce.
+   *
+   * <p>A card slightly overlapping its target is a cosmetic problem. A card nobody can reach is
+   * an application nobody can use.
+   */
+  useLayoutEffect(() => {
+    if (!isVisible || !rect) { setCardPos(null); return; }
+
+    const h = cardRef.current?.offsetHeight ?? 190;
+    const side = TOUR_STEPS[step].position;
+    const midX = rect.left + rect.width / 2 - CARD_W / 2;
+    const midY = rect.top + rect.height / 2 - h / 2;
+
+    let left;
+    let top;
+    if (side === 'bottom')      { top = rect.bottom + 20; left = midX; }
+    else if (side === 'top')    { top = rect.top - 20 - h; left = midX; }
+    else if (side === 'left')   { top = midY; left = rect.left - 20 - CARD_W; }
+    else                        { top = midY; left = rect.right + 20; }
+
+    const maxX = Math.max(CARD_MARGIN, window.innerWidth - CARD_W - CARD_MARGIN);
+    const maxY = Math.max(CARD_MARGIN, window.innerHeight - h - CARD_MARGIN);
+
+    setCardPos({
+      left: Math.min(Math.max(left, CARD_MARGIN), maxX),
+      top: Math.min(Math.max(top, CARD_MARGIN), maxY),
+    });
+  }, [rect, step, isVisible]);
 
   // Never mount the blocking overlay without a real, visible target.
-  if (!isVisible || !targetRect) return null;
+  if (!isVisible || !rect) return null;
 
-  const handleNext = () => {
-    if (currentStep < TOUR_STEPS.length - 1) {
-      setCurrentStep(s => s + 1);
-    } else {
-      finishTour();
-    }
-  };
-
-  const finishTour = () => {
-    localStorage.setItem('onboardingCompleted', 'true');
-    setIsVisible(false);
-  };
-
-  const step = TOUR_STEPS[currentStep];
-
-  const overlayStyle = {
-    clipPath: `polygon(
-          0% 0%, 0% 100%, 100% 100%, 100% 0%, 0% 0%,
-          ${targetRect.left - 8}px ${targetRect.top - 8}px,
-          ${targetRect.right + 8}px ${targetRect.top - 8}px,
-          ${targetRect.right + 8}px ${targetRect.bottom + 8}px,
-          ${targetRect.left - 8}px ${targetRect.bottom + 8}px,
-          ${targetRect.left - 8}px ${targetRect.top - 8}px
-        )`,
-  };
-
-  // Calculate tooltip position
-  let tooltipStyle;
-  if (step.position === 'bottom') {
-    tooltipStyle = { top: targetRect.bottom + 20, left: targetRect.left + (targetRect.width / 2) };
-    tooltipStyle.transform = 'translateX(-50%)';
-  } else if (step.position === 'top') {
-    tooltipStyle = { bottom: window.innerHeight - targetRect.top + 20, left: targetRect.left + (targetRect.width / 2) };
-    tooltipStyle.transform = 'translateX(-50%)';
-  } else if (step.position === 'left') {
-    tooltipStyle = { top: targetRect.top + (targetRect.height / 2), right: window.innerWidth - targetRect.left + 20 };
-    tooltipStyle.transform = 'translateY(-50%)';
-  } else {
-    tooltipStyle = { top: targetRect.top + (targetRect.height / 2), left: targetRect.right + 20 };
-    tooltipStyle.transform = 'translateY(-50%)';
-  }
+  const isLast = step === TOUR_STEPS.length - 1;
+  const current = TOUR_STEPS[step];
 
   return (
-    <div className="onboarding-tour">
-      <div className="onboarding-overlay" style={overlayStyle} aria-hidden="true" />
-      
-      <div className="onboarding-tooltip" style={tooltipStyle}>
-        <div className="onboarding-tooltip__content">
-          <p>{step.content}</p>
+    <div className="tour" dir="rtl">
+      {/* The spotlight. Its shadow IS the dimmed screen, and clicking it ends the tour - someone
+          tapping the dark part is telling you they want it gone. */}
+      <div
+        className="tour__spot"
+        style={{
+          top: rect.top - SPOTLIGHT_PAD,
+          left: rect.left - SPOTLIGHT_PAD,
+          width: rect.width + SPOTLIGHT_PAD * 2,
+          height: rect.height + SPOTLIGHT_PAD * 2,
+        }}
+        onClick={finish}
+        role="button"
+        tabIndex={-1}
+        aria-label="إنهاء الجولة"
+      />
+
+      <div
+        ref={cardRef}
+        className="tour__card"
+        style={cardPos ? { top: cardPos.top, left: cardPos.left } : { opacity: 0 }}
+        role="dialog"
+        aria-label={current.title}
+      >
+        <div className="tour__head">
+          <span className="tour__count">{step + 1} من {TOUR_STEPS.length}</span>
+          <button type="button" className="tour__skip" onClick={finish}>
+            تخطي الجولة
+          </button>
         </div>
-        
-        <div className="onboarding-tooltip__footer">
-          <div className="onboarding-tooltip__dots">
-            {TOUR_STEPS.map((_, i) => (
-              <span key={i} className={`dot ${i === currentStep ? 'active' : ''}`} />
+
+        <h4 className="tour__title">{current.title}</h4>
+        <p className="tour__text">{current.content}</p>
+
+        <div className="tour__foot">
+          <div className="tour__dots" aria-hidden="true">
+            {TOUR_STEPS.map((s, i) => (
+              <span key={s.target} className={`tour__dot ${i === step ? 'is-on' : ''}`} />
             ))}
           </div>
-          
-          <div className="onboarding-tooltip__actions">
-            <Button variant="ghost" size="sm" onClick={finishTour}>تخطي</Button>
-            <Button size="sm" onClick={handleNext}>
-              {currentStep === TOUR_STEPS.length - 1 ? 'إنهاء' : 'التالي'}
+
+          <div className="tour__actions">
+            {step > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setStep((n) => n - 1)}>
+                رجوع
+              </Button>
+            )}
+            <Button size="sm" onClick={() => (isLast ? finish() : setStep((n) => n + 1))}>
+              {isLast ? 'يلا نبدأ' : 'التالي'}
             </Button>
           </div>
         </div>
+
+        <span className="tour__esc">اضغط Esc في أي وقت للخروج</span>
       </div>
     </div>
   );
