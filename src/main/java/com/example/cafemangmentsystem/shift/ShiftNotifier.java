@@ -100,6 +100,7 @@ public class ShiftNotifier {
             appendExpenses(body, report);
             appendEmployeeMovements(body, report);
             appendDebts(body, report);
+            appendStations(body, report);
             appendTopProducts(body, report);
         }
 
@@ -194,6 +195,25 @@ public class ShiftNotifier {
         } else {
             body.append("حصّلنا ").append(money(report.totalCollectedDebts())).append(" من الآجل.");
         }
+    }
+
+    /**
+     * Sales per preparation point.
+     *
+     * <p>Only worth a line when there is more than one - a café that sends everything to the bar
+     * learns nothing from being told the bar sold all of it. With a fridge in the mix it answers
+     * the question the owner actually has at the end of the night: how much went off the cooler,
+     * and therefore what needs restocking before tomorrow.
+     */
+    private void appendStations(StringBuilder body, ShiftReportResponse report) {
+        if (isEmpty(report.stationSales()) || report.stationSales().size() < 2) return;
+
+        body.append("\n\n")
+            .append(report.stationSales().stream()
+                    .filter(station -> isPositive(station.totalAmount()))
+                    .map(station -> station.label() + " " + money(station.totalAmount()))
+                    .collect(Collectors.joining("، ")))
+            .append(".");
     }
 
     /**

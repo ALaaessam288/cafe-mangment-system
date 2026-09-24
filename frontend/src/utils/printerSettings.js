@@ -13,10 +13,14 @@ const KEY = 'wanas_pos_printers';
 export const PRINT_TARGETS = [
   { id: 'KITCHEN', label: 'بون المطبخ (المطعم)', hint: 'الأصناف اللي بتتعمل في المطبخ' },
   { id: 'BAR',     label: 'بون البار (البوفيه)', hint: 'المشروبات وأصناف البار' },
+  { id: 'FRIDGE',  label: 'بون الثلاجة',          hint: 'المياه والكانز - حاجة بتتاخد جاهزة' },
   { id: 'RECEIPT', label: 'فاتورة العميل',       hint: 'الإيصال اللي بيتسلم للعميل' },
 ];
 
-const EMPTY = { KITCHEN: '', BAR: '', RECEIPT: '', silent: true };
+/* A station with no printer mapped still falls back to the default printer rather than losing its
+   ticket - see printOptionsFor. So adding FRIDGE here cannot silently drop slips on a till that
+   was set up before it existed. */
+const EMPTY = { KITCHEN: '', BAR: '', FRIDGE: '', RECEIPT: '', silent: true };
 
 export function getPrinterSettings() {
   try {

@@ -389,6 +389,22 @@ public class ShiftService {
         List<ShiftReportResponse.ProductSalesSummaryItem> productSales = new ArrayList<>(productAgg.values());
         productSales.sort((a, b) -> b.quantitySold().compareTo(a.quantitySold()));
 
+        // 7b. Sales per preparation station - the kitchen, the bar, and now the fridge.
+        List<ShiftReportResponse.StationSalesSummaryItem> stationSales = orderItemRepository
+                .sumByShiftIdGroupedByStation(shiftId).stream()
+                .map(row -> {
+                    // A line whose product was deleted keeps its station snapshot, so this is safe;
+                    // a null only appears on very old rows written before the column existed.
+                    String code = row[0] == null ? "OTHER" : row[0].toString();
+                    return new ShiftReportResponse.StationSalesSummaryItem(
+                            code,
+                            stationLabel(code),
+                            row[1] == null ? BigDecimal.ZERO : (BigDecimal) row[1],
+                            row[2] == null ? 0 : ((Number) row[2]).intValue());
+                })
+                .sorted((a, b) -> b.totalAmount().compareTo(a.totalAmount()))
+                .toList();
+
         // 8. Expected Cash in Drawer
         BigDecimal opening = shift.getOpeningFloat() != null ? shift.getOpeningFloat() : BigDecimal.ZERO;
         BigDecimal expectedCashInDrawer = opening
@@ -417,6 +433,7 @@ public class ShiftService {
                 totalEmployeeBonuses,
                 employeeMovements,
                 productSales,
+                stationSales,
                 totalItemsSold,
                 expectedCashInDrawer
         );
@@ -436,5 +453,15 @@ public class ShiftService {
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "لا يمكن حذف هذا الشيفت لوجود طلبات أو مصاريف مسجلة عليه.");
         }
+    }
+
+    /** Arabic for a station code, for a report a human reads rather than a machine parses. */
+    private static String stationLabel(String code) {
+        return switch (code) {
+            case "KITCHEN" -> "المطبخ";
+            case "BAR" -> "البار / البوفيه";
+            case "FRIDGE" -> "الثلاجة";
+            default -> "غير محدد";
+        };
     }
 }
