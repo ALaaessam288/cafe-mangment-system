@@ -200,8 +200,21 @@
 }
 
 @media (max-width: 620px) {
-  .caffio-pulse__metrics { grid-template-columns: repeat(2, 1fr); }
-  .caffio-pulse__metrics > div { padding-inline: 8px; }
+  /* Tighter everywhere: at 16px a side, a 390px screen spends a twelfth of itself on margin,
+     twice - and the dashboard is a column of cards, so the phone pays it on every one. */
+  .dashboard-creative { padding: 12px; gap: 12px; }
+
+  .caffio-pulse { flex-direction: column; gap: 12px; padding: 12px; }
+  .caffio-pulse__lead { min-width: 0; }
+
+  .caffio-pulse__metrics { grid-template-columns: repeat(2, 1fr); gap: 1px; }
+  .caffio-pulse__metrics > div { padding: 8px; }
+
+  /* The first cell of each row starts the row, so it has nothing to its right to be divided
+     from. With a five-metric grid folded to two columns the old rule drew a line down the left
+     edge of the card and another one floating beside the odd last cell. */
+  .caffio-pulse__metrics > div:nth-child(odd) { border-inline-start: 0; }
+  .caffio-pulse__metrics > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .dash-smart-brief { grid-template-columns: 42px minmax(0, 1fr); padding: 13px; gap: 11px; }
   .dash-smart-brief__mark { width: 42px; height: 42px; border-radius: 12px; }
   .dash-smart-brief__action { grid-template-columns: 1fr; }

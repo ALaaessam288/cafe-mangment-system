@@ -886,6 +886,14 @@ export default function InventoryPage() {
             </select>
           </div>
 
+          {/* step="any" on all three numeric fields below, not 0.01.
+              A cost per unit is a purchase price divided by how many units are in the pack, so
+              the smaller the unit, the smaller that number: milk powder at 25 EGP a bag, recorded
+              in millilitres of made-up milk, is 0.0125 per ml. With step="0.01" the browser
+              rejects that on submit as an invalid value - so the fields where a small unit is
+              most useful were exactly the fields that could not be filled in. Quantities carry
+              fractions for the same reason: 1.5 litres, 0.75 kg. The step should not be deciding
+              what a unit is allowed to be. */}
           <Input
             label="الرصيد المتاح حالياً بالمستودع"
             type="number"
@@ -893,7 +901,7 @@ export default function InventoryPage() {
             onChange={(e) => setAuditForm({ ...auditForm, stockQuantity: e.target.value })}
             required
             min="0"
-            step="0.01"
+            step="any"
           />
 
           <Input
@@ -903,18 +911,24 @@ export default function InventoryPage() {
             onChange={(e) => setAuditForm({ ...auditForm, minThreshold: e.target.value })}
             required
             min="0"
-            step="0.01"
+            step="any"
           />
 
-          {/* Cost turns a variance from "‎−240 جرام‎" into a number that belongs in a P&L. */}
+          {/* Cost turns a variance from "‎−240 جرام‎" into a number that belongs in a P&L.
+              The label used to say "(لتقييم الهدر بالجنيه)", which explains what the field is FOR
+              and leaves the one ambiguous thing unsaid: which unit. Someone buying coffee by the
+              quarter-kilo reads "تكلفة الوحدة" and types the price of the pack, and every waste
+              figure from then on is 250x too high. The label now names the unit; the purpose is
+              in the hint underneath, where an explanation belongs. */}
           <Input
-            label="تكلفة الوحدة (لتقييم الهدر بالجنيه)"
+            label="تكلفة شراء الوحدة (بنفس الوحدة أعلاه)"
             type="number"
             value={auditForm.costPerUnit}
             onChange={(e) => setAuditForm({ ...auditForm, costPerUnit: e.target.value })}
             min="0"
-            step="0.01"
+            step="any"
             placeholder="0"
+            hint={`سعر ${auditForm.unit || 'الوحدة'} واحد — مش سعر العبوة. مثال: ربع كيلو بـ180 والوحدة جرام ← 0.72`}
           />
 
           <div style={{ gridColumn: '1 / -1', margin: '10px 0' }}>

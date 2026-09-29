@@ -314,6 +314,14 @@ export default function EmployeesPage() {
       return;
     }
 
+    // The backend rejects a DEDUCTION with a blank reason (400). Catch it here instead, so the
+    // cashier sees a field-level ask rather than a server error for a field the form never
+    // flagged. The quick-reason buttons write into txForm.notes, so picking one satisfies this.
+    if (txForm.type === 'DEDUCTION' && !String(txForm.notes || '').trim()) {
+      toast.error('لازم تكتب سبب الخصم قبل الحفظ');
+      return;
+    }
+
     setSavingTx(true);
     try {
       await employeesApi.createTransaction({
@@ -1235,7 +1243,7 @@ export default function EmployeesPage() {
 
           {txForm.type === 'DEDUCTION' && (
             <div className="form-group">
-              <label className="form-label">سبب الخصم (سريع)</label>
+              <label className="form-label">سبب الخصم (اختيار سريع)</label>
               <div className="quick-reasons-row">
                 {DEDUCTION_REASONS.map((r) => (
                   <button
@@ -1252,10 +1260,11 @@ export default function EmployeesPage() {
           )}
 
           <Input
-            label="ملاحظات وتفاصيل إضافية"
-            placeholder="اكتب سبب العملية بالتفصيل..."
+            label={txForm.type === 'DEDUCTION' ? 'سبب الخصم (إلزامي)' : 'ملاحظات وتفاصيل إضافية'}
+            placeholder={txForm.type === 'DEDUCTION' ? 'اكتب سبب الخصم بالتفصيل...' : 'اكتب سبب العملية بالتفصيل...'}
             value={txForm.notes}
             onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
+            required={txForm.type === 'DEDUCTION'}
           />
 
           <Input
