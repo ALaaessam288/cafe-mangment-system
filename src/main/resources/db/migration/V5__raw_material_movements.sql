@@ -6,7 +6,7 @@
 -- never recorded at all. Cost of goods sold is derived from these balances, so every margin the
 -- system reports rested on numbers with no provenance.
 --
--- Entity: com.example.cafemangmentsystem.inventory.entity.RawMaterialMovement (extends TenantScopedEntity)
+-- Entity: com.caffio.inventory.entity.RawMaterialMovement (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS raw_material_movements (
     id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

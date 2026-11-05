@@ -1,6 +1,6 @@
 -- V2: Financial Ledger Entries Schema
 --
--- Matches com.example.cafemangmentsystem.ledger.entity.FinancialLedgerEntry, which extends
+-- Matches com.caffio.ledger.entity.FinancialLedgerEntry, which extends
 -- BaseEntity (not TenantScopedEntity) - it has no tenant_id column. A tenant_id column and index
 -- here previously didn't match the entity; with JPA_DDL_AUTO=update in production, Hibernate had
 -- already created this table from the entity mapping (so no tenant_id), which made this script's

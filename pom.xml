@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.example</groupId>
-    <artifactId>cafe-mangment-system</artifactId>
+    <artifactId>caffio</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>cafe-mangment-system</name>
-    <description>cafe-mangment-system</description>
+    <name>caffio</name>
+    <description>Caffio - multi-tenant cafe POS and operations platform</description>
     <url/>
     <licenses>
         <license/>

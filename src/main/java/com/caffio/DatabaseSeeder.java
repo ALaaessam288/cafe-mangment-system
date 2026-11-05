@@ -1,0 +1,336 @@
+package com.caffio;
+
+import com.caffio.common.tenant.TenantContext;
+import com.caffio.tenant.TenantService;
+import com.caffio.tenant.entity.Tenant;
+import com.caffio.tenant.entity.BusinessType;
+import com.caffio.tenant.repository.TenantRepository;
+import com.caffio.tenant.platform.dto.ProvisionTenantRequest;
+import com.caffio.user.entity.User;
+import com.caffio.user.entity.Role;
+import com.caffio.menu.WanasMenuSeeder;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.List;
+
+@Component
+@ConditionalOnProperty(name = "app.legacy-bootstrap.enabled", havingValue = "true")
+public class DatabaseSeeder implements CommandLineRunner {
+
+    private final TenantRepository tenantRepository;
+    private final TenantService tenantService;
+    private final JdbcTemplate jdbcTemplate;
+    private final WanasMenuSeeder wanasMenuSeeder;
+
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final com.caffio.debt.repository.DebtRepository debtRepository;
+    private final com.caffio.user.repository.UserRepository userRepository;
+    private final com.caffio.inventory.ShiftAuditService shiftAuditService;
+
+    public DatabaseSeeder(TenantRepository tenantRepository, TenantService tenantService, JdbcTemplate jdbcTemplate, WanasMenuSeeder wanasMenuSeeder, org.springframework.security.crypto.password.PasswordEncoder passwordEncoder, com.caffio.debt.repository.DebtRepository debtRepository, com.caffio.user.repository.UserRepository userRepository, com.caffio.inventory.ShiftAuditService shiftAuditService) {
+        this.tenantRepository = tenantRepository;
+        this.tenantService = tenantService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.wanasMenuSeeder = wanasMenuSeeder;
+        this.passwordEncoder = passwordEncoder;
+        this.debtRepository = debtRepository;
+        this.userRepository = userRepository;
+        this.shiftAuditService = shiftAuditService;
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        boolean isSqlite = false;
+        try {
+            String dbProductName = jdbcTemplate.getDataSource().getConnection().getMetaData().getDatabaseProductName();
+            isSqlite = dbProductName != null && dbProductName.toLowerCase().contains("sqlite");
+        } catch (Exception ignored) {}
+
+        if (isSqlite) {
+            try {
+                boolean hasDeliveryFee = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('orders') WHERE name = 'delivery_fee'",
+                    Boolean.class));
+                if (!hasDeliveryFee) {
+                    jdbcTemplate.execute("ALTER TABLE orders ADD COLUMN delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0");
+                    System.out.println("[SEEDER] Added missing orders.delivery_fee column.");
+                }
+            } catch (Exception e) {
+                System.err.println("[SEEDER] Failed to add orders.delivery_fee column: " + e.getMessage());
+            }
+
+            try {
+                boolean hasSnacksNet = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('shifts') WHERE name = 'snacks_net'",
+                    Boolean.class));
+                if (!hasSnacksNet) {
+                    jdbcTemplate.execute("ALTER TABLE shifts ADD COLUMN snacks_net NUMERIC(10,2) NOT NULL DEFAULT 0");
+                    System.out.println("[SEEDER] Added missing shifts.snacks_net column.");
+                }
+            } catch (Exception e) {
+                System.err.println("[SEEDER] Failed to add shifts.snacks_net column: " + e.getMessage());
+            }
+
+            // Ensure expenses table columns exist for Petty Cash Advance & Settlement
+            String[] expenseCols = {
+                "status TEXT DEFAULT 'COMPLETED'",
+                "advance_amount NUMERIC(10,2)",
+                "actual_amount NUMERIC(10,2)",
+                "returned_amount NUMERIC(10,2)",
+                "is_advance INTEGER DEFAULT 0",
+                "settled_at INTEGER",
+                "settled_by INTEGER"
+            };
+            for (String colDef : expenseCols) {
+                String colName = colDef.split(" ")[0];
+                try {
+                    boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) > 0 FROM pragma_table_info('expenses') WHERE name = '" + colName + "'",
+                        Boolean.class));
+                    if (!exists) {
+                        jdbcTemplate.execute("ALTER TABLE expenses ADD COLUMN " + colDef);
+                        System.out.println("[SEEDER] Added missing expenses." + colName + " column.");
+                    }
+                } catch (Exception e) {
+                    System.err.println("[SEEDER] Failed to add expenses." + colName + ": " + e.getMessage());
+                }
+            }
+
+            // Ensure tenants table columns exist for SaaS Subscriptions
+            String[] tenantCols = {
+                "subscription_plan TEXT DEFAULT 'PRO'",
+                "trial_ends_at INTEGER",
+                "subscription_ends_at INTEGER",
+                "max_tables INTEGER",
+                "max_users INTEGER",
+                "max_products INTEGER"
+            };
+            for (String colDef : tenantCols) {
+                String colName = colDef.split(" ")[0];
+                try {
+                    boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) > 0 FROM pragma_table_info('tenants') WHERE name = '" + colName + "'",
+                        Boolean.class));
+                    if (!exists) {
+                        jdbcTemplate.execute("ALTER TABLE tenants ADD COLUMN " + colDef);
+                        System.out.println("[SEEDER] Added missing tenants." + colName + " column.");
+                    }
+                } catch (Exception e) {
+                    System.err.println("[SEEDER] Failed to add tenants." + colName + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // Patch users.role CHECK constraint to allow SUPER_ADMIN
+        try {
+            Boolean needsUserRolePatch = jdbcTemplate.queryForObject(
+                "SELECT sql NOT LIKE '%SUPER_ADMIN%' FROM sqlite_master WHERE type='table' AND name='users'",
+                Boolean.class);
+            if (Boolean.TRUE.equals(needsUserRolePatch)) {
+                jdbcTemplate.execute("PRAGMA writable_schema = 1");
+                jdbcTemplate.update(
+                    "UPDATE sqlite_master SET sql = REPLACE(sql, ?, ?) WHERE type='table' AND name='users'",
+                    "'ADMIN')", "'ADMIN','SUPER_ADMIN')"
+                );
+                jdbcTemplate.update(
+                    "UPDATE sqlite_master SET sql = REPLACE(sql, ?, ?) WHERE type='table' AND name='users'",
+                    "'ADMIN']", "'ADMIN','SUPER_ADMIN']"
+                );
+                jdbcTemplate.execute("PRAGMA writable_schema = 0");
+                System.out.println("[SEEDER] Patched users.role CHECK constraint to allow SUPER_ADMIN.");
+            }
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Failed to patch users role constraint: " + e.getMessage());
+            try { jdbcTemplate.execute("PRAGMA writable_schema = 0"); } catch (Exception ignored) { }
+        }
+
+        // Ensure paid_amount column exists on debts table
+        try {
+            jdbcTemplate.execute("ALTER TABLE debts ADD COLUMN paid_amount NUMERIC NOT NULL DEFAULT 0");
+            System.out.println("[SEEDER] Added paid_amount column to debts table.");
+        } catch (Exception ignored) {
+            // Column already exists or table doesn't exist yet
+        }
+
+        // Ensure cost_per_unit column exists on shift_audit_items table
+        try {
+            jdbcTemplate.execute("ALTER TABLE shift_audit_items ADD COLUMN cost_per_unit NUMERIC DEFAULT 0.40");
+            System.out.println("[SEEDER] Added cost_per_unit column to shift_audit_items table.");
+        } catch (Exception ignored) {
+            // Column already exists
+        }
+
+        // Ensure every existing tenant has a register seeded.
+        // This previously inserted into a `deleted` column that doesn't exist on `registers`
+        // (the real columns are `deleted_at`/`deleted_by`) and omitted the NOT NULL
+        // created_at/updated_at/version/active columns, so it has silently failed on every
+        // startup since it was written. Never actually blocked real usage because tenant
+        // provisioning (TenantOwnerProvisioner) already creates a valid register through JPA -
+        // this is only a safety net for tenants that somehow ended up with none.
+        try {
+            jdbcTemplate.query("SELECT id FROM tenants", (rs, rowNum) -> rs.getLong("id")).forEach(tenantId -> {
+                Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM registers WHERE tenant_id = ?",
+                    Integer.class,
+                    tenantId
+                );
+                if (count == null || count == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO registers (tenant_id, name, active, version, created_at, updated_at) " +
+                        "VALUES (?, ?, 1, 0, ?, ?)",
+                        tenantId,
+                        "الدرج الرئيسي",
+                        System.currentTimeMillis(),
+                        System.currentTimeMillis()
+                    );
+                    System.out.println("[SEEDER] Seeded 'الدرج الرئيسي' for tenant ID: " + tenantId);
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Failed to seed registers for existing tenants: " + e.getMessage());
+        }
+
+        // Fix missing columns in SQLite
+        try {
+            jdbcTemplate.execute("ALTER TABLE products ADD COLUMN reserved_quantity INTEGER DEFAULT 0");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("ALTER TABLE products ADD COLUMN min_stock_threshold INTEGER DEFAULT 10");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("ALTER TABLE products ADD COLUMN track_inventory BOOLEAN DEFAULT 0");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("DELETE FROM debts");
+        } catch (Exception ignored) {}
+        try {
+            jdbcTemplate.execute("UPDATE products SET available = 1 WHERE active = 1");
+        } catch (Exception ignored) {}
+
+        // Fix unparseable ISO timestamps in cafe_tables if any exist
+        try {
+            jdbcTemplate.execute("UPDATE cafe_tables SET created_at = datetime('now'), updated_at = datetime('now') WHERE created_at LIKE '%T%' OR created_at IS NULL");
+            System.out.println("[SEEDER] Corrected cafe_tables timestamps to SQLite format.");
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Timestamp cleanup skipped: " + e.getMessage());
+        }
+
+        // The platform tenant and its first SUPER_ADMIN are created by PlatformBootstrap, from
+        // environment variables. They used to be created here with the username and password
+        // written into the source — which put the platform owner's credentials in every build.
+
+        // Ensure default Wanas Cafe tenant exists
+        try {
+            Tenant wanasTenant = tenantRepository.findBySlug("wanas").orElse(null);
+            if (wanasTenant == null) {
+                wanasTenant = new Tenant();
+                wanasTenant.setName("Wanas Cafe");
+                wanasTenant.setSlug("wanas");
+                wanasTenant.setBusinessType(BusinessType.CAFE);
+                wanasTenant.setStatus(com.caffio.tenant.entity.TenantStatus.ACTIVE);
+                wanasTenant.setTimezone("Africa/Cairo");
+                wanasTenant.setCurrency("EGP");
+                wanasTenant.setPlanSelected(true);
+                wanasTenant = tenantRepository.save(wanasTenant);
+                System.out.println("[SEEDER] Created Wanas Cafe Tenant (ID: " + wanasTenant.getId() + ")");
+            }
+
+            if (wanasTenant != null) {
+                TenantContext.set(wanasTenant.getId());
+                try {
+                    User wanasAdmin = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "demoadmin").orElse(null);
+                    if (wanasAdmin == null) {
+                        wanasAdmin = new User();
+                        wanasAdmin.setUsername("demoadmin");
+                        wanasAdmin.setPasswordHash(passwordEncoder.encode(demoPassword("admin")));
+                        wanasAdmin.setPinHash(passwordEncoder.encode(demoPin("admin")));
+                        wanasAdmin.setFullName("Demo Admin");
+                        wanasAdmin.setRole(Role.ADMIN);
+                        userRepository.save(wanasAdmin);
+                    } else if (wanasAdmin.getPinHash() == null) {
+                        wanasAdmin.setPinHash(passwordEncoder.encode(demoPin("admin")));
+                        userRepository.save(wanasAdmin);
+                    }
+                    User cashier = userRepository.findByTenantIdAndUsername(wanasTenant.getId(), "cashier1").orElse(null);
+                    if (cashier == null) {
+                        cashier = new User();
+                        cashier.setUsername("cashier1");
+                        cashier.setPasswordHash(passwordEncoder.encode(demoPassword("cashier1")));
+                        cashier.setPinHash(passwordEncoder.encode(demoPin("cashier1")));
+                        cashier.setFullName("كاشير 1");
+                        cashier.setRole(Role.CASHIER);
+                        userRepository.save(cashier);
+                    } else if (cashier.getPinHash() == null) {
+                        cashier.setPinHash(passwordEncoder.encode(demoPin("cashier1")));
+                        userRepository.save(cashier);
+                    }
+                } finally {
+                    TenantContext.clear();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SEEDER] Wanas bootstrap check: " + e.getMessage());
+        }
+
+        // Repair the standard coffee recipe for existing tenant databases. This is idempotent
+        // and only touches the two exact seeded Turkish-coffee product names.
+        try {
+            for (Tenant tenant : tenantRepository.findAll()) {
+                try {
+                    TenantContext.set(tenant.getId());
+                    shiftAuditService.ensureDefaultCoffeeRecipes();
+                } catch (Exception e) {
+                    System.err.println("[SEEDER] Coffee recipe repair skipped for " + tenant.getSlug() + ": " + e.getMessage());
+                } finally {
+                    TenantContext.clear();
+                }
+            }
+        } catch (Exception e) {
+            // A fresh/test database may not have its schema yet. Never prevent the application
+            // from starting because an idempotent data repair could not run.
+            System.err.println("[SEEDER] Coffee recipe repair deferred: " + e.getMessage());
+        }
+    }
+
+    /*
+     * Demo credentials for the sample "Wanas" tenant.
+     *
+     * This whole seeder only runs when app.legacy-bootstrap.enabled=true, which is a development
+     * switch. Even so, nothing here is a constant any more: a demo password is read from the
+     * environment, and where none is supplied a random one is generated and printed once. That way
+     * a developer can still sign in, while a database that was seeded on a machine with the flag
+     * left on does not ship a password anyone can look up.
+     */
+    private static final java.util.Map<String, String> GENERATED_DEMO_SECRETS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private String demoPassword(String who) {
+        return demoSecret("APP_DEMO_PASSWORD_" + who.toUpperCase(java.util.Locale.ROOT), who + ":password", 16);
+    }
+
+    private String demoPin(String who) {
+        return demoSecret("APP_DEMO_PIN_" + who.toUpperCase(java.util.Locale.ROOT), who + ":pin", 6);
+    }
+
+    private String demoSecret(String envName, String cacheKey, int length) {
+        String supplied = System.getenv(envName);
+        if (supplied != null && !supplied.isBlank()) {
+            return supplied.trim();
+        }
+        return GENERATED_DEMO_SECRETS.computeIfAbsent(cacheKey, key -> {
+            String generated = randomSecret(length, cacheKey.endsWith(":pin"));
+            System.out.println("[SEEDER] Generated demo secret for " + key + ": " + generated
+                    + "  (set " + envName + " to choose your own)");
+            return generated;
+        });
+    }
+
+    private String randomSecret(int length, boolean digitsOnly) {
+        String alphabet = digitsOnly ? "0123456789" : "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        java.security.SecureRandom rng = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) sb.append(alphabet.charAt(rng.nextInt(alphabet.length())));
+        return sb.toString();
+    }
+}

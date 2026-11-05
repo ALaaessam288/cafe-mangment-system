@@ -1,0 +1,577 @@
+package com.caffio.report;
+
+import com.caffio.expense.entity.Expense;
+import com.caffio.expense.entity.ExpenseType;
+import com.caffio.expense.repository.ExpenseRepository;
+import com.caffio.menu.entity.RevenueLine;
+import com.caffio.order.entity.Order;
+import com.caffio.order.entity.OrderItem;
+import com.caffio.order.entity.OrderItemStatus;
+import com.caffio.order.entity.OrderStatus;
+import com.caffio.order.repository.OrderItemRepository;
+import com.caffio.order.repository.OrderRepository;
+import com.caffio.payment.entity.Payment;
+import com.caffio.payment.repository.PaymentRepository;
+import com.caffio.report.dto.FinancialReportDto;
+import com.caffio.report.dto.FinancialReportDto.TransactionDto;
+import com.caffio.report.dto.PaymentMethodBreakdownDto;
+import com.caffio.report.dto.ReportItemDto;
+import com.caffio.debt.entity.Debt;
+import com.caffio.debt.repository.DebtRepository;
+import com.caffio.shift.entity.Shift;
+import com.caffio.shift.repository.ShiftRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.caffio.report.dto.BestSellerDto;
+import com.caffio.report.dto.HourlySlotDto;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.data.domain.PageRequest;
+
+@Service
+@RequiredArgsConstructor
+public class ReportService {
+
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final ExpenseRepository expenseRepository;
+    private final PaymentRepository paymentRepository;
+    private final ShiftRepository shiftRepository;
+    private final DebtRepository debtRepository;
+    private final com.caffio.inventory.repository.ProductRecipeRepository productRecipeRepository;
+    private final com.caffio.inventory.repository.ShiftAuditItemRepository shiftAuditItemRepository;
+    private final com.caffio.inventory.repository.ShiftAuditRecordRepository shiftAuditRecordRepository;
+    private final com.caffio.inventory.repository.RawMaterialMovementRepository rawMaterialMovementRepository;
+
+    private static class SalesAccumulator {
+        final String name;
+        long quantity = 0;
+        BigDecimal revenue = BigDecimal.ZERO;
+
+        SalesAccumulator(String name) {
+            this.name = name;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public FinancialReportDto getComprehensiveFinancialReport(String startDate, String endDate, Long shiftId) {
+        Instant startInstant = null;
+        Instant endInstant = null;
+        LocalDate localStart = null;
+        LocalDate localEnd = null;
+
+        if (shiftId != null) {
+            Shift shift = shiftRepository.findById(shiftId)
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Shift not found"));
+            startInstant = shift.getOpenedAt();
+            endInstant = shift.getClosedAt() != null ? shift.getClosedAt() : Instant.now();
+            localStart = startInstant.atZone(ZoneId.of("Africa/Cairo")).toLocalDate();
+            localEnd = endInstant.atZone(ZoneId.of("Africa/Cairo")).toLocalDate();
+        } else {
+            if (startDate != null && !startDate.trim().isEmpty()) {
+                try {
+                    localStart = LocalDate.parse(startDate.trim());
+                    startInstant = localStart.atStartOfDay(ZoneId.of("Africa/Cairo")).toInstant();
+                } catch (Exception e) {
+                    // Ignore parse errors
+                }
+            }
+            if (endDate != null && !endDate.trim().isEmpty()) {
+                try {
+                    localEnd = LocalDate.parse(endDate.trim());
+                    endInstant = localEnd.atTime(LocalTime.MAX).atZone(ZoneId.of("Africa/Cairo")).toInstant();
+                } catch (Exception e) {
+                    // Ignore parse errors
+                }
+            }
+        }
+
+        List<Order> closedOrders = orderRepository.findByStatus(OrderStatus.CLOSED);
+        List<Expense> allExpenses = expenseRepository.findAll();
+
+        final Instant finalStart = startInstant;
+        final Instant finalEnd = endInstant;
+        List<Order> filteredOrders = closedOrders.stream()
+                .filter(o -> {
+                    Instant t = o.getClosedAt() != null ? o.getClosedAt() : o.getOpenedAt();
+                    if (finalStart != null && t.isBefore(finalStart)) return false;
+                    if (finalEnd != null && t.isAfter(finalEnd)) return false;
+                    return true;
+                })
+                .toList();
+
+        final LocalDate finalLocalStart = localStart;
+        final LocalDate finalLocalEnd = localEnd;
+        List<Expense> filteredExpenses = allExpenses.stream()
+                .filter(e -> {
+                    LocalDate d = e.getExpenseDate();
+                    if (finalLocalStart != null && d.isBefore(finalLocalStart)) return false;
+                    if (finalLocalEnd != null && d.isAfter(finalLocalEnd)) return false;
+                    return true;
+                })
+                .toList();
+
+        BigDecimal totalCafeRevenue = BigDecimal.ZERO;
+        BigDecimal totalRestaurantRevenue = BigDecimal.ZERO;
+
+        BigDecimal totalCafeExpenses = BigDecimal.ZERO;
+        BigDecimal totalRestaurantExpenses = BigDecimal.ZERO;
+        BigDecimal totalGeneralExpenses = BigDecimal.ZERO;
+        BigDecimal totalWages = BigDecimal.ZERO;
+
+        List<TransactionDto> transactions = new ArrayList<>();
+        Map<String, SalesAccumulator> productMap = new HashMap<>();
+        Map<String, SalesAccumulator> categoryMap = new HashMap<>();
+
+        for (Order order : filteredOrders) {
+            List<OrderItem> items = orderItemRepository.findByOrder(order);
+            BigDecimal orderCafeTotal = BigDecimal.ZERO;
+            BigDecimal orderRestTotal = BigDecimal.ZERO;
+
+            for (OrderItem item : items) {
+                if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
+                BigDecimal itemTotal = item.getUnitPriceSnapshot()
+                        .multiply(BigDecimal.valueOf(item.getQuantity()))
+                        .subtract(item.getDiscountAmount());
+
+                if (item.getRevenueLineSnapshot() == RevenueLine.BUFFET) {
+                    orderCafeTotal = orderCafeTotal.add(itemTotal);
+                } else if (item.getRevenueLineSnapshot() == RevenueLine.FOOD) {
+                    orderRestTotal = orderRestTotal.add(itemTotal);
+                }
+
+                // Product sales accumulation
+                String prodName = item.getProductNameSnapshot();
+                SalesAccumulator prodAcc = productMap.computeIfAbsent(prodName, SalesAccumulator::new);
+                prodAcc.quantity += item.getQuantity();
+                prodAcc.revenue = prodAcc.revenue.add(itemTotal);
+
+                // Category sales accumulation
+                String catName = (item.getProduct() != null && item.getProduct().getCategory() != null)
+                        ? item.getProduct().getCategory().getNameAr()
+                        : "غير معروف";
+                SalesAccumulator catAcc = categoryMap.computeIfAbsent(catName, SalesAccumulator::new);
+                catAcc.quantity += item.getQuantity();
+                catAcc.revenue = catAcc.revenue.add(itemTotal);
+            }
+
+            // Item lines alone don't account for order-level discount/service charge/delivery
+            // fee (Order.discount/service/deliveryFee) - reconcile against the real order total
+            // (what payments actually collect) so totalCafeRevenue + totalRestaurantRevenue
+            // matches the Payment Methods breakdown and the transactions ledger below, both of
+            // which already use order.getTotal(). The adjustment is split proportionally by each
+            // line's share of the item subtotal, since service/delivery/order-discount aren't
+            // attributable to a specific product.
+            BigDecimal itemsTotal = orderCafeTotal.add(orderRestTotal);
+            BigDecimal adjustment = order.getTotal().subtract(itemsTotal);
+            if (itemsTotal.signum() != 0) {
+                BigDecimal cafeShare = orderCafeTotal.divide(itemsTotal, 10, RoundingMode.HALF_UP);
+                orderCafeTotal = orderCafeTotal.add(adjustment.multiply(cafeShare));
+                orderRestTotal = order.getTotal().subtract(orderCafeTotal);
+            } else {
+                orderRestTotal = orderRestTotal.add(adjustment);
+            }
+
+            totalCafeRevenue = totalCafeRevenue.add(orderCafeTotal);
+            totalRestaurantRevenue = totalRestaurantRevenue.add(orderRestTotal);
+
+            transactions.add(new TransactionDto(
+                    "ORDER-" + order.getId(),
+                    "ORDER",
+                    "Order #" + order.getOrderNumber(),
+                    order.getTotal(),
+                    order.getClosedAt() != null ? order.getClosedAt().toString() : order.getOpenedAt().toString()
+            ));
+        }
+
+        for (Expense expense : filteredExpenses) {
+            if (expense.getType() == ExpenseType.SALARIES) {
+                totalWages = totalWages.add(expense.getAmount());
+                String empName = expense.getEmployee() != null ? expense.getEmployee().getName() : "Unknown";
+                transactions.add(new TransactionDto(
+                        "EXP-" + expense.getId(),
+                        "WAGE",
+                        "Salary: " + empName,
+                        expense.getAmount().negate(),
+                        expense.getExpenseDate().toString()
+                ));
+            } else {
+                if (expense.getRevenueLine() == RevenueLine.BUFFET) {
+                    totalCafeExpenses = totalCafeExpenses.add(expense.getAmount());
+                } else if (expense.getRevenueLine() == RevenueLine.FOOD) {
+                    totalRestaurantExpenses = totalRestaurantExpenses.add(expense.getAmount());
+                } else {
+                    totalGeneralExpenses = totalGeneralExpenses.add(expense.getAmount());
+                }
+
+                transactions.add(new TransactionDto(
+                        "EXP-" + expense.getId(),
+                        "EXPENSE",
+                        expense.getType().name() + " - " + expense.getRevenueLine().name(),
+                        expense.getAmount().negate(),
+                        expense.getExpenseDate().toString()
+                ));
+            }
+        }
+
+        // Payment Methods Breakdown aggregation
+        List<Long> orderIds = filteredOrders.stream().map(Order::getId).toList();
+        Map<String, SalesAccumulator> paymentMap = new HashMap<>();
+        paymentMap.put("CASH", new SalesAccumulator("CASH"));
+        paymentMap.put("INSTAPAY", new SalesAccumulator("INSTAPAY"));
+        paymentMap.put("WALLET", new SalesAccumulator("WALLET"));
+
+        if (!orderIds.isEmpty()) {
+            List<Payment> payments = paymentRepository.findByOrderIdIn(orderIds);
+            for (Payment p : payments) {
+                String method = p.getMethod().name();
+                SalesAccumulator payAcc = paymentMap.computeIfAbsent(method, SalesAccumulator::new);
+                payAcc.quantity += 1;
+                payAcc.revenue = payAcc.revenue.add(p.getAmount());
+            }
+        }
+
+        BigDecimal totalSnacksNet = BigDecimal.ZERO;
+        if (shiftId != null) {
+            Shift shift = shiftRepository.findById(shiftId).orElse(null);
+            if (shift != null && shift.getSnacksNet() != null) {
+                totalSnacksNet = shift.getSnacksNet();
+            }
+        } else {
+            List<Shift> shifts = shiftRepository.findAll();
+            for (Shift s : shifts) {
+                if (s.getSnacksNet() != null && s.getSnacksNet().compareTo(BigDecimal.ZERO) > 0) {
+                    Instant t = s.getClosedAt() != null ? s.getClosedAt() : s.getOpenedAt();
+                    if ((finalStart == null || !t.isBefore(finalStart)) && (finalEnd == null || !t.isAfter(finalEnd))) {
+                        totalSnacksNet = totalSnacksNet.add(s.getSnacksNet());
+                    }
+                }
+            }
+        }
+
+        /*
+         * Raw-material costing, from the stock ledger.
+         *
+         * Deliberately NOT folded into netProfit below. A material purchase is normally also
+         * entered on the expenses screen as ExpenseType.MATERIALS, which already reduces profit;
+         * subtracting the ledger's purchases too would book the same money twice. The two are
+         * reported side by side instead, so a café can finally see when its stock records and its
+         * expense records disagree.
+         */
+        Instant costFrom = finalStart != null ? finalStart : Instant.EPOCH;
+        Instant costTo = finalEnd != null ? finalEnd : Instant.now();
+
+        BigDecimal rawMaterialPurchases = orZero(
+                rawMaterialMovementRepository.sumPurchasesBetween(costFrom, costTo));
+        BigDecimal rawMaterialWasteValue = orZero(
+                rawMaterialMovementRepository.sumWasteBetween(costFrom, costTo)).abs();
+
+        Double consumed = shiftAuditRecordRepository.sumConsumedCost(costFrom, costTo);
+        BigDecimal costOfGoodsSold = consumed == null
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(consumed).setScale(2, java.math.RoundingMode.HALF_UP);
+
+        BigDecimal materialsExpensesLogged = filteredExpenses.stream()
+                .filter(e -> e.getType() == ExpenseType.MATERIALS)
+                .map(Expense::getAmount)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal netProfit = totalCafeRevenue.add(totalRestaurantRevenue).add(totalSnacksNet)
+                .subtract(totalCafeExpenses)
+                .subtract(totalRestaurantExpenses)
+                .subtract(totalGeneralExpenses)
+                .subtract(totalWages);
+
+        // Sort transactions by date descending
+        transactions.sort(Comparator.comparing(TransactionDto::date).reversed());
+
+        List<ReportItemDto> productSales = productMap.values().stream()
+                .sorted((a, b) -> Long.compare(b.quantity, a.quantity))
+                .map(acc -> new ReportItemDto(acc.name, acc.quantity, acc.revenue))
+                .toList();
+
+        List<ReportItemDto> categorySales = categoryMap.values().stream()
+                .sorted((a, b) -> b.revenue.compareTo(a.revenue))
+                .map(acc -> new ReportItemDto(acc.name, acc.quantity, acc.revenue))
+                .toList();
+
+        List<PaymentMethodBreakdownDto> paymentMethods = paymentMap.values().stream()
+                .map(acc -> new PaymentMethodBreakdownDto(acc.name, acc.revenue, acc.quantity))
+                .toList();
+
+        // Outstanding debts are a running liability balance, not a period flow - not date-filtered.
+        List<Debt> unsettledDebts = debtRepository.findBySettledFalse();
+        BigDecimal totalOutstandingDebts = unsettledDebts.stream()
+                .map(d -> {
+                    BigDecimal paid = d.getPaidAmount() != null ? d.getPaidAmount() : BigDecimal.ZERO;
+                    BigDecimal rem = d.getAmount().subtract(paid);
+                    return rem.compareTo(BigDecimal.ZERO) > 0 ? rem : BigDecimal.ZERO;
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new FinancialReportDto(
+                totalCafeRevenue,
+                totalRestaurantRevenue,
+                totalCafeExpenses,
+                totalRestaurantExpenses,
+                totalGeneralExpenses,
+                totalWages,
+                netProfit,
+                transactions,
+                productSales,
+                categorySales,
+                paymentMethods,
+                totalOutstandingDebts,
+                unsettledDebts.size(),
+                totalSnacksNet,
+                rawMaterialPurchases,
+                rawMaterialWasteValue,
+                costOfGoodsSold,
+                materialsExpensesLogged
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<BestSellerDto> getBestSellers(String startDate, String endDate, int limit) {
+        return getBestSellers(startDate, endDate, null, limit);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BestSellerDto> getBestSellers(String startDate, String endDate, Long shiftId, int limit) {
+        Instant[] range = resolveRange(startDate, endDate, shiftId);
+        List<Object[]> rows = orderItemRepository.findTopProductsByQuantity(
+                range[0], range[1], PageRequest.of(0, limit));
+        return rows.stream()
+                .map(r -> new BestSellerDto(
+                        (String) r[0],
+                        ((Number) r[1]).longValue(),
+                        (BigDecimal) r[2]))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<HourlySlotDto> getHourlySales(String startDate, String endDate) {
+        return getHourlySales(startDate, endDate, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HourlySlotDto> getHourlySales(String startDate, String endDate, Long shiftId) {
+        Instant[] range = resolveRange(startDate, endDate, shiftId);
+        // Hourly data is in UTC; frontend shifts by +2 for Egypt display
+        List<Object[]> rows = orderRepository.findHourlySales(range[0], range[1]);
+        return rows.stream()
+                .map(r -> new HourlySlotDto(
+                        ((Number) r[0]).intValue(),
+                        ((Number) r[1]).longValue(),
+                        (BigDecimal) r[2]))
+                .toList();
+    }
+
+    /**
+     * Resolves the window every report on the screen should agree on.
+     *
+     * <p>The financial report and recipe profitability already honoured {@code shiftId}; best
+     * sellers and hourly sales did not accept it at all, so selecting a shift left those two
+     * panels showing the whole history next to shift-scoped totals. Two answers to "what sold
+     * in this shift" on one screen, and no way for the reader to tell which one was lying.
+     */
+    private static BigDecimal orZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private Instant[] resolveRange(String startDate, String endDate, Long shiftId) {
+        if (shiftId != null) {
+            Shift shift = shiftRepository.findById(shiftId).orElse(null);
+            if (shift != null) {
+                return new Instant[]{
+                        shift.getOpenedAt(),
+                        shift.getClosedAt() != null ? shift.getClosedAt() : Instant.now()
+                };
+            }
+        }
+        return resolveDateRange(startDate, endDate);
+    }
+
+    private Instant[] resolveDateRange(String startDate, String endDate) {
+        Instant start = null, end = null;
+        if (startDate != null && !startDate.isBlank()) {
+            try { start = LocalDate.parse(startDate.trim())
+                    .atStartOfDay(ZoneId.of("Africa/Cairo")).toInstant(); } catch (Exception ignored) {}
+        }
+        if (endDate != null && !endDate.isBlank()) {
+            try { end = LocalDate.parse(endDate.trim())
+                    .atTime(LocalTime.MAX).atZone(ZoneId.of("Africa/Cairo")).toInstant(); } catch (Exception ignored) {}
+        }
+        return new Instant[]{ start, end };
+    }
+
+    @Transactional(readOnly = true)
+    public com.caffio.report.dto.RecipeProfitabilityDto getRecipeProfitability(
+            String startDate, String endDate, Long shiftId) {
+        
+        Instant startInstant = null;
+        Instant endInstant = null;
+
+        if (shiftId != null) {
+            Shift shift = shiftRepository.findById(shiftId).orElse(null);
+            if (shift != null) {
+                startInstant = shift.getOpenedAt();
+                endInstant = shift.getClosedAt() != null ? shift.getClosedAt() : Instant.now();
+            }
+        } else {
+            Instant[] range = resolveDateRange(startDate, endDate);
+            startInstant = range[0];
+            endInstant = range[1];
+        }
+
+        // Aggregate actual sold product quantities in the period
+        List<Order> closedOrders = orderRepository.findByStatus(OrderStatus.CLOSED);
+        final Instant fStart = startInstant;
+        final Instant fEnd = endInstant;
+
+        Map<Long, Integer> productQuantitiesSold = new HashMap<>();
+        for (Order order : closedOrders) {
+            Instant t = order.getClosedAt() != null ? order.getClosedAt() : order.getOpenedAt();
+            if (fStart != null && t.isBefore(fStart)) continue;
+            if (fEnd != null && t.isAfter(fEnd)) continue;
+
+            List<OrderItem> items = orderItemRepository.findByOrder(order);
+            for (OrderItem item : items) {
+                if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
+                if (item.getProduct() != null) {
+                    productQuantitiesSold.merge(item.getProduct().getId(), item.getQuantity(), Integer::sum);
+                }
+            }
+        }
+
+        // Load all shift audit items & recipes
+        List<com.caffio.inventory.entity.ShiftAuditItem> auditItems = shiftAuditItemRepository.findAll();
+        List<com.caffio.inventory.entity.ProductRecipe> allRecipes = productRecipeRepository.findAll();
+
+        Map<Long, List<com.caffio.inventory.entity.ProductRecipe>> recipesByAuditItem = new HashMap<>();
+        for (com.caffio.inventory.entity.ProductRecipe r : allRecipes) {
+            if (r.getAuditItem() != null) {
+                recipesByAuditItem.computeIfAbsent(r.getAuditItem().getId(), k -> new ArrayList<>()).add(r);
+            }
+        }
+
+        List<com.caffio.report.dto.RecipeProfitabilityDto.RawMaterialProfitSummary> rawSummaries = new ArrayList<>();
+        List<com.caffio.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem> allRecipeItems = new ArrayList<>();
+
+        double grandTotalRevenue = 0.0;
+        double grandTotalCost = 0.0;
+        double grandTotalProfit = 0.0;
+
+        for (com.caffio.inventory.entity.ShiftAuditItem item : auditItems) {
+            if (!item.isActive()) continue;
+            List<com.caffio.inventory.entity.ProductRecipe> itemRecipes = recipesByAuditItem.getOrDefault(item.getId(), List.of());
+            if (itemRecipes.isEmpty()) continue;
+
+            double unitCost = item.getCostPerUnit() != null && item.getCostPerUnit() > 0 ? item.getCostPerUnit() : 0.40;
+            double cost1000 = unitCost * 1000.0;
+            double cost250 = unitCost * 250.0;
+
+            List<com.caffio.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem> productItems = new ArrayList<>();
+            double itemConsumedQty = 0.0;
+            double itemGenRevenue = 0.0;
+            double itemRealizedCost = 0.0;
+
+            for (com.caffio.inventory.entity.ProductRecipe recipe : itemRecipes) {
+                var prod = recipe.getProduct();
+                if (prod == null || !prod.isActive()) continue;
+
+                double deduction = recipe.getDeductionQuantity() != null && recipe.getDeductionQuantity() > 0
+                        ? recipe.getDeductionQuantity()
+                        : 10.0;
+
+                double price = prod.getPrice() != null ? prod.getPrice().doubleValue() : 0.0;
+                double yield250 = 250.0 / deduction;
+                double yield1000 = 1000.0 / deduction;
+                double rev250 = yield250 * price;
+                double rev1000 = yield1000 * price;
+                double costPerSold = deduction * unitCost;
+                double profitPerSold = price - costPerSold;
+                double marginPct = price > 0 ? (profitPerSold / price) * 100.0 : 0.0;
+
+                int soldQty = productQuantitiesSold.getOrDefault(prod.getId(), 0);
+                double actRev = soldQty * price;
+                double actCost = soldQty * costPerSold;
+                double actProfit = actRev - actCost;
+
+                itemConsumedQty += soldQty * deduction;
+                itemGenRevenue += actRev;
+                itemRealizedCost += actCost;
+
+                var recipeItem = new com.caffio.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem(
+                        prod.getId(),
+                        prod.getNameAr() != null ? prod.getNameAr() : (prod.getNameEn() != null ? prod.getNameEn() : "منتج #" + prod.getId()),
+                        prod.getCategory() != null ? (prod.getCategory().getNameAr() != null ? prod.getCategory().getNameAr() : prod.getCategory().getNameEn()) : "عام",
+                        price,
+                        item.getId(),
+                        item.getName(),
+                        item.getUnit(),
+                        deduction,
+                        Math.round(yield250 * 10.0) / 10.0,
+                        Math.round(yield1000 * 10.0) / 10.0,
+                        Math.round(rev250 * 100.0) / 100.0,
+                        Math.round(rev1000 * 100.0) / 100.0,
+                        Math.round(costPerSold * 100.0) / 100.0,
+                        Math.round(profitPerSold * 100.0) / 100.0,
+                        Math.round(marginPct * 10.0) / 10.0,
+                        soldQty,
+                        Math.round(actRev * 100.0) / 100.0,
+                        Math.round(actCost * 100.0) / 100.0,
+                        Math.round(actProfit * 100.0) / 100.0
+                );
+
+                productItems.add(recipeItem);
+                allRecipeItems.add(recipeItem);
+            }
+
+            double itemRealProfit = itemGenRevenue - itemRealizedCost;
+            grandTotalRevenue += itemGenRevenue;
+            grandTotalCost += itemRealizedCost;
+            grandTotalProfit += itemRealProfit;
+
+            rawSummaries.add(new com.caffio.report.dto.RecipeProfitabilityDto.RawMaterialProfitSummary(
+                    item.getId(),
+                    item.getName(),
+                    item.getUnit(),
+                    item.getStockQuantity() != null ? item.getStockQuantity() : 0.0,
+                    unitCost,
+                    cost1000,
+                    cost250,
+                    productItems,
+                    Math.round(itemConsumedQty * 10.0) / 10.0,
+                    Math.round(itemGenRevenue * 100.0) / 100.0,
+                    Math.round(itemRealizedCost * 100.0) / 100.0,
+                    Math.round(itemRealProfit * 100.0) / 100.0
+            ));
+        }
+
+        double avgMargin = grandTotalRevenue > 0
+                ? (grandTotalProfit / grandTotalRevenue) * 100.0
+                : (allRecipeItems.isEmpty() ? 0.0 : allRecipeItems.stream().mapToDouble(com.caffio.report.dto.RecipeProfitabilityDto.RecipeProductProfitItem::profitMarginPercent).average().orElse(0.0));
+
+        return new com.caffio.report.dto.RecipeProfitabilityDto(
+                rawSummaries,
+                allRecipeItems,
+                Math.round(grandTotalRevenue * 100.0) / 100.0,
+                Math.round(grandTotalCost * 100.0) / 100.0,
+                Math.round(grandTotalProfit * 100.0) / 100.0,
+                Math.round(avgMargin * 10.0) / 10.0
+        );
+    }
+}

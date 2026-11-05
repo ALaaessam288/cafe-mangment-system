@@ -9,7 +9,7 @@ import java.sql.Statement;
 
 /**
  * Drops every V3/V4/V5/V6 table on Postgres that {@code JPA_DDL_AUTO=update} already created from
- * the entity mapping before {@link com.example.cafemangmentsystem.common.config.FlywayConfig} was
+ * the entity mapping before {@link com.caffio.common.config.FlywayConfig} was
  * fixed to run Flyway ahead of Hibernate.
  *
  * <p>Before that fix, Hibernate always won the race: it created each new entity's table straight

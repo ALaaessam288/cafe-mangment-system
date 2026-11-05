@@ -53,10 +53,10 @@ explanation. Otherwise the product goes with its options and recipe. The UI
 gets a delete button behind a confirmation that offers deactivate as the way
 out. Three tests pin the contract.
 "@ @(
-  "src/main/java/com/example/cafemangmentsystem/menu/ProductService.java",
-  "src/main/java/com/example/cafemangmentsystem/order/repository/OrderItemRepository.java",
-  "src/main/java/com/example/cafemangmentsystem/inventory/repository/StockAdjustmentRepository.java",
-  "src/test/java/com/example/cafemangmentsystem/menu/ProductDeletionTest.java",
+  "src/main/java/com/caffio/menu/ProductService.java",
+  "src/main/java/com/caffio/order/repository/OrderItemRepository.java",
+  "src/main/java/com/caffio/inventory/repository/StockAdjustmentRepository.java",
+  "src/test/java/com/caffio/menu/ProductDeletionTest.java",
   "frontend/src/pages/Products/ProductsPage.jsx",
   "frontend/src/api/menuApi.js"
 )
@@ -213,15 +213,15 @@ since V1, so a table needs no schema change; deleting one with a live order on
 it is refused with a 409 that explains itself.
 "@ @(
   "src/main/resources/db/migration/V11__force_delete_constraints.sql",
-  "src/main/java/com/example/cafemangmentsystem/menu/ProductService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/CategoryService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/CategoryController.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/entity/Product.java",
-  "src/main/java/com/example/cafemangmentsystem/cafetable/CafeTableService.java",
-  "src/main/java/com/example/cafemangmentsystem/cafetable/CafeTableController.java",
-  "src/main/java/com/example/cafemangmentsystem/order/entity/OrderItem.java",
-  "src/main/java/com/example/cafemangmentsystem/order/dto/OrderItemResponse.java",
-  "src/test/java/com/example/cafemangmentsystem/menu/ProductDeletionTest.java",
+  "src/main/java/com/caffio/menu/ProductService.java",
+  "src/main/java/com/caffio/menu/CategoryService.java",
+  "src/main/java/com/caffio/menu/CategoryController.java",
+  "src/main/java/com/caffio/menu/entity/Product.java",
+  "src/main/java/com/caffio/cafetable/CafeTableService.java",
+  "src/main/java/com/caffio/cafetable/CafeTableController.java",
+  "src/main/java/com/caffio/order/entity/OrderItem.java",
+  "src/main/java/com/caffio/order/dto/OrderItemResponse.java",
+  "src/test/java/com/caffio/menu/ProductDeletionTest.java",
   "frontend/src/api/menuApi.js",
   "frontend/src/api/tablesApi.js",
   "frontend/src/pages/Products/ProductsPage.jsx",
@@ -266,13 +266,13 @@ resetWeek is removed from the service, the controller, the API client, the
 handler, the button and its modal.
 "@ @(
   "src/main/resources/db/migration/V12__payroll_anchor_date.sql",
-  "src/main/java/com/example/cafemangmentsystem/employee/PayrollPeriod.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/EmployeePayrollService.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/EmployeePayrollController.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/entity/Employee.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/dto/WeeklyPayrollSummaryDto.java",
-  "src/test/java/com/example/cafemangmentsystem/employee/PayrollPeriodTest.java",
-  "src/test/java/com/example/cafemangmentsystem/employee/PayrollReceivablesPayablesTest.java",
+  "src/main/java/com/caffio/employee/PayrollPeriod.java",
+  "src/main/java/com/caffio/employee/EmployeePayrollService.java",
+  "src/main/java/com/caffio/employee/EmployeePayrollController.java",
+  "src/main/java/com/caffio/employee/entity/Employee.java",
+  "src/main/java/com/caffio/employee/dto/WeeklyPayrollSummaryDto.java",
+  "src/test/java/com/caffio/employee/PayrollPeriodTest.java",
+  "src/test/java/com/caffio/employee/PayrollReceivablesPayablesTest.java",
   "frontend/src/api/employeesApi.js",
   "frontend/src/pages/Employees/EmployeesPage.jsx",
   "frontend/src/pages/Employees/EmployeesPage.css"
@@ -372,16 +372,16 @@ FRIDGE also gets its own printer slot in the per-terminal settings; an
 unmapped station still falls back to the default printer, so a till configured
 before today cannot silently drop its slips.
 "@ @(
-  "src/main/java/com/example/cafemangmentsystem/station/entity/StationCode.java",
-  "src/main/java/com/example/cafemangmentsystem/printing/PrintJobService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/MenuTemplateService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/WanasMenuSeeder.java",
-  "src/main/java/com/example/cafemangmentsystem/order/repository/OrderItemRepository.java",
-  "src/main/java/com/example/cafemangmentsystem/shift/ShiftService.java",
-  "src/main/java/com/example/cafemangmentsystem/shift/ShiftNotifier.java",
-  "src/main/java/com/example/cafemangmentsystem/shift/dto/ShiftReportResponse.java",
+  "src/main/java/com/caffio/station/entity/StationCode.java",
+  "src/main/java/com/caffio/printing/PrintJobService.java",
+  "src/main/java/com/caffio/menu/MenuTemplateService.java",
+  "src/main/java/com/caffio/menu/WanasMenuSeeder.java",
+  "src/main/java/com/caffio/order/repository/OrderItemRepository.java",
+  "src/main/java/com/caffio/shift/ShiftService.java",
+  "src/main/java/com/caffio/shift/ShiftNotifier.java",
+  "src/main/java/com/caffio/shift/dto/ShiftReportResponse.java",
   "src/main/resources/db/migration/V13__fridge_station.sql",
-  "src/test/java/com/example/cafemangmentsystem/station/StationRoutingTest.java",
+  "src/test/java/com/caffio/station/StationRoutingTest.java",
   "frontend/src/pages/POS/POSPage.jsx",
   "frontend/src/utils/printerSettings.js"
 )

@@ -1,0 +1,131 @@
+package com.caffio.expense;
+
+import com.caffio.employee.entity.Employee;
+import com.caffio.employee.repository.EmployeeRepository;
+import com.caffio.expense.dto.ExpenseRequest;
+import com.caffio.expense.dto.ExpenseResponse;
+import com.caffio.expense.dto.SettleExpenseRequest;
+import com.caffio.expense.entity.Expense;
+import com.caffio.expense.entity.ExpenseStatus;
+import com.caffio.expense.repository.ExpenseRepository;
+import com.caffio.shift.entity.Shift;
+import com.caffio.shift.repository.ShiftRepository;
+import com.caffio.user.entity.User;
+import com.caffio.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class ExpenseService {
+
+    private final ExpenseRepository expenseRepository;
+    private final ShiftRepository shiftRepository;
+    private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
+
+    public ExpenseResponse create(Long userId, ExpenseRequest request) {
+        User recordedBy = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        Shift shift = null;
+        if (request.paidFromDrawer()) {
+            shift = shiftRepository.findByUserIdAndClosedAtIsNull(userId).orElse(null);
+            if (shift == null) {
+                List<Shift> openShifts = shiftRepository.findAllByClosedAtIsNull();
+                if (!openShifts.isEmpty()) {
+                    shift = openShifts.get(openShifts.size() - 1);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "يجب فتح شيفت أولاً لصرف أي مبلغ من الخزينة");
+                }
+            }
+        }
+
+        Employee employee = null;
+        if (request.employeeId() != null) {
+            employee = employeeRepository.findById(request.employeeId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+        }
+
+        boolean isAdvance = request.isAdvance();
+        ExpenseStatus status = isAdvance ? ExpenseStatus.PENDING_SETTLEMENT : ExpenseStatus.COMPLETED;
+        BigDecimal advanceAmt = request.amount();
+        BigDecimal actualAmt = isAdvance ? null : request.amount();
+        BigDecimal returnedAmt = isAdvance ? null : BigDecimal.ZERO;
+
+        String spender = request.spenderName();
+        if ((spender == null || spender.isBlank()) && employee != null) {
+            spender = employee.getName() != null ? employee.getName() : employee.getFullName();
+        }
+
+        Expense expense = new Expense();
+        expense.setType(request.type());
+        expense.setRevenueLine(request.revenueLine());
+        expense.setStatus(status);
+        expense.setAmount(request.amount());
+        expense.setAdvanceAmount(advanceAmt);
+        expense.setActualAmount(actualAmt);
+        expense.setReturnedAmount(returnedAmt);
+        expense.setAdvance(isAdvance);
+        expense.setExpenseDate(request.expenseDate());
+        expense.setRecurring(request.recurring());
+        expense.setPaidFromDrawer(request.paidFromDrawer());
+        expense.setNotes(request.notes());
+        expense.setShift(shift);
+        expense.setEmployee(employee);
+        expense.setSpenderName(spender);
+        expense.setRecordedBy(recordedBy);
+
+        return ExpenseResponse.from(expenseRepository.save(expense));
+    }
+
+    public ExpenseResponse settleAdvance(Long userId, Long expenseId, SettleExpenseRequest request) {
+        User settledBy = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "المصروف غير موجود: " + expenseId));
+
+        if (expense.getStatus() != ExpenseStatus.PENDING_SETTLEMENT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "هذه العُهدة تم تسويتها بالفعل سابقاً");
+        }
+
+        BigDecimal actualAmt = request.actualAmount();
+        BigDecimal advanceAmt = expense.getAdvanceAmount() != null ? expense.getAdvanceAmount() : expense.getAmount();
+        BigDecimal returnedAmt = advanceAmt.subtract(actualAmt);
+
+        expense.setActualAmount(actualAmt);
+        expense.setReturnedAmount(returnedAmt);
+        expense.setAmount(actualAmt); // Update net expense in DB to the actual spent amount!
+        expense.setStatus(ExpenseStatus.COMPLETED);
+        expense.setSettledAt(Instant.now());
+        expense.setSettledBy(settledBy);
+
+        if (request.notes() != null && !request.notes().trim().isEmpty()) {
+            String existingNotes = expense.getNotes() != null ? expense.getNotes() + " | " : "";
+            expense.setNotes(existingNotes + "تم التسوية: " + request.notes());
+        }
+
+        return ExpenseResponse.from(expenseRepository.save(expense));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExpenseResponse> findAll() {
+        return expenseRepository.findAll().stream().map(ExpenseResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseResponse findById(Long id) {
+        return ExpenseResponse.from(expenseRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Expense not found: " + id)));
+    }
+}

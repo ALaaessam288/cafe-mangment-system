@@ -11,7 +11,7 @@
 -- whole order is voided. Without it, voiding an order fails outright on a server deployment.
 
 -- ── cash_movements ───────────────────────────────────────────────────────────
--- Entity: com.example.cafemangmentsystem.cashmovement.entity.CashMovement (extends TenantScopedEntity)
+-- Entity: com.caffio.cashmovement.entity.CashMovement (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS cash_movements (
     id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_movements_tenant ON cash_movements(tenant_id
 CREATE INDEX IF NOT EXISTS idx_cash_movements_shift ON cash_movements(shift_id);
 
 -- ── manager_overrides ────────────────────────────────────────────────────────
--- Entity: com.example.cafemangmentsystem.manageroverride.entity.ManagerOverride (extends TenantScopedEntity)
+-- Entity: com.caffio.manageroverride.entity.ManagerOverride (extends TenantScopedEntity)
 --
 -- order_id and shift_id are plain BIGINT with no foreign key, matching the entity: the audit row
 -- must outlive whatever it refers to. An override that vanishes when its order is purged is not an

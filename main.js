@@ -249,7 +249,7 @@ async function createWindow() {
   } else {
     // ── Dev: resolve java executable & local jar path ──
     const javaExe = locateJava();
-    const jarPath = path.join(__dirname, 'target', 'cafe-mangment-system-0.0.1-SNAPSHOT.jar');
+    const jarPath = path.join(__dirname, 'target', 'caffio-0.0.1-SNAPSHOT.jar');
 
     // Write initialization diagnostics to backend.log
     writeLog(`[LAUNCHER] --- Startup at ${new Date().toISOString()} ---\n`);
