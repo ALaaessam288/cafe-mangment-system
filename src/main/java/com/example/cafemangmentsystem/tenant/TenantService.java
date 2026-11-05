@@ -72,6 +72,7 @@ public class TenantService {
             TenantStatus.TRIAL, TenantStatus.ACTIVE, TenantStatus.GRACE, TenantStatus.EXPIRED);
 
     private final TenantRepository tenantRepository;
+    private final com.example.cafemangmentsystem.menu.repository.ProductRepository productRepository;
     private final TenantOwnerProvisioner tenantOwnerProvisioner;
     private final TenantSaver tenantSaver;
     private final JwtService jwtService;
@@ -175,6 +176,19 @@ public class TenantService {
             byTenant.put(subscription.getTenantId(), subscription);
         }
         return byTenant;
+    }
+
+    public TenantResponse updatePosSettings(Long tenantId, Long defaultWaterProductId) {
+        Tenant tenant = requireTenant(tenantId);
+        // The product read is tenant-scoped, so another café's product id is simply "not found".
+        if (defaultWaterProductId != null && productRepository.findById(defaultWaterProductId).isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "الصنف المختار غير موجود في المنيو");
+        }
+        tenant.setDefaultWaterProductId(defaultWaterProductId);
+        Tenant saved = tenantRepository.save(tenant);
+        audit(tenantId, "POS_SETTINGS_UPDATED", "تم تحديث صنف المياه الافتراضي");
+        return TenantResponse.from(saved, currentSubscription(tenantId));
     }
 
     public TenantResponse updateLogo(Long tenantId, String logoUrl) {

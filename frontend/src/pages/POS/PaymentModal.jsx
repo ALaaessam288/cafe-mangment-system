@@ -103,7 +103,7 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
 
   /* Standard or Partial Payment */
   async function handleProcessPayment(customPayAmount, noteLabel) {
-    const payAmt = customPayAmount ?? Math.min(currentBalanceDue, amountNum);
+    let payAmt = customPayAmount ?? Math.min(currentBalanceDue, amountNum);
     if (payAmt <= 0) {
       toast.warning('يرجى تحديد مبلغ دفع صحيح أكبر من صفر');
       return;
@@ -112,6 +112,13 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
     setLoading(true);
     try {
       const isFullPayment = payAmt >= currentBalanceDue;
+      /* A split that does not divide evenly leaves a few piastres. The last payment absorbs them
+         so the server sees the bill as settled. Before, the screen tried to close the order with
+         the piastres still owing, and the server - which only closes a fully paid order - refused,
+         leaving the payment recorded and the bill stuck open. */
+      const leftover = currentBalanceDue - payAmt;
+      const absorbed = !isFullPayment && leftover <= 0.05 ? leftover : 0;
+      if (absorbed > 0) payAmt = currentBalanceDue;
       // The server stores an amount, not a basket. Naming the lines in the note is what makes a
       // split bill auditable afterwards — otherwise the payment history is a column of numbers
       // nobody can reconcile against the order.
@@ -135,7 +142,10 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
         payload.received = Math.max(payAmt, amountNum);
       }
 
-      let updatedOrder = await ordersApi.recordPayment(order.id, payload);
+      /* Pay and close in one request, one transaction. They used to be two calls in a row, and
+         when the second failed the money was recorded but the order stayed open on the floor. */
+      payload.closeIfFullyPaid = true;
+      const updatedOrder = await ordersApi.recordPayment(order.id, payload);
       const remaining = Math.max(0, currentBalanceDue - payAmt);
       setCurrentBalanceDue(remaining);
 
@@ -153,15 +163,10 @@ export default function PaymentModal({ order, onClose, onSuccess }) {
         }
       ]);
 
-      if (isFullPayment || remaining <= 0.05) {
-        updatedOrder = await ordersApi.close(order.id);
-        /*
-         * A split that does not divide evenly leaves a few piastres. Closing the bill absorbs them,
-         * which is right — but it was silent, so the drawer and the bill disagreed with no record
-         * of why. Say it out loud instead.
-         */
-        if (!isFullPayment && remaining > 0) {
-          toast.info(`تم إغلاق الفاتورة وتسوية فرق ${formatCurrency(remaining)} (كسور التقسيم).`);
+      if (updatedOrder?.status === 'CLOSED' || remaining <= 0) {
+        // Say the rounding out loud, so the drawer and the bill never disagree without a record.
+        if (absorbed > 0) {
+          toast.info(`تم إغلاق الفاتورة وتسوية فرق ${formatCurrency(absorbed)} (كسور التقسيم).`);
         }
         toast.success(`تم سداد وإغلاق الفاتورة بنجاح! الإجمالي: ${formatCurrency(total)}`, 'تم الدفع بالكامل 🎉');
         onSuccess(updatedOrder, true);

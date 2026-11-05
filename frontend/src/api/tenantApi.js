@@ -37,6 +37,10 @@ export const tenantApi = {
   updateWhatsApp: ({ ownerWhatsapp, whatsappAlertsEnabled }) =>
     client.put('/tenant/whatsapp', { ownerWhatsapp, whatsappAlertsEnabled }).then((r) => r.data),
 
+  /* POS preferences. Only the water button's product today; null clears it. */
+  updatePosSettings: ({ defaultWaterProductId }) =>
+    client.put('/tenant/pos-settings', { defaultWaterProductId: defaultWaterProductId ?? null }).then((r) => r.data),
+
   /* No recipient argument on purpose - the server sends to the number it has stored. */
   testWhatsApp: () => client.post('/tenant/whatsapp/test').then((r) => r.data),
 

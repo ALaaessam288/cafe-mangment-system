@@ -91,6 +91,10 @@ public class PaymentService {
         BigDecimal newAmountPaid = amountPaidSoFar.add(request.amount());
         if (newAmountPaid.compareTo(order.getTotal()) >= 0) {
             order.setStatus(OrderStatus.PAID);
+            if (Boolean.TRUE.equals(request.closeIfFullyPaid())) {
+                // Same transaction: if closing fails, the payment rolls back with it.
+                return orderService.close(orderId, userId);
+            }
         }
 
         return orderService.toResponse(order);

@@ -46,6 +46,18 @@ public class OrderController {
         return orderService.findAll(status);
     }
 
+    /**
+     * Orders still on the floor (not paid, closed, voided or refunded), optionally for one table.
+     *
+     * <p>The POS used to call the unfiltered list - every order the café has ever taken - on each
+     * table tap and on every 20-second poll, then filter in the browser. That request grows by
+     * every order sold, forever. This one is bounded by what is actually open right now.
+     */
+    @GetMapping("/active")
+    public List<OrderResponse> findActive(@RequestParam(required = false) Long tableId) {
+        return orderService.findActive(tableId);
+    }
+
     @GetMapping("/{id}")
     public OrderResponse findById(@PathVariable Long id) {
         return orderService.findById(id);

@@ -4,6 +4,10 @@ export const ordersApi = {
   /* Orders */
   findAll:   (status) =>
     client.get('/orders', { params: status ? { status } : undefined }).then((r) => r.data),
+  /* Only orders still on the floor; pass a tableId for that table's live order. The plain
+     findAll returns the café's entire history and is for reports/invoices, not the POS poll. */
+  findActive: (tableId) =>
+    client.get('/orders/active', { params: tableId != null ? { tableId } : undefined }).then((r) => r.data),
   findById:  (id)     => client.get(`/orders/${id}`).then((r) => r.data),
   open:      (payload) => client.post('/orders', payload).then((r) => r.data),
   send:      (id)     => client.put(`/orders/${id}/send`).then((r) => r.data),

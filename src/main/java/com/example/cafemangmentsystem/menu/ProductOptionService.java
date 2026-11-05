@@ -42,6 +42,21 @@ public class ProductOptionService {
                 .toList();
     }
 
+    /**
+     * Every option on the menu, in one read.
+     *
+     * <p>The POS used to ask for a product's options the first time it was tapped - including the
+     * majority of products that have none - so the first tap on almost anything waited on a round
+     * trip before the line appeared. Loading them with the menu makes that tap instant. Scoped to
+     * the current tenant by the {@code @TenantId} on the entity, like every other read here.
+     */
+    @Transactional(readOnly = true)
+    public List<ProductOptionResponse> findAll() {
+        return productOptionRepository.findAll().stream()
+                .map(ProductOptionResponse::from)
+                .toList();
+    }
+
     public ProductOptionResponse update(Long productId, Long optionId, ProductOptionRequest request) {
         ProductOption option = getOrThrow(productId, optionId);
         option.setNameAr(request.nameAr());

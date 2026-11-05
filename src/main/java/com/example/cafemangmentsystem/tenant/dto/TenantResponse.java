@@ -38,7 +38,8 @@ public record TenantResponse(
         boolean perpetual,
         Integer maxTables,
         Integer maxUsers,
-        Integer maxProducts
+        Integer maxProducts,
+        Long defaultWaterProductId
 ) {
     public static TenantResponse from(Tenant tenant, TenantSubscription subscription) {
         return new TenantResponse(
@@ -63,7 +64,8 @@ public record TenantResponse(
                 subscription != null && subscription.isPerpetual(),
                 subscription != null ? subscription.effectiveLimit(QuotaType.TABLES) : null,
                 subscription != null ? subscription.effectiveLimit(QuotaType.USERS) : null,
-                subscription != null ? subscription.effectiveLimit(QuotaType.PRODUCTS) : null
+                subscription != null ? subscription.effectiveLimit(QuotaType.PRODUCTS) : null,
+                tenant.getDefaultWaterProductId()
         );
     }
 }

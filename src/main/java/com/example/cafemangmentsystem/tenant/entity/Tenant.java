@@ -68,4 +68,8 @@ public class Tenant extends BaseEntity {
     /** Whether the owner has been through the first-run plan picker. */
     @Column(name = "plan_selected", nullable = false)
     private Boolean planSelected = false;
+
+    /** The product the POS «إضافة مياه» button adds. NULL means "match by name". */
+    @Column(name = "default_water_product_id")
+    private Long defaultWaterProductId;
 }

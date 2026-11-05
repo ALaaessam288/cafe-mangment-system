@@ -48,6 +48,15 @@ public class TenantController {
             Boolean whatsappAlertsEnabled
     ) {}
 
+    /** POS preferences. Today just the water button's product; null clears it. */
+    public record UpdatePosSettingsRequest(Long defaultWaterProductId) {}
+
+    @PutMapping("/pos-settings")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    public TenantResponse updatePosSettings(@RequestBody UpdatePosSettingsRequest request) {
+        return tenantService.updatePosSettings(TenantContext.get(), request.defaultWaterProductId());
+    }
+
     @PutMapping("/logo")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     public TenantResponse updateLogo(@RequestBody UpdateLogoRequest request) {

@@ -12,6 +12,12 @@ public record RecordPaymentRequest(
         @NotNull @Positive BigDecimal amount,
         @PositiveOrZero BigDecimal received,
         String reference,
-        String note
+        String note,
+        /*
+         * Close the order in the same transaction when this payment settles it. Paying and closing
+         * used to be two requests; when the second one failed the money was recorded and the order
+         * stayed open on the floor. Optional, so existing callers are unaffected.
+         */
+        Boolean closeIfFullyPaid
 ) {
 }

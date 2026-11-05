@@ -26,6 +26,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findAllByStatus(OrderStatus status);
 
+    List<Order> findAllByStatusIn(Collection<OrderStatus> statuses);
+
     List<Order> findByStatus(OrderStatus status);
 
     List<Order> findAllByShiftId(Long shiftId);

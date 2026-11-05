@@ -186,6 +186,18 @@ public class OrderService {
         return orders.stream().map(this::toResponse).toList();
     }
 
+    /** What the POS treats as live: everything that can still take items or payments. */
+    public static final java.util.Set<OrderStatus> ACTIVE_STATUSES = java.util.EnumSet.of(
+            OrderStatus.OPEN, OrderStatus.SENT, OrderStatus.SERVED, OrderStatus.READY_FOR_PICKUP);
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> findActive(Long tableId) {
+        List<Order> orders = tableId == null
+                ? orderRepository.findAllByStatusIn(ACTIVE_STATUSES)
+                : orderRepository.findByTableIdAndStatusIn(tableId, ACTIVE_STATUSES);
+        return orders.stream().map(this::toResponse).toList();
+    }
+
     @Transactional(readOnly = true)
     public OrderResponse findById(Long id) {
         return toResponse(getOrThrow(id));
