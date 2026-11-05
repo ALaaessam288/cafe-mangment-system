@@ -7,6 +7,7 @@ import { useToast }  from '../../context/ToastContext';
 import { useAuth }   from '../../context/AuthContext';
 import { registersApi } from '../../api/registersApi';
 import { shiftsApi }   from '../../api/shiftsApi';
+import { tenantApi }   from '../../api/tenantApi';
 import TableGrid     from './TableGrid';
 import MenuPanel     from './MenuPanel';
 import OrderPanel    from './OrderPanel';
@@ -17,6 +18,7 @@ import SugarModal from './SugarModal';
 import ShiftStrip    from './ShiftStrip';
 import ShiftAuditModal from '../../components/ShiftAuditModal/ShiftAuditModal';
 import { fallbackTopSellers } from './menuGroups';
+import { findWaterProduct } from './waterProduct';
 import { getQuickAccessProducts, recordProductUse } from './recentProducts';
 import './POSPage.css';
 import { printReceipt, buildReceiptHtml, buildKitchenTicketHtml } from '../../utils/printUtils';
@@ -59,6 +61,23 @@ function applyTempDelta(order, delta) {
     total:      num(order.total) + delta,
     balanceDue: num(order.balanceDue) + delta,
   };
+}
+
+/* Keeps the open-orders list in step with an order the server just returned.
+   The table grid and the open-orders rail are drawn from this list, so after an action the order
+   the endpoint already sent back is all they need - re-downloading every order and every table
+   after each tap was the single most repeated request on this screen. An order that has left the
+   floor (paid, closed, voided) drops out of the list here, exactly as the next poll would drop it. */
+const LIVE_STATUSES = ['OPEN', 'SENT', 'SERVED', 'READY_FOR_PICKUP'];
+function upsertActiveOrder(list, order) {
+  if (!order?.id) return list;
+  const rest = (list ?? []).filter((o) => o.id !== order.id);
+  if (!LIVE_STATUSES.includes(order.status)) return rest.length === (list ?? []).length ? list : rest;
+  const idx = (list ?? []).findIndex((o) => o.id === order.id);
+  if (idx === -1) return [...(list ?? []), order];
+  const next = [...list];
+  next[idx] = order;
+  return next;
 }
 
 function reducer(state, action) {
@@ -172,7 +191,13 @@ function reducer(state, action) {
       };
     }
     case 'SELECT_TABLE': return { ...state, activeTable: action.payload, activeOrder: null };
-    case 'SELECT_ORDER': return { ...state, activeOrder: action.payload, activeTable: null };
+    case 'SELECT_ORDER': return {
+      ...state,
+      activeOrder: action.payload,
+      activeTable: null,
+      activeOrders: upsertActiveOrder(state.activeOrders, action.payload),
+    };
+    case 'UPSERT_ORDER': return { ...state, activeOrders: upsertActiveOrder(state.activeOrders, action.payload) };
     /* A response that left the server before one already applied must not overwrite it.
      *
      * Adding an item fires its own request and replaces the whole order with the reply. Nothing
@@ -188,7 +213,12 @@ function reducer(state, action) {
     case 'SET_ORDER': {
       const seq = action.seq ?? 0;
       if (seq && seq < (state.orderSeq ?? 0)) return state;
-      return { ...state, activeOrder: action.payload, orderSeq: seq || (state.orderSeq ?? 0) };
+      return {
+        ...state,
+        activeOrder: action.payload,
+        orderSeq: seq || (state.orderSeq ?? 0),
+        activeOrders: upsertActiveOrder(state.activeOrders, action.payload),
+      };
     }
     case 'SET_SHIFT':    return { ...state, activeShift: action.payload };
     case 'CLEAR_TABLE':  return { ...state, activeTable: null, activeOrder: null };
@@ -275,6 +305,9 @@ export default function POSPage() {
   // productId -> ProductOptionResponse[] (avoids re-fetching modifiers)
   const optionsCache = useRef(new Map());
 
+  // The «إضافة مياه» product the owner picked in Settings; null = match by name.
+  const [waterProductId, setWaterProductId] = useState(null);
+
   // Quantity multiplier: type a digit, then tap a product to add that many.
   const [multiplier, setMultiplier] = useState(1);
 
@@ -356,9 +389,26 @@ export default function POSPage() {
   const loadOrders = useCallback(async ({ silent = false } = {}) => {
     if (!silent) dispatch({ type: 'LOADING_ORDERS', payload: true });
     try {
-      const data = await ordersApi.findAll();
-      dispatch({ type: 'SET_ORDERS', payload: data.filter((o) => o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED') });
+      /* Only what is on the floor. This used to be the café's entire order history, re-downloaded
+         every 20 seconds and filtered here - a request that grew by every order ever sold. The
+         server list includes READY_FOR_PICKUP, which the old filter dropped, so takeaway orders
+         waiting at the counter no longer vanish from the open-orders list. */
+      const data = await ordersApi.findActive();
+      dispatch({ type: 'SET_ORDERS', payload: data });
+    } catch (err) {
+      toast.error(err.message, 'فشل في تحميل الأوردرات');
+    } finally {
+      if (!silent) dispatch({ type: 'LOADING_ORDERS', payload: false });
+    }
+  }, [toast]);
 
+  /* ── Customer recall list ──
+     Built from order history so a returning delivery customer's phone fills in their name and
+     address. History is large and changes slowly, so it is read once in the background at boot -
+     not on every 20-second poll, which is where it used to be. */
+  const loadCustomers = useCallback(async () => {
+    try {
+      const data = await ordersApi.findAll();
       // Build a comprehensive recall list of takeaway & delivery customers from order history and localStorage
       const seen = new Map();
       let storedList = [];
@@ -394,11 +444,10 @@ export default function POSPage() {
         });
       dispatch({ type: 'SET_CUSTOMERS', payload: [...seen.values()].slice(0, 500) });
     } catch (err) {
-      toast.error(err.message, 'فشل في تحميل الأوردرات');
-    } finally {
-      if (!silent) dispatch({ type: 'LOADING_ORDERS', payload: false });
+      // Not worth interrupting the cashier over: the local customer book still works.
+      console.error('Failed to load customer history', err);
     }
-  }, [toast]);
+  }, []);
 
   // Customer storage in localStorage
   function getStoredCustomers() {
@@ -461,12 +510,27 @@ export default function POSPage() {
   const loadMenu = useCallback(async (categories, { silent = false } = {}) => {
     if (!silent) dispatch({ type: 'LOADING_MENU', payload: true });
     try {
-      const [all, top] = await Promise.all([
+      const [all, top, allOptions] = await Promise.all([
         menuApi.getProducts(),
         menuApi.getTopSellers().catch(() => []),
+        // null on failure: the per-product fetch in getOptionsFor still works as a fallback.
+        menuApi.getAllOptions().catch(() => null),
       ]);
 
       const sellable = all.filter((p) => p.active && p.available);
+
+      /* Fill the options cache for the whole menu up front. Every product gets an entry - an
+         empty list for the many that have no options - so the first tap on any of them adds the
+         line straight away instead of first asking the server whether there is anything to ask.
+         Rebuilt on every load so an option edited in the back office shows up with the menu. */
+      if (allOptions) {
+        const byProduct = new Map(all.map((p) => [p.id, []]));
+        for (const option of allOptions) {
+          if (!byProduct.has(option.productId)) byProduct.set(option.productId, []);
+          byProduct.get(option.productId).push(option);
+        }
+        optionsCache.current = byProduct;
+      }
 
       /* Replacing the array every 20 seconds re-renders every product card even when not one
          value changed, which on a full menu is the most expensive thing this screen does. A poll
@@ -551,6 +615,10 @@ export default function POSPage() {
 
       await loadTables();
       await loadOrders();
+      loadCustomers(); // background: only the delivery form needs it
+      tenantApi.getMe()
+        .then((t) => setWaterProductId(t?.defaultWaterProductId ?? null))
+        .catch(() => {}); // the name match still works without it
       try {
         await loadCategoriesAndMenu();
       } catch (err) {
@@ -558,7 +626,7 @@ export default function POSPage() {
       }
     }
     boot();
-  }, [loadTables, loadOrders, loadCategoriesAndMenu, toast]);
+  }, [loadTables, loadOrders, loadCustomers, loadCategoriesAndMenu, toast]);
 
   useEffect(() => {
     const handleReload = async () => {
@@ -658,16 +726,12 @@ export default function POSPage() {
   async function loadOrderForTable(tableId) {
     dispatch({ type: 'LOADING_ORDER', payload: true });
     try {
-      const allOrders = await ordersApi.findAll();
-      const existing  = allOrders.find(
-        (o) => o.tableId === tableId && (o.status === 'OPEN' || o.status === 'SENT' || o.status === 'SERVED')
-      );
-      if (existing) {
-        const full = await ordersApi.findById(existing.id);
-        dispatch({ type: 'SET_ORDER', payload: full });
-      } else {
-        dispatch({ type: 'SET_ORDER', payload: null });
-      }
+      /* One request for exactly this table's live order. This used to download every order the
+         café had ever taken, search it here, then fetch the match a second time - two round trips
+         per table tap, the first one growing with every sale. The list response is already the
+         full order, so there is nothing to re-fetch. */
+      const [existing] = await ordersApi.findActive(tableId);
+      dispatch({ type: 'SET_ORDER', payload: existing ?? null });
     } catch (err) {
       toast.error(err.message, 'فشل في تحميل الأوردر');
     } finally {
@@ -700,8 +764,6 @@ export default function POSPage() {
       dispatch({ type: 'SET_ORDER', payload: order });
       setOpenTableModal(false);
       toast.success(`اتفتح أوردر لترابيزة ${state.activeTable.number}`);
-      await loadTables();
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في فتح الأوردر');
     } finally {
@@ -756,7 +818,6 @@ export default function POSPage() {
       setDeliveryFee('');
       setMatchedCustomer(null);
       toast.success(isDirect ? 'تم فتح أوردر تيك أواي!' : 'تم فتح أوردر دليفري بنجاح!');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في فتح الأوردر');
     } finally {
@@ -784,11 +845,8 @@ export default function POSPage() {
       });
       dispatch({ type: 'SET_ORDER', payload: newOrder });
       toast.success(`اتفتح أوردر لترابيزة ${state.activeTable.number}`);
-      // Not awaited, and silent: the cashier should neither wait on this refresh nor watch the
-      // table and order panels flash their spinners because of it. This runs on the first tap of
-      // a product for a table, which is the worst possible moment to repaint the screen.
-      loadTables({ silent: true });
-      loadOrders({ silent: true });
+      // No refresh: SET_ORDER above already put the new order on the table grid. This runs on
+      // the first tap of a product for a table, the worst possible moment for extra requests.
       return newOrder;
     } catch (err) {
       toast.error(err.message, 'فشل في فتح الأوردر تلقائياً');
@@ -1125,7 +1183,6 @@ export default function POSPage() {
       }
       setLastAddedItemId(null);
       toast.success('تم التراجع عن آخر صنف.');
-      loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في التراجع');
     }
@@ -1178,8 +1235,9 @@ export default function POSPage() {
       setShowMoveModal(false);
       setTargetTableId('');
       dispatch({ type: 'CLEAR_TABLE' });
-      await loadTables();
-      await loadOrders();
+      // A merge changes two orders and retires one, so re-read the open list. Tables carry no
+      // status of their own (it is derived from this list), so they need no reload.
+      await loadOrders({ silent: true });
     } catch (err) {
       toast.error(err.message, 'فشل في عملية النقل/الدمج');
     }
@@ -1296,7 +1354,6 @@ export default function POSPage() {
       sounds.playKitchen();
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success(DONE.SEND);
-      await loadOrders();
       // Stock is deducted server-side on send(); refetch so the on-screen counts (and
       // auto-unavailable flips at zero) reflect it immediately instead of only after F5.
       await loadMenu(state.categories);
@@ -1316,7 +1373,6 @@ export default function POSPage() {
       const updated = await ordersApi.serve(state.activeOrder.id);
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success(serveDone(updated?.type ?? state.activeOrder?.type));
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في تحديث حالة الأوردر');
     } finally {
@@ -1337,7 +1393,6 @@ export default function POSPage() {
       sounds.playError();
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('الأوردر تم إلغاؤه.');
-      await loadOrders();
       // clear active table/order
       dispatch({ type: 'CLEAR_TABLE' });
     } catch (err) {
@@ -1364,7 +1419,6 @@ export default function POSPage() {
         });
       }
       toast.success('الصنف اتلغى.');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في إلغاء الصنف');
     }
@@ -1389,7 +1443,6 @@ export default function POSPage() {
         });
       }
       if (itemId === lastAddedItemId) setLastAddedItemId(null);
-      loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في شيل الصنف');
     }
@@ -1417,45 +1470,42 @@ export default function POSPage() {
       };
       const html = buildReceiptHtml({ order: printableOrder });
       printReceipt(html, printOptionsFor('RECEIPT', { width: 80 }));
+      // Takes the closed order off the grid before the table is cleared.
+      dispatch({ type: 'UPSERT_ORDER', payload: updatedOrder ?? { ...state.activeOrder, status: 'CLOSED' } });
       dispatch({ type: 'CLEAR_TABLE' });
     } else {
       // Order stays open with a reduced balance - keep it active so the cashier can collect
       // the rest, instead of clearing the table as if the sale were finished.
       dispatch({ type: 'SET_ORDER', payload: updatedOrder });
     }
-
-    await loadTables();
-    await loadOrders();
   }
 
   /* ── Add Water ── */
   async function handleAddWater() {
     if (!state.activeOrder) return;
-    
-    try {
-      const allProds = await menuApi.getProducts();
-      const waterProd = allProds.find(p => {
-        const nameAr = (p.nameAr || '').toLowerCase();
-        const nameEn = (p.nameEn || '').toLowerCase();
-        const name = (p.name || '').toLowerCase();
-        return nameAr.includes('مياه') || nameEn.includes('water') || name.includes('مياه') || nameAr.includes('Ù…ÙŠØ§Ù‡');
-      });
 
-      if (!waterProd) {
-        toast.error('صنف المياه غير موجود بالمنيو');
-        return;
-      }
+    // Only sellable products are in state.products, so an out-of-stock water is not found here
+    // rather than being added and then refused by the server.
+    const waterProd = findWaterProduct(state.products, waterProductId);
+    if (!waterProd) {
+      toast.error(waterProductId != null
+        ? 'صنف المياه المختار مش متاح دلوقتي - راجع المخزون أو الإعدادات'
+        : 'صنف المياه غير موجود بالمنيو - اختاره من الإعدادات');
+      return;
+    }
+
+    try {
       const updated = await ordersApi.addItem(state.activeOrder.id, {
         productId: waterProd.id,
         quantity: 1
       });
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('تم إضافة مياه للفاتورة بنجاح!');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في إضافة المياه');
     }
   }
+
 
   /* ── Set Delivery Fee (takeaway only) ── */
   async function handleSetDeliveryFee(amount) {
@@ -1464,7 +1514,6 @@ export default function POSPage() {
       const updated = await ordersApi.setDeliveryFee(state.activeOrder.id, amount);
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('تم تحديث رسوم التوصيل بنجاح');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في تحديث رسوم التوصيل');
     }
@@ -1477,7 +1526,6 @@ export default function POSPage() {
       const updated = await ordersApi.applyDiscount(state.activeOrder.id, data);
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('تم تطبيق الخصم بنجاح');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في تطبيق الخصم');
     }
@@ -1489,7 +1537,6 @@ export default function POSPage() {
       const updated = await ordersApi.clearDiscount(state.activeOrder.id);
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('تم إلغاء الخصم بنجاح');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في إلغاء الخصم');
     }
@@ -1502,7 +1549,6 @@ export default function POSPage() {
       const updated = await ordersApi.setServiceFee(state.activeOrder.id, amount);
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('تم تطبيق رسوم الخدمة بنجاح');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في تطبيق رسوم الخدمة');
     }
@@ -1514,7 +1560,6 @@ export default function POSPage() {
       const updated = await ordersApi.clearServiceFee(state.activeOrder.id);
       dispatch({ type: 'SET_ORDER', payload: updated });
       toast.success('تم إلغاء رسوم الخدمة بنجاح');
-      await loadOrders();
     } catch (err) {
       toast.error(err.message, 'فشل في إلغاء رسوم الخدمة');
     }

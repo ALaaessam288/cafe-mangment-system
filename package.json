@@ -11,6 +11,7 @@
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
+    "@neon/config": "^1.11.3",
     "electron": "^33.0.0",
     "electron-builder": "^24.13.3"
   },
@@ -34,7 +35,7 @@
     ],
     "extraResources": [
       {
-        "from": "target/cafe-mangment-system-0.0.1-SNAPSHOT.jar",
+        "from": "target/caffio-0.0.1-SNAPSHOT.jar",
         "to": "backend.jar"
       },
       {

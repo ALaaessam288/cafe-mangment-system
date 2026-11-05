@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ROLES } from '../../utils/constants';
 import PrinterSettings from './PrinterSettings';
+import PosSettingsCard from './PosSettingsCard';
 import './SettingsPage.css';
 import UpgradeRequestCard from '../../components/UpgradeRequest/UpgradeRequestCard';
 
@@ -1059,6 +1060,8 @@ export default function SettingsPage() {
       {activeTab === 'hardware' && (
         <div className="settings-grid">
           <PrinterSettings />
+
+          <PosSettingsCard />
 
           {/* WhatsApp Alerts Card */}
           <div className="section-card">

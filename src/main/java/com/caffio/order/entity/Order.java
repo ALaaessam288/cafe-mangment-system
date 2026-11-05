@@ -1,0 +1,184 @@
+package com.caffio.order.entity;
+
+import com.caffio.cafetable.entity.CafeTable;
+import com.caffio.common.entity.TenantScopedEntity;
+import com.caffio.shift.entity.Shift;
+import com.caffio.user.entity.User;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+@Entity
+@Table(name = "orders")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Order extends TenantScopedEntity {
+
+    @Column(name = "order_number", nullable = false)
+    private Integer orderNumber;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "table_id")
+    private CafeTable table;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "opened_by", nullable = false)
+    private User openedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "closed_by")
+    private User closedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "served_by")
+    private User servedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "shift_id", nullable = false)
+    private Shift shift;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal subtotal = BigDecimal.ZERO;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal discount = BigDecimal.ZERO;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal service = BigDecimal.ZERO;
+
+    /** Takeaway only - flat delivery charge added on top of the order total. */
+    @Column(name = "delivery_fee", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal deliveryFee = BigDecimal.ZERO;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal total = BigDecimal.ZERO;
+
+    @Column(name = "guest_count")
+    private Integer guestCount;
+
+    /** Takeaway only - how staff identifies whose order this is at the counter, no table to go by. */
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_phone")
+    private String customerPhone;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    /** Takeaway only, and only for RESTAURANT tenants - a call-ahead/scheduled pickup time. */
+    @Column(name = "pickup_at")
+    private Instant pickupAt;
+
+    @Column(name = "opened_at", nullable = false)
+    private Instant openedAt;
+
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
+    @Column(name = "served_at")
+    private Instant servedAt;
+
+    /**
+     * Not part of the documented Order schema. AuditLog (the doc's intended home for
+     * void reasons) is deferred, so this is a minimal stopgap to avoid silently discarding
+     * a reason the API requires the caller to provide.
+     */
+    @Column(name = "void_reason")
+    private String voidReason;
+
+    public Integer getOrderNumber() { return orderNumber; }
+    public void setOrderNumber(Integer orderNumber) { this.orderNumber = orderNumber; }
+
+    public CafeTable getTable() { return table; }
+    public void setTable(CafeTable table) { this.table = table; }
+
+    public OrderType getType() { return type; }
+    public void setType(OrderType type) { this.type = type; }
+
+    public OrderStatus getStatus() { return status; }
+    public void setStatus(OrderStatus status) { this.status = status; }
+
+    public User getOpenedBy() { return openedBy; }
+    public void setOpenedBy(User openedBy) { this.openedBy = openedBy; }
+
+    public User getClosedBy() { return closedBy; }
+    public void setClosedBy(User closedBy) { this.closedBy = closedBy; }
+
+    public User getServedBy() { return servedBy; }
+    public void setServedBy(User servedBy) { this.servedBy = servedBy; }
+
+    public Shift getShift() { return shift; }
+    public void setShift(Shift shift) { this.shift = shift; }
+
+    public BigDecimal getSubtotal() { return subtotal; }
+    public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+
+    public BigDecimal getDiscount() { return discount; }
+    public void setDiscount(BigDecimal discount) { this.discount = discount; }
+
+    public BigDecimal getService() { return service; }
+    public void setService(BigDecimal service) { this.service = service; }
+
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+
+    public BigDecimal getTotal() { return total; }
+    public void setTotal(BigDecimal total) { this.total = total; }
+
+    public Instant getOpenedAt() { return openedAt; }
+    public void setOpenedAt(Instant openedAt) { this.openedAt = openedAt; }
+
+    public Instant getClosedAt() { return closedAt; }
+    public void setClosedAt(Instant closedAt) { this.closedAt = closedAt; }
+
+    public Instant getServedAt() { return servedAt; }
+    public void setServedAt(Instant servedAt) { this.servedAt = servedAt; }
+
+    public String getVoidReason() { return voidReason; }
+    public void setVoidReason(String voidReason) { this.voidReason = voidReason; }
+
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
+
+    public String getCustomerPhone() { return customerPhone; }
+    public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+
+    public String getCustomerAddress() { return customerAddress; }
+    public void setCustomerAddress(String customerAddress) { this.customerAddress = customerAddress; }
+
+    public Instant getPickupAt() { return pickupAt; }
+    public void setPickupAt(Instant pickupAt) { this.pickupAt = pickupAt; }
+
+    public Integer getGuestCount() { return guestCount; }
+    public void setGuestCount(Integer guestCount) { this.guestCount = guestCount; }
+}

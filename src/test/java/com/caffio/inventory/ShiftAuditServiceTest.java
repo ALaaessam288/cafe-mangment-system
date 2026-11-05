@@ -1,0 +1,224 @@
+package com.caffio.inventory;
+
+import com.caffio.inventory.entity.ProductRecipe;
+import com.caffio.inventory.entity.ShiftAuditItem;
+import com.caffio.inventory.repository.ProductRecipeRepository;
+import com.caffio.inventory.repository.ShiftAuditItemRepository;
+import com.caffio.inventory.repository.ShiftAuditRecordRepository;
+import com.caffio.menu.entity.Product;
+import com.caffio.menu.repository.ProductRepository;
+import com.caffio.order.entity.Order;
+import com.caffio.order.entity.OrderItem;
+import com.caffio.order.entity.OrderItemStatus;
+import com.caffio.order.repository.OrderItemRepository;
+import com.caffio.shift.repository.ShiftRepository;
+import com.caffio.shift.entity.Shift;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+
+@ExtendWith(MockitoExtension.class)
+class ShiftAuditServiceTest {
+
+    @Mock ShiftAuditItemRepository auditItemRepository;
+    @Mock ProductRecipeRepository recipeRepository;
+    @Mock ShiftAuditRecordRepository auditRecordRepository;
+    @Mock ProductRepository productRepository;
+    @Mock ShiftRepository shiftRepository;
+    @Mock OrderItemRepository orderItemRepository;
+    @Mock RawMaterialLedgerService rawMaterialLedgerService;
+    @Mock Product product;
+
+    private ShiftAuditService service;
+    private Order order;
+    private ShiftAuditItem ingredient;
+    private OrderItem item;
+
+    @BeforeEach
+    void setUp() {
+        service = new ShiftAuditService(auditItemRepository, recipeRepository, auditRecordRepository,
+                productRepository, shiftRepository, rawMaterialLedgerService, orderItemRepository);
+        order = Order.builder().build();
+        ingredient = ShiftAuditItem.builder().name("Coffee beans").unit("g").stockQuantity(100.0).build();
+        ingredient.setId(1L);
+        item = OrderItem.builder().product(product).quantity(2).status(OrderItemStatus.SENT).build();
+        ProductRecipe recipe = ProductRecipe.builder()
+                .product(product)
+                .auditItem(ingredient)
+                .deductionQuantity(10.0)
+                .build();
+        lenient().when(product.getId()).thenReturn(7L);
+        lenient().when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(recipe));
+        lenient().when(auditRecordRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void deductsOnlyTheItemsExplicitlyBeingSent() {
+        service.deductRecipeInventoryOnItems(order, List.of(item));
+
+        assertEquals(80.0, ingredient.getStockQuantity());
+        verify(auditItemRepository).save(ingredient);
+        verify(orderItemRepository, never()).findAllByOrderId(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsIngredientOversellingInsteadOfClampingToZero() {
+        ingredient.setStockQuantity(15.0);
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.deductRecipeInventoryOnItems(order, List.of(item)));
+        assertEquals(15.0, ingredient.getStockQuantity());
+        verify(auditItemRepository, never()).save(ingredient);
+    }
+
+    @Test
+    void restoresRecipeInventoryWhenASentItemIsCancelled() {
+        ingredient.setStockQuantity(80.0);
+
+        service.restoreRecipeInventoryForItem(order, item);
+
+        assertEquals(100.0, ingredient.getStockQuantity());
+        verify(auditItemRepository).save(ingredient);
+    }
+
+    @Test
+    void supportsFractionalRecipeQuantities() {
+        ProductRecipe fractional = ProductRecipe.builder()
+                .product(product).auditItem(ingredient).deductionQuantity(2.5).build();
+        when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(fractional));
+        item.setQuantity(3);
+
+        service.deductRecipeInventoryOnItems(order, List.of(item));
+
+        assertEquals(92.5, ingredient.getStockQuantity());
+    }
+
+    @Test
+    void productWithoutRecipeDoesNotChangeIngredients() {
+        when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of());
+
+        service.deductRecipeInventoryOnItems(order, List.of(item));
+
+        assertEquals(100.0, ingredient.getStockQuantity());
+        verify(auditItemRepository, never()).save(ingredient);
+    }
+
+    @Test
+    void rejectsUnrealisticOpeningStockBeforeSavingAnything() {
+        ReflectionTestUtils.setField(ingredient, "id", 12L);
+        when(shiftRepository.findById(5L)).thenReturn(java.util.Optional.of(Shift.builder().build()));
+        when(auditItemRepository.findAllByActiveTrueAndRequiresAuditTrue()).thenReturn(List.of(ingredient));
+        var request = new com.caffio.inventory.dto.ShiftOpeningAuditRequest(
+                java.util.Map.of(12L, 50_000_000_000.0));
+
+        assertThrows(ResponseStatusException.class, () -> service.recordShiftOpening(5L, request));
+
+        assertEquals(100.0, ingredient.getStockQuantity());
+        verify(auditItemRepository, never()).save(ingredient);
+    }
+
+    @Test
+    void acceptsRealisticOpeningStock() {
+        ReflectionTestUtils.setField(ingredient, "id", 12L);
+        when(shiftRepository.findById(5L)).thenReturn(java.util.Optional.of(Shift.builder().build()));
+        when(auditItemRepository.findAllByActiveTrueAndRequiresAuditTrue()).thenReturn(List.of(ingredient));
+        var request = new com.caffio.inventory.dto.ShiftOpeningAuditRequest(
+                java.util.Map.of(12L, 1_000.0));
+
+        service.recordShiftOpening(5L, request);
+
+        assertEquals(1_000.0, ingredient.getStockQuantity());
+        verify(auditItemRepository).save(ingredient);
+    }
+
+    @Test
+    void allowsExactlyTheNumberOfProductsTheRecipeCanProduce() {
+        ingredient.setStockQuantity(1_000.0);
+        ProductRecipe tenGramsPerCup = ProductRecipe.builder()
+                .product(product).auditItem(ingredient).deductionQuantity(10.0).build();
+        when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(tenGramsPerCup));
+
+        service.validateRecipeAvailability(product, 100);
+    }
+
+    @Test
+    void rejectsOneMoreProductThanTheRecipeCanProduce() {
+        ingredient.setStockQuantity(1_000.0);
+        ProductRecipe tenGramsPerCup = ProductRecipe.builder()
+                .product(product).auditItem(ingredient).deductionQuantity(10.0).build();
+        when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(tenGramsPerCup));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.validateRecipeAvailability(product, 101));
+
+        org.junit.jupiter.api.Assertions.assertTrue(error.getReason().contains("Only 100"));
+    }
+
+    @Test
+    void existingNewTicketsReduceWhatCanStillBeAdded() {
+        ingredient.setStockQuantity(1_000.0);
+        ProductRecipe tenGramsPerCup = ProductRecipe.builder()
+                .product(product).auditItem(ingredient).deductionQuantity(10.0).build();
+        when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(tenGramsPerCup));
+        // The hold is now counted against the ingredient rather than the product, because
+        // ingredients are what run out and two products can share one. 90 cups at 10 g is 900 g.
+        when(recipeRepository.sumReservedByIngredient())
+                .thenReturn(List.<Object[]>of(new Object[]{ 1L, 900.0 }));
+
+        service.validateRecipeAvailability(product, 10);
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.validateRecipeAvailability(product, 11));
+        org.junit.jupiter.api.Assertions.assertTrue(error.getReason().contains("Only 10"));
+    }
+
+    @Test
+    void reportsTwentyFiveCupsAvailableFromTwoHundredFiftyGrams() {
+        ingredient.setStockQuantity(250.0);
+
+        assertEquals(25, service.getRecipeAvailableQuantity(product));
+    }
+
+    @Test
+    void repairsMissingTurkishCoffeeRecipeAndDisablesContradictoryPieceStock() {
+        Product turkishCoffee = Product.builder()
+                .nameAr("قهوة تركية سادة")
+                .stockQuantity(5_565)
+                .reservedQuantity(214)
+                .trackInventory(true)
+                .build();
+        ReflectionTestUtils.setField(turkishCoffee, "id", 99L);
+        ShiftAuditItem coffeeBeans = ShiftAuditItem.builder()
+                .name("بن قهوة (جرام)")
+                .unit("جرام")
+                .stockQuantity(250.0)
+                .build();
+        when(auditItemRepository.findAllByActiveTrue()).thenReturn(List.of(coffeeBeans));
+        when(productRepository.findAll()).thenReturn(List.of(turkishCoffee));
+        when(recipeRepository.findAllByProductId(99L)).thenReturn(List.of());
+
+        service.ensureDefaultCoffeeRecipes();
+
+        verify(recipeRepository).save(argThat(recipe ->
+                recipe.getProduct() == turkishCoffee
+                        && recipe.getAuditItem() == coffeeBeans
+                        && recipe.getDeductionQuantity() == 10.0));
+        org.junit.jupiter.api.Assertions.assertFalse(turkishCoffee.isTrackInventory());
+        assertEquals(0, turkishCoffee.getReservedQuantity());
+        verify(productRepository).save(turkishCoffee);
+    }
+}

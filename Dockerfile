@@ -29,7 +29,7 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Copy built JAR from backend builder stage
-COPY --from=backend-builder /app/target/cafe-mangment-system-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=backend-builder /app/target/caffio-0.0.1-SNAPSHOT.jar app.jar
 
 # Set ownership to appuser
 RUN chown -R appuser:appgroup /app

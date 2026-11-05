@@ -52,6 +52,16 @@
 @media (max-width: 760px) { .categories-story-strip { grid-template-columns: repeat(3,1fr); } .categories-story-strip p { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .categories-story-strip { grid-template-columns: 1fr; } .categories-story-strip p { grid-column: auto; } }
 
+@media (max-width: 640px) {
+  /* The POSITION rail goes on a phone.
+     It is 66px of a 358px card - roughly a fifth of the width - spent on a vertical "POSITION"
+     label and a number the card already states in words directly beside it ("القسم 1 من 5"). On
+     a desktop it is a nice piece of editorial furniture; on a phone it is the difference between
+     the category name having room and not. The order is not lost, just no longer said twice. */
+  .category-editorial-card__order { display: none; }
+  .category-editorial-card { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+}
+
 .cats-page .page__title::before {
   content: '';
   display: inline-block;

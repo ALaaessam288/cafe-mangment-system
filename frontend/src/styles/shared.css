@@ -433,3 +433,73 @@
   .page-filters__search { min-width: 0; }
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   PHONE — shared page furniture
+   The page header and .page padding are already handled by the 760px block above; this is the
+   narrower tier, for the things that only break once the screen is actually phone-sized.
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  /* .data-table-wrap scrolls sideways (above), but a table given width:100% inside a 390px
+     screen never becomes wider than the wrap, so there is nothing to scroll — it just crushes.
+     Eight columns become eight slivers and the numbers wrap into unreadable stacks. A minimum
+     width makes it honest: columns keep a legible size and the table scrolls, which is a thing
+     a finger already knows how to do. */
+  .data-table { min-width: 680px; }
+
+  .data-table th,
+  .data-table td { padding-inline: 10px; white-space: nowrap; }
+
+  /* Filter/toolbar rows are the other thing that silently runs off the side of a phone. */
+  .filters-row,
+  .toolbar-row { flex-wrap: wrap; gap: 8px; }
+
+  /* ── The header action row, under its five different names ──
+     Products, Tables, Users, Invoices, Employees and the dashboard each have a page header whose
+     right-hand side is a flex row of [primary button] [capacity chip] [view toggles]. It is the
+     same component five times with five class names, and none of them wrapped: about 500px of
+     controls in a row that cannot break, inside a 390px screen. The row overflowed its card and
+     the FIRST child — which in RTL is the primary button, «إضافة منتج», «إضافة طاولة»,
+     «إضافة مستخدم» — was the part sliced off by the edge of the screen. The most important
+     control on the page was the one you could not reach.
+
+     Grouped here rather than fixed in five files because it is one bug; if these ever get a
+     shared class, this collapses to one selector. */
+  .products-header__actions,
+  .tables-header__actions,
+  .users-header__actions,
+  .invoices-header__actions,
+  .employees-header__actions,
+  .categories-hero__actions,
+  .dash-hero__actions {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+
+  /* The primary action takes the full first line; the chips and toggles share the next. */
+  .products-header__actions > button:first-child,
+  .tables-header__actions > button:first-child,
+  .users-header__actions > button:first-child,
+  .invoices-header__actions > button:first-child,
+  .employees-header__actions > button:first-child,
+  .dash-hero__actions > button:first-child {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  /* Products, Tables, Users, Employees and Categories all carry .page__header, so the 760px
+     stacking already reaches them. Invoices does not — it rolls its own header. */
+  .invoices-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* These header cards are generous at desktop width; on a phone the padding is most of the card. */
+  .products-header,
+  .tables-header,
+  .users-header,
+  .invoices-header,
+  .employees-header { padding: 14px; }
+}

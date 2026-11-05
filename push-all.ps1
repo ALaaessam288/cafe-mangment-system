@@ -1,4 +1,4 @@
-# Commits this session's work, then stops before pushing.
+﻿# Commits this session's work, then stops before pushing.
 #
 # Paths are listed explicitly: `git add -A` here stages ~35 files that differ only by CRLF line
 # endings, which buries the real change. Any commit whose files are missing or unchanged is
@@ -53,10 +53,10 @@ explanation. Otherwise the product goes with its options and recipe. The UI
 gets a delete button behind a confirmation that offers deactivate as the way
 out. Three tests pin the contract.
 "@ @(
-  "src/main/java/com/example/cafemangmentsystem/menu/ProductService.java",
-  "src/main/java/com/example/cafemangmentsystem/order/repository/OrderItemRepository.java",
-  "src/main/java/com/example/cafemangmentsystem/inventory/repository/StockAdjustmentRepository.java",
-  "src/test/java/com/example/cafemangmentsystem/menu/ProductDeletionTest.java",
+  "src/main/java/com/caffio/menu/ProductService.java",
+  "src/main/java/com/caffio/order/repository/OrderItemRepository.java",
+  "src/main/java/com/caffio/inventory/repository/StockAdjustmentRepository.java",
+  "src/test/java/com/caffio/menu/ProductDeletionTest.java",
   "frontend/src/pages/Products/ProductsPage.jsx",
   "frontend/src/api/menuApi.js"
 )
@@ -213,15 +213,15 @@ since V1, so a table needs no schema change; deleting one with a live order on
 it is refused with a 409 that explains itself.
 "@ @(
   "src/main/resources/db/migration/V11__force_delete_constraints.sql",
-  "src/main/java/com/example/cafemangmentsystem/menu/ProductService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/CategoryService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/CategoryController.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/entity/Product.java",
-  "src/main/java/com/example/cafemangmentsystem/cafetable/CafeTableService.java",
-  "src/main/java/com/example/cafemangmentsystem/cafetable/CafeTableController.java",
-  "src/main/java/com/example/cafemangmentsystem/order/entity/OrderItem.java",
-  "src/main/java/com/example/cafemangmentsystem/order/dto/OrderItemResponse.java",
-  "src/test/java/com/example/cafemangmentsystem/menu/ProductDeletionTest.java",
+  "src/main/java/com/caffio/menu/ProductService.java",
+  "src/main/java/com/caffio/menu/CategoryService.java",
+  "src/main/java/com/caffio/menu/CategoryController.java",
+  "src/main/java/com/caffio/menu/entity/Product.java",
+  "src/main/java/com/caffio/cafetable/CafeTableService.java",
+  "src/main/java/com/caffio/cafetable/CafeTableController.java",
+  "src/main/java/com/caffio/order/entity/OrderItem.java",
+  "src/main/java/com/caffio/order/dto/OrderItemResponse.java",
+  "src/test/java/com/caffio/menu/ProductDeletionTest.java",
   "frontend/src/api/menuApi.js",
   "frontend/src/api/tablesApi.js",
   "frontend/src/pages/Products/ProductsPage.jsx",
@@ -266,13 +266,13 @@ resetWeek is removed from the service, the controller, the API client, the
 handler, the button and its modal.
 "@ @(
   "src/main/resources/db/migration/V12__payroll_anchor_date.sql",
-  "src/main/java/com/example/cafemangmentsystem/employee/PayrollPeriod.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/EmployeePayrollService.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/EmployeePayrollController.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/entity/Employee.java",
-  "src/main/java/com/example/cafemangmentsystem/employee/dto/WeeklyPayrollSummaryDto.java",
-  "src/test/java/com/example/cafemangmentsystem/employee/PayrollPeriodTest.java",
-  "src/test/java/com/example/cafemangmentsystem/employee/PayrollReceivablesPayablesTest.java",
+  "src/main/java/com/caffio/employee/PayrollPeriod.java",
+  "src/main/java/com/caffio/employee/EmployeePayrollService.java",
+  "src/main/java/com/caffio/employee/EmployeePayrollController.java",
+  "src/main/java/com/caffio/employee/entity/Employee.java",
+  "src/main/java/com/caffio/employee/dto/WeeklyPayrollSummaryDto.java",
+  "src/test/java/com/caffio/employee/PayrollPeriodTest.java",
+  "src/test/java/com/caffio/employee/PayrollReceivablesPayablesTest.java",
   "frontend/src/api/employeesApi.js",
   "frontend/src/pages/Employees/EmployeesPage.jsx",
   "frontend/src/pages/Employees/EmployeesPage.css"
@@ -372,18 +372,67 @@ FRIDGE also gets its own printer slot in the per-terminal settings; an
 unmapped station still falls back to the default printer, so a till configured
 before today cannot silently drop its slips.
 "@ @(
-  "src/main/java/com/example/cafemangmentsystem/station/entity/StationCode.java",
-  "src/main/java/com/example/cafemangmentsystem/printing/PrintJobService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/MenuTemplateService.java",
-  "src/main/java/com/example/cafemangmentsystem/menu/WanasMenuSeeder.java",
-  "src/main/java/com/example/cafemangmentsystem/order/repository/OrderItemRepository.java",
-  "src/main/java/com/example/cafemangmentsystem/shift/ShiftService.java",
-  "src/main/java/com/example/cafemangmentsystem/shift/ShiftNotifier.java",
-  "src/main/java/com/example/cafemangmentsystem/shift/dto/ShiftReportResponse.java",
+  "src/main/java/com/caffio/station/entity/StationCode.java",
+  "src/main/java/com/caffio/printing/PrintJobService.java",
+  "src/main/java/com/caffio/menu/MenuTemplateService.java",
+  "src/main/java/com/caffio/menu/WanasMenuSeeder.java",
+  "src/main/java/com/caffio/order/repository/OrderItemRepository.java",
+  "src/main/java/com/caffio/shift/ShiftService.java",
+  "src/main/java/com/caffio/shift/ShiftNotifier.java",
+  "src/main/java/com/caffio/shift/dto/ShiftReportResponse.java",
   "src/main/resources/db/migration/V13__fridge_station.sql",
-  "src/test/java/com/example/cafemangmentsystem/station/StationRoutingTest.java",
+  "src/test/java/com/caffio/station/StationRoutingTest.java",
   "frontend/src/pages/POS/POSPage.jsx",
   "frontend/src/utils/printerSettings.js"
+)
+
+Commit "feat(mobile): the management screens were unusable on a phone" @"
+Every management screen is a wide table inside .data-table-wrap, and that wrap
+was overflow:hidden - the usual way to make a border-radius clip its contents.
+On a phone it meant a table wider than the screen did not scroll, it simply
+lost its right-hand columns. Not clipped with a scrollbar offered: gone, with
+no way to reach them. On the employees screen that took the net-pay column off
+the page entirely, which is the one number the screen exists to show.
+
+overflow-x:auto fixes the wrap, but a table at width:100% never gets wider than
+its wrap, so there was still nothing to scroll - it just crushed eight columns
+into eight slivers. A min-width on .data-table makes it honest: the columns
+keep a legible size, and the table scrolls, which is a thing a finger already
+knows how to do.
+
+The other half was the page header. Products, Tables, Users, Invoices,
+Employees and the dashboard each have a header whose action side is a flex row
+of [primary button] [chip] [view toggles] - the same component six times under
+six class names, none of them wrapping. About 500px of controls in an
+unbreakable row inside a 390px screen: the row overflowed, and because the
+layout is RTL the FIRST child is the primary button. The one control the page
+is for - Add product, Add table, Add user - was the part sliced off by the edge
+of the screen. Grouped into one rule here rather than fixed in six files,
+because it is one bug.
+
+Inventory: step="0.01" on the numeric fields. A cost per unit is a pack price
+divided by how many units are in the pack, so the smaller the unit the smaller
+that number - milk powder at 25 EGP a bag, recorded in millilitres, is 0.0125
+per ml, which the browser rejected on submit as an invalid value. The fields
+where a small unit is most useful were exactly the fields that could not be
+filled in. step="any" now, and the cost label names the unit instead of
+explaining the purpose: someone buying coffee by the quarter-kilo read
+"unit cost" and typed the price of the pack, and every waste figure from then
+on was 250x too high.
+
+Employees: a DEDUCTION with a blank reason is rejected by the backend with a
+400, but the form never said the field was required - so the cashier filled in
+the amount, hit save, and got a server error about a field that looked
+optional. The reason is now required in the form when the type is a deduction,
+and the label and placeholder say so. The quick-reason buttons write into the
+same field, so picking one satisfies it.
+"@ @(
+  "frontend/src/styles/shared.css",
+  "frontend/src/layouts/AppLayout.css",
+  "frontend/src/pages/Dashboard/DashboardPage.css",
+  "frontend/src/pages/Categories/CategoriesPage.css",
+  "frontend/src/pages/Inventory/InventoryPage.jsx",
+  "frontend/src/pages/Employees/EmployeesPage.jsx"
 )
 
 Write-Host "=== after ==="

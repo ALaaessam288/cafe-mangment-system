@@ -1,0 +1,20 @@
+package com.caffio.order.dto;
+
+import com.caffio.order.entity.OrderType;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+public record OpenOrderRequest(
+        @NotNull OrderType type,
+        Long tableId,
+        @Positive Integer guestCount,
+        String customerName,
+        String customerPhone,
+        String customerAddress,
+        BigDecimal deliveryFee,
+        Instant pickupAt
+) {
+}

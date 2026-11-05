@@ -1,0 +1,11 @@
+-- tenants.default_water_product_id
+--
+-- The POS has a one-tap «إضافة مياه» button. It found the water by downloading the whole menu on
+-- every press and searching product names for «مياه» or "water" - including a mojibake spelling of
+-- the Arabic, which is how fragile that was. A café whose bottle is called «مياه معدنية صغيرة», or
+-- that sells two waters, got the wrong one or none. The owner now picks the product once, in
+-- Settings; NULL keeps the old name match as a fallback so nothing changes until they do.
+--
+-- No foreign key on purpose: deleting a product must not be blocked by, or cascade into, a
+-- preference. A stale id simply falls back to the name match.
+ALTER TABLE tenants ADD COLUMN ${add_col_if_not_exists}default_water_product_id BIGINT;

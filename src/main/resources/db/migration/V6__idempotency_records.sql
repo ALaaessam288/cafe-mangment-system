@@ -5,7 +5,7 @@
 -- all — so a checkout retried through a restart, or landing on the other node, charged the customer
 -- a second time. Those are exactly the two moments a client is most likely to retry.
 --
--- Entity: com.example.cafemangmentsystem.common.idempotency.IdempotencyRecord (extends TenantScopedEntity)
+-- Entity: com.caffio.common.idempotency.IdempotencyRecord (extends TenantScopedEntity)
 CREATE TABLE IF NOT EXISTS idempotency_records (
     id ${pk_id},
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

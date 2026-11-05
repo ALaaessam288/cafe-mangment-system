@@ -69,6 +69,9 @@ export const menuApi = {
 
   /* Product Options */
   getOptions:    (productId)         => client.get(`/products/${productId}/options`).then((r) => r.data),
+  /* Every option on the menu in one read - the POS loads these with the menu so tapping a
+     product never waits on a request just to learn it has no options. */
+  getAllOptions: ()                  => client.get('/product-options').then((r) => r.data),
   createOption:  (productId, payload) => client.post(`/products/${productId}/options`, payload).then((r) => r.data),
   updateOption:  (productId, optionId, payload) =>
     client.put(`/products/${productId}/options/${optionId}`, payload).then((r) => r.data),

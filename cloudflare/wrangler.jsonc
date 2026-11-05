@@ -1,0 +1,43 @@
+// Caffio on Cloudflare: a Worker in front, the existing Spring Boot Docker image behind it.
+//
+// Cloudflare runs Docker images only as "Containers", which belong to a Worker and are started by
+// requests that Worker forwards. So this folder is the Worker; the image is the same root
+// Dockerfile Railway builds today. Deploy with `npx wrangler deploy` from this folder - see README.
+{
+  "name": "caffio",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  "containers": [
+    {
+      "class_name": "CaffioBackend",
+      // The repository-root Dockerfile (frontend + backend in one image), built with the whole
+      // repository as its context, exactly as Railway does.
+      "image": "../Dockerfile",
+      "image_build_context": "..",
+      // 1/4 vCPU, 1 GiB RAM, 4 GB disk. The JVM is capped at -Xmx512m in the Dockerfile, so this
+      // fits with headroom. Move to "standard-1" (1/2 vCPU, 4 GiB) if startup or reports are slow.
+      "instance_type": "basic",
+      // Exactly one. The app keeps login lockouts and rate limits in memory and runs nightly jobs;
+      // two copies would each hold half the picture and run every job twice.
+      "max_instances": 1
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "class_name": "CaffioBackend", "name": "BACKEND" }]
+  },
+
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CaffioBackend"] }],
+
+  // Every 5 minutes: wake the app if it is asleep and keep it awake. A POS cannot wait for a Java
+  // cold start mid-order, and the app's own scheduled jobs (subscription expiry, idempotency
+  // cleanup) only run while it is up. It calls /api/ping, which does not touch the database, so
+  // Neon can still pause between customers.
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  // CORS_ALLOWED_ORIGINS is not needed while the web app and the API share one address (the
+  // container serves both). Add it under "vars" only if the frontend is ever hosted elsewhere.
+
+  "observability": { "enabled": true }
+}

@@ -152,7 +152,7 @@ The central control tower for platform owners:
 
 ## 🚨 6. Centralized Arabic Validation & Error Handling
 
-The backend implements a unified `@RestControllerAdvice` [`GlobalExceptionHandler`](file:///C:/Users/alaae/.gemini/antigravity/worktrees/cafe-mangment-system/initialize_frontend_worktree/src/main/java/com/example/cafemangmentsystem/common/exception/GlobalExceptionHandler.java):
+The backend implements a unified `@RestControllerAdvice` [`GlobalExceptionHandler`](src/main/java/com/caffio/common/exception/GlobalExceptionHandler.java):
 
 ```json
 {
@@ -214,7 +214,7 @@ The backend implements a unified `@RestControllerAdvice` [`GlobalExceptionHandle
 ### 8.1 Backend Setup (Spring Boot)
 ```powershell
 # Navigate to project root
-cd C:\Users\alaae\.gemini\antigravity\worktrees\cafe-mangment-system\initialize_frontend_worktree
+cd E:\Projects\Caffio
 
 # Build and compile
 ./mvnw clean compile -q

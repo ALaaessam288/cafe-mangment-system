@@ -1,0 +1,72 @@
+package com.caffio.tenant.platform;
+
+import com.caffio.user.entity.Role;
+import com.caffio.user.entity.User;
+import com.caffio.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+/**
+ * Writes the platform's SUPER_ADMIN on a genuinely fresh Hibernate session.
+ *
+ * <p>A separate bean for the same reason as {@link TenantOwnerProvisioner}: {@code REQUIRES_NEW}
+ * only takes effect across a proxy boundary, and Hibernate resolves a session's {@code @TenantId}
+ * once, when the session opens. Setting {@code TenantContext} inside an already-transactional
+ * method is too late — the first version of the bootstrap did exactly that and wrote the platform
+ * owner with {@code tenant_id = 0}, so the account existed in the database and could never log in.
+ * The caller must set the context <em>before</em> calling either method here.
+ */
+@Component
+@RequiredArgsConstructor
+public class PlatformAdminSaver {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    /** Requires {@code TenantContext} to already hold the platform tenant's id. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public boolean superAdminExists() {
+        List<User> users = userRepository.findAll();
+        return users.stream().anyMatch(user -> user.getRole() == Role.SUPER_ADMIN);
+    }
+
+    /** Requires {@code TenantContext} to already hold the platform tenant's id. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public User createSuperAdmin(String username, String fullName, String rawPassword) {
+        User admin = new User();
+        admin.setUsername(username);
+        admin.setFullName(fullName);
+        admin.setPasswordHash(passwordEncoder.encode(rawPassword));
+        admin.setRole(Role.SUPER_ADMIN);
+        return userRepository.save(admin);
+    }
+
+    /**
+     * Creates the platform owner or deliberately resets the matching owner's credentials.
+     *
+     * <p>This method is used only by the provisioning-key protected recovery endpoint. The old
+     * recovery path silently did nothing when the platform tenant already existed and the supplied
+     * username was missing; when it did find the user, it promoted the role but ignored the new
+     * password. That left a Railway deployment permanently locked out despite a successful 201.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public User upsertSuperAdmin(Long tenantId, String username, String fullName, String rawPassword) {
+        User admin = userRepository.findByTenantIdAndUsername(tenantId, username)
+                .orElseGet(User::new);
+
+        if (admin.getId() == null) {
+            admin.setTenantId(tenantId);
+            admin.setUsername(username);
+        }
+        admin.setFullName(fullName);
+        admin.setPasswordHash(passwordEncoder.encode(rawPassword));
+        admin.setRole(Role.SUPER_ADMIN);
+        admin.activate();
+        return userRepository.save(admin);
+    }
+}
