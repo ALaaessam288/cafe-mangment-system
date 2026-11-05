@@ -63,7 +63,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/*.png", "/*.jpg", "/*.jpeg", "/*.svg", "/*.ico", "/*.css", "/*.js", "/*.woff", "/*.woff2", "/*.ttf").permitAll()
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/health").permitAll()
+                .requestMatchers("/api/health", "/api/ping").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/platform/**").permitAll()
                 .requestMatchers("/api/license/validate").permitAll()

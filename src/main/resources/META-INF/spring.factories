@@ -1,0 +1,7 @@
+# Spring Boot discovers environment post-processors here, and only here.
+#
+# This used to be META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports.
+# The .imports format is for auto-configurations; Boot never read that file, so the converter below
+# never ran and a postgresql:// DATABASE_URL (Railway's, Neon's) reached the SQLite driver as-is.
+org.springframework.boot.EnvironmentPostProcessor=\
+com.caffio.common.config.RailwayDatabaseUrlPostProcessor

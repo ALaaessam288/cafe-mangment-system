@@ -73,4 +73,30 @@ class RailwayDatabaseUrlPostProcessorTest {
 
         assertThat(environment.getPropertySources().contains("railwayDatabaseUrl")).isFalse();
     }
+
+    /**
+     * Every other test here calls the converter directly, which is how it went unnoticed that Spring
+     * never did. It was listed in a .imports file Boot does not read for post-processors, so a
+     * postgresql:// DATABASE_URL reached the SQLite driver unconverted. This asks Spring's own loader.
+     */
+    @Test
+    void springDiscoversTheConverterAtStartup() {
+        // Names only: Boot's own entries need constructor arguments only a running app supplies.
+        // Each spring.factories file is read on its own - merging them keeps one value per key.
+        java.util.List<String> registered = new java.util.ArrayList<>();
+        String key = org.springframework.boot.EnvironmentPostProcessor.class.getName();
+        try {
+            var files = getClass().getClassLoader()
+                    .getResources(org.springframework.core.io.support.SpringFactoriesLoader.FACTORIES_RESOURCE_LOCATION);
+            while (files.hasMoreElements()) {
+                java.util.Properties p = new java.util.Properties();
+                try (var in = files.nextElement().openStream()) { p.load(in); }
+                for (String name : p.getProperty(key, "").split(",")) registered.add(name.trim());
+            }
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+
+        assertThat(registered).contains(RailwayDatabaseUrlPostProcessor.class.getName());
+    }
 }

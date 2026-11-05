@@ -27,6 +27,19 @@ public class HealthController {
 
     private final DataSource dataSource;
 
+    /**
+     * "The process is up", and nothing else - in particular, no database.
+     *
+     * <p>The Cloudflare Worker calls this every few minutes to keep the container awake. If that call
+     * opened a connection, as {@link #health()} does, a serverless database such as Neon would never
+     * see five idle minutes, never pause, and burn through a free plan's compute in about two
+     * weeks. Keeping the app warm and keeping the database warm are separate decisions.
+     */
+    @GetMapping("/api/ping")
+    public Map<String, Object> ping() {
+        return Map.of("status", "UP");
+    }
+
     @GetMapping("/api/health")
     public Map<String, Object> health() {
         Map<String, Object> health = new LinkedHashMap<>();
