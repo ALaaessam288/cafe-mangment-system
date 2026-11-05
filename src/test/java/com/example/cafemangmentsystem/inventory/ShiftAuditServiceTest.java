@@ -152,7 +152,6 @@ class ShiftAuditServiceTest {
         ProductRecipe tenGramsPerCup = ProductRecipe.builder()
                 .product(product).auditItem(ingredient).deductionQuantity(10.0).build();
         when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(tenGramsPerCup));
-        when(orderItemRepository.sumNewQuantityByProductId(7L)).thenReturn(0L);
 
         service.validateRecipeAvailability(product, 100);
     }
@@ -163,7 +162,6 @@ class ShiftAuditServiceTest {
         ProductRecipe tenGramsPerCup = ProductRecipe.builder()
                 .product(product).auditItem(ingredient).deductionQuantity(10.0).build();
         when(recipeRepository.findAllByProductId(7L)).thenReturn(List.of(tenGramsPerCup));
-        when(orderItemRepository.sumNewQuantityByProductId(7L)).thenReturn(0L);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.validateRecipeAvailability(product, 101));
@@ -191,7 +189,6 @@ class ShiftAuditServiceTest {
     @Test
     void reportsTwentyFiveCupsAvailableFromTwoHundredFiftyGrams() {
         ingredient.setStockQuantity(250.0);
-        when(orderItemRepository.sumNewQuantityByProductId(7L)).thenReturn(0L);
 
         assertEquals(25, service.getRecipeAvailableQuantity(product));
     }
